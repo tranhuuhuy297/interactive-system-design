@@ -1,7 +1,8 @@
 import {
-  ApiSpec, ArchitectureDiagram, Callout, CodeBlock, CompareTable, EstimationTable, H2, InterviewQuestion,
-  KeyTakeaways, References, Requirements, TLDR, Term,
+  ApiSpec, ArchitectureDiagram, Callout, CodeBlock, EstimationTable, FlowDiagram, H2, InterviewQuestion,
+  KeyTakeaways, MentalModel, References, Requirements, SideBySide, StatRow, Term, TLDR,
 } from '../components/ui'
+import { Fingerprint, Inbox, Layers, ListOrdered, Send, ShieldCheck, SlidersHorizontal, Split } from 'lucide-react'
 import type { ArchEdge, ArchNode, Reference } from '../components/ui'
 import { NotifPipelineSimulatorDemo } from './demos/notif-pipeline-simulator-demo'
 
@@ -54,6 +55,7 @@ export default function NotificationSystemChapter() {
         'An idempotency key at ingress stops duplicate sends, which matters because SMS costs real money.',
         'Frequency caps, quiet hours and digests protect users from fatigue.',
       ]} />
+      <MentalModel id="notifications" />
 
       <p>
         A notification system is a <strong>reliability and fairness</strong> problem dressed up as a messaging
@@ -90,6 +92,12 @@ export default function NotificationSystemChapter() {
           { label: 'Log rows / day', math: '72M × ~1.5 attempts', result: '≈ 110M' },
         ]}
       />
+      <StatRow stats={[
+        { value: '600/s', label: 'average push' },
+        { value: '17K/s', label: 'campaign burst', note: '≈ 30× the average' },
+        { value: '$15K', label: 'SMS spend per day' },
+        { value: '110M', label: 'log rows per day' },
+      ]} />
       <p>
         The average load is small. <strong>Bursts</strong> and <strong>money</strong> dominate: a duplicated SMS
         campaign is a five-figure mistake. That is why deduplication and rate limiting are first-class components,
@@ -101,6 +109,13 @@ export default function NotificationSystemChapter() {
         Producers ask for a notification; the platform decides how to deliver it. Every request carries an{' '}
         <Term def="A unique key the caller sends with a request, so the server can recognize and ignore retries of the same request.">idempotency key</Term>.
       </p>
+      <FlowDiagram caption="Producers say what; the platform decides how" steps={[
+        { label: 'Request', sub: 'with idempotency key', icon: Inbox },
+        { label: 'Dedupe', sub: 'drop retries', icon: Fingerprint },
+        { label: 'Preferences', sub: 'opt-ins, caps, quiet hours', icon: SlidersHorizontal },
+        { label: 'Channel queue', sub: 'by channel and priority', icon: ListOrdered },
+        { label: 'Provider', sub: 'APNs, FCM, SMS, email', icon: Send },
+      ]} />
       <ApiSpec endpoints={[
         { method: 'POST', path: '/v1/notifications', desc: 'Request a notification. The idempotency key is required; the platform picks channels from preferences unless overridden.', body: '{ userId, templateId, params, priority, idempotencyKey, channels? }', returns: '202 { notificationId }' },
         { method: 'PUT', path: '/v1/users/{id}/preferences', desc: 'Channel opt-ins, categories, quiet hours.', body: '{ channels, categories, quietHours, tz }', returns: '204' },
@@ -159,15 +174,11 @@ async function deliver(msg: QueuedNotification) {
 
       <H2 id="isolation">6 · Deep dive: priority, isolation, and user fatigue</H2>
       <p>The second deep dive is fairness: how queue layout keeps urgent messages fast during bursts and outages.</p>
-      <CompareTable
-        columns={['One shared queue', 'Queue per channel', 'Queue per channel × priority']}
-        rows={[
-          { label: 'OTP during a campaign', cells: ['Stuck behind millions', 'Stuck behind campaign on same channel', 'Unaffected'] },
-          { label: 'Provider outage', cells: ['Blocks everything', 'Isolated to that channel', 'Isolated'] },
-          { label: 'Scaling knobs', cells: ['One', 'Per channel', 'Per channel and class'] },
-          { label: 'Ops complexity', cells: ['Lowest', 'Medium', 'Higher, and worth it'] },
-        ]}
-      />
+      <SideBySide caption="The OTP test: does a one-time code still arrive during a 10M-user campaign?" panels={[
+        { title: 'One shared queue', icon: Layers, tone: 'bad', points: ['- OTP stuck behind millions', '- A provider outage blocks everything', '- One scaling knob', '+ Lowest ops complexity'], verdict: 'Fails the OTP test' },
+        { title: 'Queue per channel', icon: Split, points: ['+ Provider outage isolated to its channel', '- OTP still stuck behind a campaign on the same channel', '+ Scale per channel'], verdict: 'Better, not enough' },
+        { title: 'Per channel × priority', icon: ShieldCheck, tone: 'good', points: ['+ OTP unaffected by campaigns', '+ Outages isolated', '+ Scale per channel and class', '- Higher ops complexity'], verdict: 'Worth the complexity' },
+      ]} />
       <p>
         Fatigue controls protect users <em>and</em> the business, because over-notifying drives uninstalls. Use
         per-category frequency caps and quiet hours in the user's time zone.

@@ -1,8 +1,9 @@
 import {
-  ApiSpec, ArchitectureDiagram, Callout, CodeBlock, CompareTable, EstimationTable, H2, InterviewQuestion,
-  KeyTakeaways, Requirements, References, TLDR, Term,
+  ApiSpec, ArchitectureDiagram, Callout, CodeBlock, CompareTable, EstimationTable, FlowDiagram, H2,
+  InterviewQuestion, KeyTakeaways, LayerStack, MentalModel, References, Requirements, StatRow, Term, TLDR,
 } from '../components/ui'
 import type { ArchEdge, ArchNode, Reference } from '../components/ui'
+import { BadgeCheck, Bot, Brush, CalendarSearch, CreditCard, DoorOpen, Hourglass, Lock, MemoryStick, Ticket, XCircle } from 'lucide-react'
 import { ReserveRaceDemo } from './demos/reserve-race-demo'
 
 const NODES: ArchNode[] = [
@@ -48,6 +49,7 @@ export default function ReservationSystemChapter() {
         'The hard part: payment happens outside that transaction, so holds need an expiry.',
         'Staff insight: flash sales are a different system: a waiting room, in-memory counters, async persistence.',
       ]} />
+      <MentalModel id="reservations" />
       <p>
         Hotel and ticket booking is the canonical <strong>“don't sell the same thing twice”</strong> problem. The
         write rate is tiny next to the browse rate.
@@ -82,7 +84,12 @@ export default function ReservationSystemChapter() {
           { label: 'Inventory rows', math: '5K hotels × ~20 types × 365 days × 2 yrs', result: '≈ 73M' },
         ]}
       />
-      <p>Three bookings per second fits on one relational database. The write path is a <strong>correctness</strong> problem, not a scale problem.</p>
+      <StatRow caption="Three bookings per second fits on one relational database: the write path is a correctness problem, not a scale problem"
+        stats={[
+          { value: '≈ 3/s', label: 'booking writes' },
+          { value: '300–3K/s', label: 'search reads' },
+          { value: '≈ 73M', label: 'inventory rows' },
+        ]} />
       <p>A concert on-sale is different: a million users competing for 50K seats in minutes.</p>
 
       <H2 id="api">3 · API</H2>
@@ -95,6 +102,13 @@ export default function ReservationSystemChapter() {
         { method: 'POST', path: '/v1/reservations', desc: 'Creates a HELD reservation with an expiry. Idempotency-Key required.', body: '{ hotelId, roomTypeId, checkIn, checkOut, guest }', returns: '201 { reservationId, status: HELD, holdExpiresAt }' },
         { method: 'POST', path: '/v1/reservations/{id}/confirm', desc: 'After payment succeeds.' },
         { method: 'DELETE', path: '/v1/reservations/{id}', desc: 'Cancel and release inventory.' },
+      ]} />
+
+      <FlowDiagram caption="The booking lifecycle as API calls" steps={[
+        { label: 'GET availability', sub: 'cached, may be stale', icon: CalendarSearch },
+        { label: 'POST reservation', sub: 'HELD + expiry', icon: Hourglass },
+        { label: 'POST confirm', sub: 'after payment', icon: BadgeCheck },
+        { label: 'DELETE', sub: 'cancel, release', icon: XCircle },
       ]} />
 
       <H2 id="high-level">4 · High-level design</H2>
@@ -149,6 +163,12 @@ COMMIT;`} />
       <p>
         The state guard (<code>WHERE status = 'HELD'</code>) makes release and confirm race-safe against each other.
       </p>
+      <FlowDiagram caption="Payment happens outside the database transaction; the hold's expiry bounds how long inventory is locked up" steps={[
+        { label: 'Hold', sub: 'HELD, expires in 10 min', icon: Hourglass },
+        { label: 'Pay', sub: 'provider call, no DB txn open', icon: CreditCard },
+        { label: 'Confirm', sub: "WHERE status = 'HELD'", icon: BadgeCheck },
+        { label: 'Sweeper', sub: 'releases expired holds', icon: Brush },
+      ]} />
       <CodeBlock lang="ts" title="reservation lifecycle" code={`
 HELD ──pay ok──▶ CONFIRMED ──cancel──▶ CANCELLED (inventory released, refund per policy)
   │
@@ -156,13 +176,20 @@ HELD ──pay ok──▶ CONFIRMED ──cancel──▶ CANCELLED (inventory 
 
       <H2 id="flash-sale">7 · Deep dive: flash sales & ticketing</H2>
       <p>Finally, the ticketing variant. When demand exceeds supply by 20× in the first minute, the database row for “section A” becomes the hottest lock on the planet.</p>
-      <p>Layered defences:</p>
-      <ul>
-        <li><strong><Term def="A holding page that queues visitors and lets them into the real site at a controlled rate.">Virtual waiting room</Term></strong>: a static page with a queue position. Admit users at the rate the booking tier can sustain, and issue signed, short-lived admission tokens.</li>
-        <li><strong>Pre-sharded inventory in memory</strong>: split 50K seats into buckets in Redis and <code>DECR</code> atomically (Lua for multi-key). The fast “you got one” answer then gets persisted asynchronously with a durable queue behind it.</li>
-        <li><strong>Seat maps</strong>: holds per seat ID with a TTL (<code>SET seat:123 user NX EX 600</code>) so two users can't pick the same seat.</li>
-        <li><strong>Bots</strong>: rate limits per account and device, and challenges at the admission gate rather than at checkout.</li>
-      </ul>
+      <p>
+        Defend in layers, from the edge inward. The outermost is a{' '}
+        <Term def="A holding page that queues visitors and lets them into the real site at a controlled rate.">virtual waiting room</Term>:
+        a static page with a queue position that admits users at the rate the booking tier can sustain.
+      </p>
+      <LayerStack legend="Outermost layer on top; each layer shrinks the traffic the next one sees"
+        caption="The fast “you got one” answer comes from memory; persistence happens asynchronously behind a durable queue"
+        layers={[
+          { label: 'Virtual waiting room', sub: 'queue position, signed short-lived tokens', icon: DoorOpen, size: 1, value: 'admit N/s' },
+          { label: 'Bot defences', sub: 'rate limits per account/device, challenge at the gate', icon: Bot, size: 0.8, value: 'at admission' },
+          { label: 'In-memory inventory', sub: 'seats pre-sharded into Redis buckets', icon: MemoryStick, size: 0.6, value: 'DECR (Lua)', highlight: true },
+          { label: 'Seat holds', sub: 'per seat ID with a TTL', icon: Lock, size: 0.45, value: 'SET NX EX 600' },
+          { label: 'Durable persistence', sub: 'queue → database, async', icon: Ticket, size: 0.3, value: 'source of truth' },
+        ]} />
 
       <H2 id="data-model">8 · Data model</H2>
       <p>Two tables carry the design: inventory counts per night, and reservations. Both are keyed by hotel.</p>

@@ -1,7 +1,11 @@
 import {
-  References, TLDR, Term,
-  ArchitectureDiagram, Callout, CompareTable, EpisodePlayer, EstimationTable, H2, InterviewQuestion, KeyTakeaways,
+  ArchitectureDiagram, Callout, CompareTable, EpisodePlayer, EstimationTable, H2, InterviewQuestion,
+  KeyTakeaways, MentalModel, References, SideBySide, StatRow, Term, TLDR, VisualTimeline,
 } from '../components/ui'
+import {
+  Activity, Blocks, Brain, Car, Database, Hexagon, Lock, MapPin, Network, Radio, ScrollText, Server,
+  ShieldCheck, Split, type LucideIcon,
+} from 'lucide-react'
 import type { ArchEdge, ArchNode, Reference } from '../components/ui'
 import { EpisodeUberDispatchDemo } from './demos/episode-uber-dispatch-demo'
 import { UBER_SRC } from './demos/episode-uber-sources'
@@ -29,6 +33,14 @@ const MATCH_EDGES: ArchEdge[] = [
 // Every source used anywhere in the episode, including per-stage deep dives.
 const REFS: Reference[] = Object.values(UBER_SRC)
 
+const STAGE_ICONS: Record<string, LucideIcon> = {
+  v0: Server, v1: Split, v2: Network, v3: Database, v4: ShieldCheck, v5: ScrollText, v6: Activity, v7: Hexagon, v8: Radio, v9: Brain, v10: Blocks, v11: Lock,
+}
+const TIMELINE = UBER_STAGES.map((s) => {
+  const [version, name] = s.title.split(' · ')
+  return { when: s.era ?? '', title: name ?? s.title, note: typeof s.summary === 'string' ? s.summary : undefined, icon: STAGE_ICONS[version] }
+})
+
 export default function UberEpisode() {
   return (
     <>
@@ -39,6 +51,7 @@ export default function UberEpisode() {
         'Growth brought its own problems: thousands of services, then tracing, a shared event backbone, an ML platform, and service domains.',
         'The trip core ended up on a transactional, multi-region database: correctness first, at the cost of latency engineering.',
       ]} />
+      <MentalModel id="ep-uber" />
       <p>
         Uber looks like a map with cars on it. Underneath, it is a <strong>real-time marketplace</strong>. Drivers
         stream their position every few seconds. Each ride request must reach the right driver in seconds. And a trip,
@@ -55,16 +68,13 @@ export default function UberEpisode() {
       <p className="muted"><em>This episode is an independent reconstruction from public sources. It is not affiliated with or endorsed by Uber; all trademarks belong to their owners.</em></p>
 
       <H2 id="timeline">Timeline at a glance</H2>
-      <ol>
-        {UBER_STAGES.map((s) => (
-          <li key={s.title}><strong>{s.era}</strong> · {s.title.replace(/^v\d+ · /, '')}: {s.summary}</li>
-        ))}
-      </ol>
+      <VisualTimeline items={TIMELINE} />
 
       <H2 id="the-build">The build, stage by stage</H2>
       <EpisodePlayer stages={UBER_STAGES} height={420} />
 
       <H2 id="numbers">The numbers that shape everything</H2>
+      <StatRow caption="Illustrative estimates from the assumptions below" stats={[{ value: '≈ 1.25M / s', label: 'driver location writes', note: 'estimate' }, { value: '≈ 0.5 GB', label: 'every driver’s latest position', note: 'estimate' }, { value: '≈ 1K / s', label: 'trip state writes', note: 'estimate' }]} />
       <EstimationTable
         assumptions={['Illustrative: 5M drivers online at global peak', 'One GPS update every 4 s per online driver', 'Illustrative: 15M trips per day, ~6 state changes each']}
         rows={[
@@ -108,13 +118,17 @@ export default function UberEpisode() {
       </Callout>
 
       <H2 id="decisions">Key decisions and their alternatives</H2>
+      <p>The three decisions that split fast data from safe data:</p>
+      <SideBySide panels={[
+        { title: 'In memory, latest value only', icon: MapPin, tone: 'good', points: ['+ Huge write rate, tiny state', '+ Loss-tolerant', '- Instead of: one database row per ping'], verdict: 'Driver locations' },
+        { title: 'Batched matching by road ETA', icon: Car, tone: 'good', points: ['+ Lower total wait', '+ Roads, not crow-flies distance', '- Instead of: greedy nearest by distance'], verdict: 'Matching' },
+        { title: 'State machine + conditional writes', icon: Lock, tone: 'good', points: ['+ Safe retries; no double accept', '+ Auditable', '- Instead of: a free-form status field'], verdict: 'Trip state' },
+      ]} />
+      <p>Other decisions, in brief:</p>
       <CompareTable
         columns={['Chosen', 'Alternative', 'Why the choice fits']}
         rows={[
-          { label: 'Driver locations', cells: ['In memory, latest value only', 'One database row per ping', 'Huge write rate, tiny state, loss-tolerant'] },
           { label: 'Spatial index', cells: ['Cells (S2, later H3 hexagons)', 'Per-city shards', 'Even load; neighbours are cheap to query'] },
-          { label: 'Matching', cells: ['Batched, by road ETA', 'Greedy nearest by distance', 'Lower total wait; roads, not crow-flies distance'] },
-          { label: 'Trip state', cells: ['State machine + conditional writes', 'Free-form status field', 'Safe retries; no double accept; auditable'] },
           { label: 'Service sprawl', cells: ['Typed contracts, then domains', 'Ad-hoc JSON between services', 'Changes break in review, not in production'] },
           { label: 'Trip core storage', cells: ['Transactional NewSQL (Spanner)', 'NoSQL + app-level consistency', 'Invariants span entities; correctness first'] },
         ]}

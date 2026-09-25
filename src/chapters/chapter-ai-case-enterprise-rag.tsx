@@ -1,7 +1,8 @@
 import {
-  ApiSpec, ArchitectureDiagram, Callout, CodeBlock, CompareTable, EstimationTable, H2, InterviewQuestion,
-  KeyTakeaways, References, Requirements, Term, TLDR,
+  ApiSpec, ArchitectureDiagram, Callout, CodeBlock, EstimationTable, H2, InterviewQuestion,
+  KeyTakeaways, MentalModel, References, Requirements, SideBySide, StatRow, Term, TLDR,
 } from '../components/ui'
+import { Database, EyeOff, FileEdit, Filter, Layers, Search, ShieldCheck, Trash2 } from 'lucide-react'
 import type { ArchEdge, ArchNode, Reference } from '../components/ui'
 import { AiCaseRagAclDemo } from './demos/ai-case-rag-acl-demo'
 
@@ -56,6 +57,7 @@ export default function EnterpriseRagChapter() {
         'Hybrid search + reranking, few strong passages, and a citation per claim.',
         'Key every cache by the user’s permission set, never by question text alone.',
       ]} />
+      <MentalModel id="ai-case-rag" />
       <p>
         “Ask anything about the company” sounds like a vector database plus an LLM. The hard parts are elsewhere.
       </p>
@@ -75,6 +77,13 @@ export default function EnterpriseRagChapter() {
         nonFunctional={['Zero permission leaks (hard requirement)', 'Deletes and revocations reflected within minutes', 'First token < 2 s, full answer < 10 s', 'Tenant isolation, with data residency per customer']}
         outOfScope={['Taking actions in source systems (agents)', 'Training or fine-tuning on customer data']}
       />
+      <StatRow caption="The four targets that shape the design"
+        stats={[
+          { value: '0', label: 'permission leaks', note: 'hard requirement' },
+          { value: 'minutes', label: 'for deletes and revocations' },
+          { value: '< 2 s', label: 'to first token' },
+          { value: '< 10 s', label: 'to full answer' },
+        ]} />
       <Callout kind="tip">
         Ask early: <strong>how fast must a permission change or delete take effect?</strong> The answer decides
         whether connectors can poll nightly or need webhooks plus a priority lane. It is the most common reason
@@ -93,6 +102,13 @@ export default function EnterpriseRagChapter() {
           { label: 'Re-embedding load', math: '2M docs × 8 / 86,400', result: '≈ 190 chunks/s' },
         ]}
       />
+      <StatRow
+        stats={[
+          { value: '≈ 800M', label: 'chunks in the largest tenant' },
+          { value: '≈ 1.2 TB', label: 'of fp16 vectors', note: '≈ 150–600 GB quantized' },
+          { value: '≈ 60', label: 'questions/s at peak', note: 'modest' },
+          { value: '≈ 6.5B', label: 'LLM tokens per day', note: 'the real cost' },
+        ]} />
       <p>
         Query traffic is modest. The costs are <strong>LLM tokens</strong> (context size dominates) and{' '}
         <strong>keeping a billion-chunk index fresh and permission-correct</strong>. Spend design effort where the
@@ -128,15 +144,12 @@ export default function EnterpriseRagChapter() {
         search</em>. Where that filter runs is the whole game. Try the three options:
       </p>
       <AiCaseRagAclDemo />
-      <CompareTable
-        columns={['Filter inside the index', 'Post-filter the top-k', 'Check at render only']}
-        rows={[
-          { label: 'Leaks', cells: ['None', 'None', 'The model already read it'] },
-          { label: 'Recall', cells: ['Full', 'Drops when restricted docs rank high', 'Full, but unsafe'] },
-          { label: 'Cost', cells: ['Needs a filter-aware vector index', 'Cheap; over-fetch hides the problem', 'Cheapest'] },
-          { label: 'Verdict', cells: ['Default', 'Only with heavy over-fetch as a stopgap', 'Never'] },
-        ]}
-      />
+      <SideBySide
+        panels={[
+          { title: 'Filter inside the index', icon: ShieldCheck, tone: 'good', points: ['+ No leaks', '+ Full recall', '- Needs a filter-aware vector index'], verdict: 'Default' },
+          { title: 'Post-filter the top-k', icon: Filter, points: ['+ No leaks', '- Recall drops when restricted docs rank high', 'Cheap; over-fetch hides the problem'], verdict: 'Stopgap only, with heavy over-fetch' },
+          { title: 'Check at render only', icon: EyeOff, tone: 'bad', points: ['- The model already read it', 'Cheapest'], verdict: 'Never' },
+        ]} />
       <CodeBlock lang="ts" title="query with principal filter (pseudo-code)" code={`
 const principals = await acl.expand(user.id) // user id + all (nested) group ids, TTL ~60 s
 
@@ -159,6 +172,11 @@ const passages = (await reranker.score(rewrittenQuestion, candidates)).slice(0, 
         is turned into vectors by an{' '}
         <Term def="A model that maps text to a vector so that similar meanings land close together.">embedding model</Term>.
       </p>
+      <SideBySide caption="Deletes and revocations never wait behind content edits"
+        panels={[
+          { title: 'Content lane', icon: FileEdit, points: ['New and edited documents', 'Chunk → embed → idempotent upsert', 'Unchanged chunks skipped by content hash', 'Can lag a bit'] },
+          { title: 'Priority lane', icon: Trash2, tone: 'good', points: ['Deletes and ACL revocations', 'Skip embedding: tombstone or update ACL directly', 'Own freshness SLO (minutes)', 'Backed by periodic full ACL re-crawl'] },
+        ]} />
       <ul>
         <li><strong>Structure-aware chunking.</strong> Split on headings, slides, and table boundaries into chunks of a few hundred tokens, with a little overlap. Keep the document title and section path on every chunk so a passage makes sense on its own.</li>
         <li><strong>Idempotent upserts.</strong> Key chunks by <code>(docId, chunkIndex)</code> and store a content hash. An unchanged chunk is not re-embedded, which saves most of the daily embedding cost.</li>
@@ -171,14 +189,12 @@ const passages = (await reranker.score(rewrittenQuestion, candidates)).slice(0, 
         If the right passage isn’t retrieved, no model can use it. Combine keyword and vector search, then{' '}
         <Term def="Re-scoring the top candidates with a slower, more precise model that reads query and passage together.">rerank</Term>.
       </p>
-      <CompareTable
-        columns={['Keyword (BM25)', 'Dense vectors', 'Hybrid + rerank']}
-        rows={[
-          { label: 'Strength', cells: ['Exact names, error codes, IDs', 'Paraphrases and concepts', 'Both'] },
-          { label: 'Weakness', cells: ['Misses synonyms', 'Misses rare exact tokens', 'Extra latency (~100–300 ms for rerank)'] },
-          { label: 'Use', cells: ['Always keep it', 'Always keep it', 'Default for enterprise search'] },
-        ]}
-      />
+      <SideBySide
+        panels={[
+          { title: 'Keyword (BM25)', icon: Search, points: ['+ Exact names, error codes, IDs', '- Misses synonyms'], verdict: 'Always keep it' },
+          { title: 'Dense vectors', icon: Database, points: ['+ Paraphrases and concepts', '- Misses rare exact tokens'], verdict: 'Always keep it' },
+          { title: 'Hybrid + rerank', icon: Layers, tone: 'good', points: ['+ Both strengths', '- ~100–300 ms extra for rerank'], verdict: 'Default for enterprise search' },
+        ]} />
       <ul>
         <li><strong>Few, strong passages.</strong> Models use information at the start and end of a long context better than in the middle, so send ~5–10 reranked passages rather than 50.</li>
         <li><strong>Citations as a contract.</strong> Number the passages, require a citation per claim, and check after generation that every cited number exists. If nothing relevant was retrieved, say so rather than guessing.</li>

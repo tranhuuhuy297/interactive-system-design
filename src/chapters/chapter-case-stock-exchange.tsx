@@ -1,8 +1,9 @@
 import {
-  ApiSpec, ArchitectureDiagram, Callout, CodeBlock, CompareTable, EstimationTable, H2, InterviewQuestion,
-  KeyTakeaways, Requirements, References, TLDR, Term,
+  ApiSpec, ArchitectureDiagram, Callout, CodeBlock, CompareTable, EstimationTable, FlowDiagram, H2,
+  InterviewQuestion, KeyTakeaways, LayerStack, MentalModel, References, Requirements, StatRow, Term, TLDR,
 } from '../components/ui'
 import type { ArchEdge, ArchNode, Reference } from '../components/ui'
+import { Cpu, FileClock, ListOrdered, MemoryStick, Network, RefreshCw, Send, Split } from 'lucide-react'
 import { ExchangeOrderBookDemo } from './demos/exchange-order-book-demo'
 import { ExchangeSequencerReplayDemo } from './demos/exchange-sequencer-replay-demo'
 
@@ -49,6 +50,7 @@ export default function StockExchangeChapter() {
         'The hard part: tail latency. One pause or cache miss can cost more than the whole matching budget.',
         'Staff insight: the engine is a deterministic state machine, so the journal gives failover, replay and audit for free.',
       ]} />
+      <MentalModel id="stock-exchange" />
       <p>
         Most system design questions reward horizontal scale and eventual consistency. The stock exchange rewards the
         opposite: <strong>one ordered stream, processed deterministically, as fast as physics allows</strong>.
@@ -86,10 +88,13 @@ export default function StockExchangeChapter() {
           { label: 'Budget per message', math: '1 s / 400K', result: '≈ 2.5 µs' },
         ]}
       />
-      <p>
-        Throughput is modest; a single core handles it. The hard part is <strong>latency and determinism at the
-        tail</strong>.
-      </p>
+      <StatRow caption="Throughput is modest; a single core handles it. The hard part is latency and determinism at the tail."
+        stats={[
+          { value: '≈ 4.3K/s', label: 'average messages' },
+          { value: '50–400K/s', label: 'auction bursts' },
+          { value: '≈ 2.5 µs', label: 'budget per message' },
+          { value: '≈ 10 GB', label: 'journal per day' },
+        ]} />
       <p>
         A single garbage-collection pause or cross-core cache miss can be worth more than the whole matching budget.
         Storage is tiny, so keep the entire book in memory.
@@ -174,17 +179,15 @@ function match(order: Order, book: Book): Trade[] {
 
       <H2 id="latency">7 · Deep dive: the low-latency toolbox</H2>
       <p>Last, how to hit a budget of a few microseconds. Each technique removes work from the hot path.</p>
-      <CompareTable
-        columns={['Technique', 'Why it helps']}
-        rows={[
-          { label: 'Single-threaded hot path', cells: ['Engine thread pinned to a core', 'No locks, no contention, predictable cache behaviour'] },
-          { label: 'Ring buffers', cells: ['Pre-allocated, lock-free queues between stages', 'No allocation, so no GC pauses; mechanical sympathy'] },
-          { label: 'Kernel bypass', cells: ['DPDK / RDMA / specialised NICs', 'Skip the kernel network stack: microseconds per hop'] },
-          { label: 'mmap journal', cells: ['Append to memory-mapped files, replicate in parallel', 'Durability without blocking on fsync for every message'] },
-          { label: 'Co-location', cells: ['Brokers rack-mounted next to the gateway', 'Speed of light: ~5 µs per km of fibre'] },
-          { label: 'Symbol sharding', cells: ['One engine per symbol group', 'Scale out; no cross-symbol ordering needed'] },
-        ]}
-      />
+      <LayerStack legend="From the wire (top) to the core (bottom): every layer strips out a source of delay or jitter"
+        caption="Scale out by symbol sharding: one engine per symbol group, since no cross-symbol ordering is needed"
+        layers={[
+          { label: 'Co-location', sub: 'brokers rack-mounted next to the gateway', icon: Network, size: 1, value: '~5 µs per km of fibre' },
+          { label: 'Kernel bypass', sub: 'DPDK / RDMA / specialised NICs', icon: Send, size: 0.85, value: 'skip the kernel stack' },
+          { label: 'Ring buffers', sub: 'pre-allocated, lock-free queues between stages', icon: RefreshCw, size: 0.7, value: 'no allocation, no GC' },
+          { label: 'Single-threaded engine', sub: 'pinned to one core', icon: Cpu, size: 0.55, value: 'no locks', highlight: true },
+          { label: 'mmap journal', sub: 'append to memory-mapped files, replicate in parallel', icon: FileClock, size: 0.4, value: 'no fsync per message' },
+        ]} />
       <Callout kind="pitfall">
         Proposing Kafka and a microservice per step on the order path. Those are fine for post-trade reporting, but on
         the hot path every network hop and broker adds tens to hundreds of microseconds and jitter. Keep the core in
@@ -205,6 +208,13 @@ type SequencedEvent = {
   kind: 'new' | 'cancel' | 'replace'
   payload: Uint8Array   // fixed-size binary message
 }`} />
+
+      <FlowDiagram caption="Only the journal is durable on the hot path; the book is a cache you can always rebuild" steps={[
+        { label: 'Order message', sub: 'fixed-size binary', icon: Split },
+        { label: 'Sequencer', sub: 'gap-free seq + timestamp', icon: ListOrdered },
+        { label: 'Journal', sub: 'durable, append-only', icon: FileClock },
+        { label: 'In-memory book', sub: 'rebuilt by replay', icon: MemoryStick },
+      ]} />
 
       <H2 id="staff">9 · Going beyond: staff-level extensions</H2>
       <Callout kind="staff">

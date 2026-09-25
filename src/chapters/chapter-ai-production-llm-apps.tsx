@@ -1,6 +1,11 @@
 import {
-  ArchitectureDiagram, Callout, CodeBlock, CompareTable, H2, InterviewQuestion, KeyTakeaways, References, Term, TLDR,
+  ArchitectureDiagram, Callout, CodeBlock, FlowDiagram, H2, InterviewQuestion, KeyTakeaways, LayerStack, MentalModel,
+  References, SideBySide, Term, TLDR,
 } from '../components/ui'
+import {
+  Archive, Braces, Calculator, Clock, Copy, EyeOff, FlaskConical, Ghost, Globe2, Rocket, Scale, Search, Send, ShieldCheck,
+  Tag, Wallet, XCircle, Zap,
+} from 'lucide-react'
 import type { ArchEdge, ArchNode, Reference } from '../components/ui'
 import { AiProdCostDemo } from './demos/ai-prod-cost-demo'
 
@@ -48,6 +53,7 @@ export default function ProductionLlmAppsChapter() {
         'Budget and rate-limit in tokens, per tenant and per feature.',
         'Fail over on slow first tokens, only to fallbacks you have evaluated.',
       ]} />
+      <MentalModel id="ai-production" />
       <p>
         Calling a model API takes one line of code. Running an LLM feature for millions of users is a systems
         problem:
@@ -78,6 +84,14 @@ export default function ProductionLlmAppsChapter() {
 
       <H2 id="streaming">Streaming UX</H2>
       <p>A full answer can take many seconds. Streaming makes the wait feel short, but it changes how you handle errors.</p>
+      <FlowDiagram caption="Two timeouts, one cancel, one final check"
+        steps={[
+          { label: 'Send request', icon: Send },
+          { label: 'First token', sub: 'short timeout · fail over here', icon: Clock },
+          { label: 'Stream tokens', sub: 'SSE or WebSocket', icon: Zap },
+          { label: 'User leaves?', sub: 'cancel upstream', icon: XCircle },
+          { label: 'Finish', sub: 'validate JSON at the end', icon: Braces },
+        ]} />
       <ul>
         <li><strong>Stream tokens</strong> over{' '}<Term def="SSE: a simple HTTP mechanism where the server keeps the response open and pushes events.">server-sent events</Term>{' '}or WebSockets. Users judge speed by <em>time to first token</em>, not total time.</li>
         <li><strong>Separate timeouts</strong> for first token (e.g. a few seconds) and for the whole response. A slow first token is the best signal to fail over.</li>
@@ -91,14 +105,12 @@ export default function ProductionLlmAppsChapter() {
         <Term def="A cache that returns a stored answer when a new question’s embedding is close enough to an old one.">semantic cache</Term>{' '}
         can serve the wrong answer. Compare the three kinds, then play with the calculator.
       </p>
-      <CompareTable
-        columns={['What matches', 'Savings', 'Risk']}
-        rows={[
-          { label: 'Exact response cache', cells: ['Identical prompt + model + params', 'Full call avoided', 'Stale answers if underlying data changes; include data versions in the key'] },
-          { label: 'Semantic cache', cells: ['Embedding similarity above a threshold', 'Full call avoided on paraphrases', 'False hits serve the wrong answer; must be tenant-scoped and evaluated'] },
-          { label: 'Provider prompt caching', cells: ['Shared prompt prefix (system prompt, documents, tools)', 'Cheaper, faster input tokens; output still generated', 'Only helps if the stable part comes first; order your prompt for it'] },
-        ]}
-      />
+      <SideBySide caption="Same goal, very different risk"
+        panels={[
+          { title: 'Exact response cache', icon: Copy, tone: 'good', points: ['Match: identical prompt + model + params', '+ Full call avoided', '- Stale if data changes: put data versions in the key'] },
+          { title: 'Semantic cache', icon: Search, tone: 'bad', points: ['Match: embedding similarity above a threshold', '+ Also catches paraphrases', '- False hits serve the wrong answer', '- Must be tenant-scoped and evaluated'] },
+          { title: 'Provider prompt caching', icon: Archive, points: ['Match: shared prompt prefix', '+ Cheaper, faster input tokens', '- Output still generated', '- Stable part must come first'] },
+        ]} />
       <AiProdCostDemo />
 
       <H2 id="limits">Rate limits and token budgets</H2>
@@ -106,11 +118,13 @@ export default function ProductionLlmAppsChapter() {
         Providers limit <strong>requests per minute</strong> (RPM) and <strong>tokens per minute</strong> (TPM). So your
         own limits should count tokens too.
       </p>
-      <ol>
-        <li>Budget per tenant and per feature.</li>
-        <li>Estimate tokens before the call. Input is known; output is capped by <code>max_tokens</code>.</li>
-        <li>Reconcile with actual usage afterwards.</li>
-      </ol>
+      <FlowDiagram caption="Reserve before, reconcile after"
+        steps={[
+          { label: 'Budget', sub: 'per tenant and per feature', icon: Wallet },
+          { label: 'Estimate', sub: 'input known + max_tokens cap', icon: Calculator },
+          { label: 'Call the model', icon: Send },
+          { label: 'Reconcile', sub: 'charge actual usage', icon: Scale },
+        ]} />
       <p>
         Reserve capacity for interactive traffic. Push batch jobs to off-peak hours or discounted batch APIs. The
         algorithms are the same as in <a href="#/rate-limiting">Rate Limiting</a>, with tokens as the unit.
@@ -122,6 +136,12 @@ export default function ProductionLlmAppsChapter() {
         <Term def="A switch that stops sending traffic to a failing dependency for a while, then tests it again.">circuit breaker</Term>{' '}
         keeps the feature up.
       </p>
+      <LayerStack legend="The fallback chain from the sketch below: try top to bottom, skip any with an open breaker"
+        layers={[
+          { label: 'primary-large', sub: 'normal traffic', size: 1, value: 'first token ≤ 4 s', highlight: true },
+          { label: 'fallback-large', sub: 'evaluated to parity', size: 1, value: 'first token ≤ 4 s' },
+          { label: 'small-fast', sub: 'degraded mode: UI says “limited”', size: 0.6, value: 'first token ≤ 2 s' },
+        ]} />
       <CodeBlock lang="ts" title="gateway call with fallback (sketch)" code={`
 const CHAIN = [
   { model: 'primary-large',  firstTokenTimeoutMs: 4_000 },
@@ -167,9 +187,23 @@ async function complete(req: LlmRequest): Promise<LlmStream> {
         <Term def="Shadow: run the new version on real traffic without showing users. Canary: show it to a small slice first.">shadow or canary</Term>{' '}
         traffic with online quality metrics. See <a href="#/ai-evals">Evaluating LLM Systems</a>.
       </p>
+      <FlowDiagram
+        steps={[
+          { label: 'Version + pin', sub: 'prompt version, model version', icon: Tag },
+          { label: 'Offline evals', sub: 'gate', icon: FlaskConical },
+          { label: 'Shadow / canary', sub: 'online quality metrics', icon: Ghost },
+          { label: 'Full rollout', icon: Rocket },
+        ]} />
 
       <H2 id="privacy">Privacy and data handling</H2>
       <p>Every prompt is data leaving your system. Treat it with the same care as any other data flow.</p>
+      <FlowDiagram caption="Check the data at the boundary, then apply the same retention everywhere it lands"
+        steps={[
+          { label: 'Prompt built', icon: Braces },
+          { label: 'Redact PII', sub: 'if the model doesn’t need it', icon: EyeOff },
+          { label: 'Approved endpoint', sub: 'provider policy, region', icon: Globe2 },
+          { label: 'Logs, traces, caches', sub: 'same retention + deletion', icon: ShieldCheck },
+        ]} />
       <ul>
         <li>Redact or tokenize{' '}<Term def="Personally identifiable information: names, emails, phone numbers, IDs, and similar.">PII</Term>{' '}before it leaves your boundary when the model doesn’t need it.</li>
         <li>Know each provider’s data retention and training policies, and route regulated data only to approved endpoints or regions.</li>

@@ -1,6 +1,7 @@
 import {
-  Callout, CompareTable, H2, InterviewQuestion, KeyTakeaways, References, TLDR, Tabs, Term,
+  Callout, H2, InterviewQuestion, KeyTakeaways, MentalModel, References, SideBySide, TLDR, Term,
 } from '../components/ui'
+import { BookOpen, Globe2, Lock, PenLine, Server, Shuffle, Unlock } from 'lucide-react'
 import type { Reference } from '../components/ui'
 import { ScalingEvolutionStepper } from './demos/scaling-evolution-stepper'
 import { ScalingSaturationSimulator } from './demos/scaling-saturation-simulator'
@@ -27,6 +28,7 @@ export default function ScaleZeroToMillionsChapter() {
         'Stateless servers make load balancing, autoscaling, and deploys easy.',
         'Latency climbs sharply as a component gets busy, so plan for about 60% utilization at peak.',
       ]} />
+      <MentalModel id="scaling" />
       <p>
         If you can tell that story fluently (which stage, which pain, which fix, what it cost), you can reason about
         almost any design prompt from first principles.
@@ -48,12 +50,18 @@ export default function ScaleZeroToMillionsChapter() {
 
       <H2 id="vertical-vs-horizontal">Vertical vs horizontal scaling</H2>
       <p>There are only two ways to add capacity: a bigger machine, or more machines. Each has a different ceiling.</p>
-      <CompareTable columns={['Vertical (scale up)', 'Horizontal (scale out)']} rows={[
-        { label: 'How', cells: ['Bigger machine: more CPU, RAM, faster disks', 'More machines behind a load balancer'] },
-        { label: 'Ceiling', cells: ['Hard limit: the biggest instance you can buy', 'Practically unbounded if the tier is stateless'] },
-        { label: 'Complexity', cells: ['Near zero, since code does not change', 'Needs stateless design, discovery, coordination'] },
-        { label: 'Failure', cells: ['Still a single point of failure', 'Losing one node loses 1/N of capacity'] },
-        { label: 'Sweet spot', cells: ['Databases early on, and anything hard to shard', 'Web/API tiers, workers, caches'] },
+      <SideBySide caption="Scale up until the next step is too expensive or too risky" panels={[
+        { title: 'Vertical (scale up)', icon: Server, points: [
+          '+ Bigger machine; code does not change',
+          '+ Great for databases early on',
+          '- Hard ceiling: the biggest instance you can buy',
+          '- Still a single point of failure',
+        ], verdict: 'Databases, hard-to-shard things' },
+        { title: 'Horizontal (scale out)', icon: Shuffle, points: [
+          '+ Practically unbounded if stateless',
+          '+ Losing one node loses only 1/N',
+          '- Needs stateless design, discovery, coordination',
+        ], verdict: 'Web/API tiers, workers, caches' },
       ]} />
       <p>
         Vertical scaling is underrated. One modern database server with hundreds of GB of RAM and NVMe storage
@@ -68,9 +76,20 @@ export default function ScaleZeroToMillionsChapter() {
         rate-limit counters live in shared stores instead.
       </p>
       <p>
-        The payoff: the load balancer can route anywhere, autoscaling can add and remove instances freely, and
-        deploys become <Term def="Replacing servers a few at a time, so the service stays up during a release.">rolling restarts</Term> instead of events.
+        The payoff is that deploys become <Term def="Replacing servers a few at a time, so the service stays up during a release.">rolling restarts</Term> instead of events.
       </p>
+      <SideBySide panels={[
+        { title: 'Stateful servers', icon: Lock, tone: 'bad', points: [
+          '- Requests must return to the same box',
+          '- A node failure logs users out',
+          '- Scale-in waits for sessions to drain',
+        ] },
+        { title: 'Stateless servers', icon: Unlock, tone: 'good', points: [
+          '+ The load balancer can route anywhere',
+          '+ Autoscaling adds and removes freely',
+          '+ State lives in shared stores',
+        ] },
+      ]} />
       <Callout kind="pitfall">
         Sticky sessions look like a shortcut, but they bring back state through the side door. Load becomes uneven,
         a node failure logs users out, and scale-in has to wait for sessions to drain. Use them only for genuinely
@@ -94,28 +113,24 @@ export default function ScaleZeroToMillionsChapter() {
         Stateless tiers are easy to copy. Data is not, which is why the data tier is where most scaling effort goes.
         The right move depends on whether reads, writes, or geography is the pressure.
       </p>
-      <Tabs items={[
-        { label: 'Read-heavy', content: (
-          <ul>
-            <li><strong>Cache</strong> hot objects (cache-aside), usually the cheapest 10× you'll ever buy.</li>
-            <li><strong>Read replicas</strong> scale reads linearly. Watch replication lag and route read-your-writes to the primary.</li>
-            <li><strong>Denormalized read models</strong> (materialized views, search indexes) fed by change data capture.</li>
-          </ul>
-        ) },
-        { label: 'Write-heavy', content: (
-          <ul>
-            <li><strong>Batch and buffer</strong> writes through a queue to smooth spikes.</li>
-            <li><strong>Log-structured stores</strong> (LSM-based: Cassandra, RocksDB) absorb high write rates.</li>
-            <li><strong>Shard</strong> when one primary's write throughput or disk is exhausted. Choose the key by access pattern.</li>
-          </ul>
-        ) },
-        { label: 'Global', content: (
-          <ul>
-            <li><strong>Active-passive</strong>: one region takes writes, the others serve reads and stand by. Simple, but failover is a big event.</li>
-            <li><strong>Active-active</strong>: every region takes writes. Needs conflict resolution (CRDTs, last-write-wins, or per-user home regions).</li>
-            <li><strong>Partition by geography</strong>: EU users live in the EU region. This also solves data residency.</li>
-          </ul>
-        ) },
+      <SideBySide caption="Name the pressure first; the tools follow" panels={[
+        { title: 'Read-heavy', icon: BookOpen, points: [
+          '+ Cache hot objects: the cheapest 10×',
+          '+ Read replicas scale reads linearly',
+          '+ Denormalized read models fed by CDC',
+          '- Watch replication lag; read your own writes from the primary',
+        ] },
+        { title: 'Write-heavy', icon: PenLine, points: [
+          '+ Batch and buffer writes through a queue',
+          '+ LSM stores (Cassandra, RocksDB) absorb write rates',
+          '+ Shard when one primary is exhausted',
+          '- The shard key is hard to change later',
+        ] },
+        { title: 'Global', icon: Globe2, points: [
+          'Active-passive: one writer region, simple',
+          'Active-active: every region writes; needs conflict resolution',
+          'Partition by geography: also solves data residency',
+        ] },
       ]} />
 
       <H2 id="staff">Staff lens: scaling the organization too</H2>

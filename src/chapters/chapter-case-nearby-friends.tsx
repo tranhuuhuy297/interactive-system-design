@@ -1,8 +1,9 @@
 import {
   ApiSpec, ArchitectureDiagram, Callout, CodeBlock, CompareTable, EstimationTable, H2, InterviewQuestion,
-  KeyTakeaways, Requirements, References, TLDR, Term,
+  KeyTakeaways, LayerStack, MentalModel, Quadrant, References, Requirements, SideBySide, StatRow, Term, TLDR,
 } from '../components/ui'
 import type { ArchEdge, ArchNode, Reference } from '../components/ui'
+import { Cable, Clock, History, Radio, Users } from 'lucide-react'
 import { NearbyFriendsSimulationDemo } from './demos/nearby-friends-simulation-demo'
 
 const NODES: ArchNode[] = [
@@ -48,6 +49,7 @@ export default function NearbyFriendsChapter() {
         'The hard part: fan-out. About 330K location updates per second become about 13M deliveries.',
         'Staff insight: pick the fan-out key from who cares: the friend graph here, geography for nearby strangers.',
       ]} />
+      <MentalModel id="nearby-friends" />
       <p>
         Nearby Friends looks like a proximity problem, but it isn't one. Proximity search (“restaurants near me”)
         queries a mostly <em>static</em> index.
@@ -79,10 +81,13 @@ export default function NearbyFriendsChapter() {
           { label: 'WebSocket servers', math: '10M conns / ~100K per box', result: '≈ 100+ (illustrative)' },
         ]}
       />
-      <p>
-        The number that shapes the design is <strong>13M deliveries per second</strong>, forty times the inbound rate.
-      </p>
-      <p>Connections are a solved problem. The fan-out is where the capacity plan lives.</p>
+      <StatRow caption="Connections are a solved problem. The fan-out, forty times the inbound rate, is where the capacity plan lives."
+        stats={[
+          { value: '≈ 330K/s', label: 'location updates in' },
+          { value: '× ≈ 40', label: 'online friends each' },
+          { value: '≈ 13M/s', label: 'pub/sub deliveries' },
+          { value: '≈ 100+', label: 'WebSocket servers', note: 'illustrative' },
+        ]} />
 
       <H2 id="api">3 · API</H2>
       <p>
@@ -148,22 +153,36 @@ async function onFriendLocation(conn: Conn, msg: { userId: string; lat: number; 
 
       <H2 id="scaling">6 · Deep dive: scaling the two stateful tiers</H2>
       <p>Both tiers hold state, so neither scales by simply adding boxes. Take them one at a time.</p>
-      <h3>Pub/sub cluster</h3>
-      <ul>
-        <li><strong>Shard by channel</strong> (user id) with{' '}<Term def="A hashing scheme where adding or removing a server moves only a small share of keys.">consistent hashing</Term>. A service-discovery store (etcd or ZooKeeper) holds the ring, and publishers and subscribers look up the owning shard.</li>
-        <li>Size for <strong>CPU on fan-out</strong>, not memory: at ~13M deliveries/s you need many shards even though the channel metadata fits on a few boxes.</li>
-        <li>Classic Redis Cluster pub/sub <strong>broadcasts to every node</strong>. Use sharded pub/sub (<code>SSUBSCRIBE</code>, Redis 7+) or client-side sharding across independent instances.</li>
-        <li>Resizing moves channels, so every subscriber on them must resubscribe. Do it off-peak and gradually, and treat it as an operational event, not autoscaling.</li>
-      </ul>
-      <h3>WebSocket tier</h3>
-      <ul>
-        <li>Stateful but <strong>replaceable</strong>: a lost connection just reconnects, re-subscribes and re-reads the cache.</li>
-        <li>Deploys <strong><Term def="Stop sending new work to a server and let existing connections move away gracefully before shutting it down.">drain</Term></strong>: stop accepting, tell clients to reconnect with jitter, then terminate. This avoids a thundering herd of 100K sockets.</li>
-        <li>Autoscale on connection count and CPU. Per-connection memory, which includes the subscription set, is the main limit.</li>
-      </ul>
+      <p>
+        The pub/sub tier shards channels by user id with{' '}
+        <Term def="A hashing scheme where adding or removing a server moves only a small share of keys.">consistent hashing</Term>.
+        The WebSocket tier must{' '}
+        <Term def="Stop sending new work to a server and let existing connections move away gracefully before shutting it down.">drain</Term>{' '}
+        on every deploy.
+      </p>
+      <SideBySide caption="Both tiers are stateful; neither scales by just adding boxes" panels={[
+        { title: 'Pub/sub cluster', icon: Radio, points: [
+          '+ Shard by channel; the ring lives in etcd or ZooKeeper',
+          '- Size for CPU on fan-out (~13M deliveries/s), not memory',
+          '- Classic Redis Cluster pub/sub broadcasts to every node: use SSUBSCRIBE (Redis 7+) or client-side sharding',
+          '- Resizing moves channels, so subscribers must resubscribe: go off-peak, gradually',
+        ], verdict: 'Resizing is an operational event, not autoscaling' },
+        { title: 'WebSocket tier', icon: Cable, points: [
+          '+ Replaceable: a lost connection reconnects, resubscribes and re-reads the cache',
+          '+ Deploys drain: stop accepting, reconnect clients with jitter, then terminate',
+          '- Per-connection memory (the subscription set) is the main limit',
+        ], verdict: 'Autoscale on connection count and CPU' },
+      ]} />
 
       <H2 id="battery-privacy">7 · Deep dive: battery and privacy</H2>
       <p>The phone decides how often and how precisely to report. Each option trades battery, freshness and privacy.</p>
+      <Quadrant x={['Drains battery', 'Battery friendly']} y={['Precise location shared', 'More private']} sweetSpot="Best of both"
+        caption="Coarsening before sending (round to ~100 m, or share only a distance band) moves any option upward"
+        items={[
+          { label: 'Fixed 30 s GPS', x: 0.15, y: 0.22 },
+          { label: 'Adaptive interval', x: 0.62, y: 0.45 },
+          { label: 'OS significant-change', x: 0.88, y: 0.62, highlight: true },
+        ]} />
       <CompareTable
         columns={['Choice', 'Battery', 'Freshness', 'Privacy']}
         rows={[
@@ -187,6 +206,15 @@ async function onFriendLocation(conn: Conn, msg: { userId: string; lat: number; 
 // Friend graph (SQL/graph DB), cached per WS connection at open:
 type Friendship = { userId: string; friendId: string; sharing: boolean }
 // Optional history (Cassandra): PRIMARY KEY ((user_id), ts) WITH default_time_to_live = 2592000 -- 30 days`} />
+
+      <LayerStack legend="Bar width shows how long each kind of data lives"
+        caption="Most of the system is ephemeral; only the friend graph and opt-in history are durable"
+        layers={[
+          { label: 'Pub/sub channel', sub: 'user:{userId}, live subscribers only', icon: Radio, size: 0.18, value: 'no storage' },
+          { label: 'Location cache', sub: 'loc:{userId} in Redis, doubles as presence', icon: Clock, size: 0.35, value: 'TTL 10 min', highlight: true },
+          { label: 'Location history', sub: 'optional, Cassandra', icon: History, size: 0.7, value: '30 days' },
+          { label: 'Friend graph', sub: 'SQL / graph DB, cached per connection', icon: Users, size: 1, value: 'durable' },
+        ]} />
 
       <H2 id="staff">9 · Going beyond: staff-level extensions</H2>
       <Callout kind="staff">

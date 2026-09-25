@@ -1,6 +1,7 @@
 import {
-  ArchitectureDiagram, Callout, CodeBlock, CompareTable, H2, InterviewQuestion, KeyTakeaways, References, Requirements, TLDR, Tabs, Term,
+  ArchitectureDiagram, Callout, CodeBlock, CompareTable, H2, InterviewQuestion, KeyTakeaways, LayerStack, MentalModel, References, Requirements, SideBySide, TLDR, Tabs, Term,
 } from '../components/ui'
+import { Atom, CalendarDays, DoorClosed, DoorOpen, FileSignature, Gauge, Server, Shield, Shuffle, Timer } from 'lucide-react'
 import type { ArchEdge, ArchNode, Reference } from '../components/ui'
 import { RateLimitRaceDemo } from './demos/ratelimit-race-demo'
 
@@ -49,6 +50,7 @@ export default function RateLimitingChapter() {
         'Always return 429 with Retry-After so well-behaved clients back off.',
         'Decide up front whether a broken limiter lets traffic through (fail open) or blocks it (fail closed).',
       ]} />
+      <MentalModel id="rate-limiting" />
       <p>
         The algorithm is the easy part. The hard parts are <strong>where</strong> to enforce the limit,{' '}
         <strong>shared state</strong> across many gateway nodes, and <strong>what to do</strong> when the limiter
@@ -61,11 +63,19 @@ export default function RateLimitingChapter() {
         nonFunctional={['Adds < 1–2 ms to p99', 'Works across N stateless gateway replicas', 'Fails open or closed by explicit choice', 'Accurate enough, not perfectly exact']}
         outOfScope={['DDoS scrubbing at the network layer', 'Billing and metering']}
       />
-      <Callout kind="tip">
-        Ask what the limit is <em>for</em>. <strong>Protection</strong> limits (don't melt the DB) belong close to the
-        resource and can be approximate. <strong>Contractual</strong> limits (a plan with 10K calls/day) need durable,
-        auditable counters and a clear story for the edges of the window.
-      </Callout>
+      <p>Then ask what the limit is <em>for</em>. The answer changes where it lives and how exact it must be.</p>
+      <SideBySide panels={[
+        { title: 'Protection limit', icon: Shield, points: [
+          '“Don’t melt the database”',
+          '+ Lives close to the resource',
+          '+ Approximate is fine',
+        ] },
+        { title: 'Contractual limit', icon: FileSignature, points: [
+          '“Your plan includes 10K calls/day”',
+          '- Needs durable, auditable counters',
+          '- Needs a clear story at window edges',
+        ] },
+      ]} />
 
       <H2 id="algorithms">The five algorithms, raced live</H2>
       <p>
@@ -105,10 +115,18 @@ export default function RateLimitingChapter() {
         With 50 gateway replicas, a naive <code>GET</code> → compare → <code>SET</code> is a race. Two nodes both read
         “4 of 5”, and both allow the request.
       </p>
-      <p>
-        The fix is to make check-and-update <strong>one atomic operation</strong> on the counter store. That is usually
-        a Lua script in Redis, or <code>INCR</code> + <code>EXPIRE</code> for a fixed window.
-      </p>
+      <SideBySide panels={[
+        { title: 'Naive: read, compare, write', icon: Shuffle, tone: 'bad', points: [
+          '- Node A reads “4 of 5”',
+          '- Node B reads “4 of 5”',
+          '- Both allow: 6 requests pass a limit of 5',
+        ] },
+        { title: 'Atomic check-and-update', icon: Atom, tone: 'good', points: [
+          '+ One operation on the counter store',
+          '+ Lua script in Redis, or INCR + EXPIRE',
+          '+ No other command can interleave',
+        ] },
+      ]} />
       <Tabs items={[
         { label: 'Token bucket (Lua)', content: <CodeBlock lang="text" title="token_bucket.lua — KEYS[1]=bucket, ARGV: capacity, refill_per_ms, now_ms" code={`
 -- Runs atomically inside Redis: no other command interleaves.
@@ -159,24 +177,33 @@ Content-Type: application/problem+json`} /> },
 
       <H2 id="failure">When the limiter fails</H2>
       <p>The limiter depends on a counter store. When that store is down, you need a decision made in advance.</p>
-      <CompareTable
-        columns={['Fail open', 'Fail closed']}
-        rows={[
-          { label: 'Behavior when Redis is down', cells: ['Allow all traffic', 'Reject all traffic'] },
-          { label: 'Risk', cells: ['The backend is unprotected during the outage', 'Your limiter becomes the outage'] },
-          { label: 'Typical use', cells: ['Protection and fairness limits', 'Security limits (login, OTP), paid quotas'] },
-        ]}
-      />
-      <p>
-        A good middle ground: put a short timeout on the counter-store call, and fall back to{' '}
-        <strong>local, per-node limits</strong> (the global limit divided by the node count). You degrade to
-        “approximately right” instead of “wide open” or “fully down”.
-      </p>
+      <SideBySide caption="Decide this before the outage, per limit" panels={[
+        { title: 'Fail open', icon: DoorOpen, points: [
+          'Counter store down → allow all',
+          '- Backend unprotected during the outage',
+        ], verdict: 'Protection and fairness limits' },
+        { title: 'Fail closed', icon: DoorClosed, points: [
+          'Counter store down → reject all',
+          '- Your limiter becomes the outage',
+        ], verdict: 'Login, OTP, paid quotas' },
+        { title: 'Local fallback', icon: Server, tone: 'good', points: [
+          '+ Short timeout on the store call',
+          '+ Fall back to global limit ÷ node count',
+          '+ “Approximately right” instead of open or down',
+        ], verdict: 'A good middle ground' },
+      ]} />
+
 
       <H2 id="fairness">Multi-tier limits and fairness</H2>
       <p>Real APIs combine several limits, so no single customer or request type can crowd out the rest.</p>
+      <LayerStack legend="Stacked rules: a request must pass every layer"
+        caption="Evaluate all layers in one Lua call to avoid several round trips"
+        layers={[
+          { label: 'Burst', sub: 'short spikes', icon: Timer, size: 0.4, value: '20 / s' },
+          { label: 'Sustained', sub: 'steady rate', icon: Gauge, size: 0.7, value: '1,000 / min' },
+          { label: 'Quota', sub: 'plan allowance', icon: CalendarDays, size: 1, value: '100K / day', highlight: true },
+        ]} />
       <ul>
-        <li><strong>Stack rules</strong>: 20/s burst, 1,000/min sustained, 100K/day quota. A request must pass all of them. Evaluate them in one Lua call to avoid several round trips.</li>
         <li><strong>Per-tenant and global</strong>: a global concurrency cap protects the service, and per-tenant limits share the capacity fairly. A weighted fair queue lets paying tiers win under contention.</li>
         <li><strong>Cost-based limits</strong>: weight requests by cost (a search costs 10 units, a GET costs 1), as GitHub's GraphQL API does with point budgets.</li>
         <li><strong>Adaptive limits</strong>: let the service lower limits automatically when its latency or queue depth rises, using TCP-style <Term def="Additive increase, multiplicative decrease: raise the limit slowly while healthy, cut it sharply on trouble.">AIMD</Term> concurrency limits.</li>

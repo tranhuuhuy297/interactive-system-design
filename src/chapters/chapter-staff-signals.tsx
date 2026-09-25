@@ -1,4 +1,8 @@
-import { Callout, CompareTable, H2, InterviewQuestion, KeyTakeaways, References, Term, TLDR } from '../components/ui'
+import {
+  Callout, CompareTable, FlowDiagram, H2, InterviewQuestion, KeyTakeaways, LayerStack, MentalModel, References,
+  Term, TLDR,
+} from '../components/ui'
+import { Building, Calculator, ClipboardList, Coins, Layers, Map, MessagesSquare, Scale, Search, ShieldAlert, User, Users } from 'lucide-react'
 import { INTERVIEW_FURTHER_READING } from '../data/interview-further-reading'
 import { StaffAnswerUpgrader } from './demos/staff-answer-upgrader'
 
@@ -12,6 +16,7 @@ export default function StaffSignalsChapter() {
         'Raise the hard part before the interviewer does.',
         'For “what if 10×?”, redo the numbers, find the first bottleneck, and apply the cheapest fix.',
       ]} />
+      <MentalModel id="staff-signals" />
       <p>
         At senior level and above, the system design round is the main{' '}
         <Term def="The signal interviewers use to decide which level (senior, staff, principal) to offer.">leveling</Term>{' '}
@@ -23,7 +28,14 @@ export default function StaffSignalsChapter() {
       </p>
 
       <H2 id="levels">Senior vs staff vs principal</H2>
-      <p>Expectations vary by company, but the pattern across rubrics is consistent:</p>
+      <p>Expectations vary by company, but the pattern across rubrics is consistent: each level widens the scope you own.</p>
+      <LayerStack legend="Bar width = scope of ownership"
+        caption="The same design question, answered at three widening scopes"
+        layers={[
+          { label: 'Senior', sub: 'designs the system asked for; lists pros and cons', icon: User, size: 0.5 },
+          { label: 'Staff', sub: 'reframes the problem; picks trade-offs tied to requirements; names what breaks first', icon: Users, size: 0.75, highlight: true },
+          { label: 'Principal', sub: 'connects it to the platform, org and multi-year strategy', icon: Building, size: 1 },
+        ]} />
       <CompareTable
         columns={['Senior', 'Staff', 'Principal']}
         rows={[
@@ -49,15 +61,15 @@ export default function StaffSignalsChapter() {
       <StaffAnswerUpgrader />
 
       <H2 id="rubric">What interviewers write down</H2>
-      <p>Most system design rubrics reduce to some version of these dimensions. The simulator uses the same list:</p>
-      <ul>
-        <li><strong>Problem exploration:</strong> requirements, scale, constraints, non-goals.</li>
-        <li><strong>Design quality:</strong> a coherent end-to-end design; the right component for each job.</li>
-        <li><strong>Depth:</strong> can go two or three levels down on at least one component.</li>
-        <li><strong>Trade-offs:</strong> real alternatives, decisive criteria.</li>
-        <li><strong>Reliability & operations:</strong> failures, monitoring, deploys, cost.</li>
-        <li><strong>Communication:</strong> structure, time management, collaboration with the interviewer.</li>
-      </ul>
+      <p>Most system design rubrics reduce to some version of these dimensions. The simulator uses the same list. They roughly follow the order of the interview, except communication, which is scored throughout.</p>
+      <FlowDiagram caption="Six dimensions, roughly in interview order" steps={[
+        { label: 'Exploration', sub: 'requirements, scale, constraints, non-goals', icon: Search },
+        { label: 'Design quality', sub: 'coherent end to end; right component per job', icon: Map },
+        { label: 'Depth', sub: 'two or three levels down on one component', icon: Layers },
+        { label: 'Trade-offs', sub: 'real alternatives, decisive criteria', icon: Scale },
+        { label: 'Reliability & ops', sub: 'failures, monitoring, deploys, cost', icon: ShieldAlert },
+        { label: 'Communication', sub: 'structure, time, collaboration', icon: MessagesSquare },
+      ]} />
 
       <H2 id="phrases">Phrases that signal depth</H2>
       <p>The same idea, said two ways. The right column adds a number, a reason, or a failure mode.</p>
@@ -89,12 +101,12 @@ export default function StaffSignalsChapter() {
 
       <H2 id="ten-x">Handling “what if it's 10× bigger?”</H2>
       <p>This question tests whether your design has an understood scaling path. A strong structure:</p>
-      <ol>
-        <li>Redo the one or two estimates that change (write QPS, storage, fan-out).</li>
-        <li>Identify the first component to saturate, and explain why it goes before the others.</li>
-        <li>Apply the cheapest fix first: batching, caching, async work, compression. Re-architect only when the numbers require it.</li>
-        <li>Mention cost: 10× traffic should cost less than 10× the money.</li>
-      </ol>
+      <FlowDiagram caption="Re-architect only when the numbers require it" steps={[
+        { label: 'Redo the numbers', sub: 'only the 1–2 estimates that change: write QPS, storage, fan-out', icon: Calculator },
+        { label: 'First bottleneck', sub: 'what saturates first, and why before the others', icon: ShieldAlert },
+        { label: 'Cheapest fix', sub: 'batching, caching, async, compression', icon: ClipboardList },
+        { label: 'Mention cost', sub: '10× traffic should cost less than 10× the money', icon: Coins },
+      ]} />
 
       <H2 id="drill">Interview drill</H2>
       <InterviewQuestion

@@ -1,6 +1,10 @@
 import {
-  ArchitectureDiagram, Callout, CodeBlock, CompareTable, H2, InterviewQuestion, KeyTakeaways, References, Term, TLDR,
+  ArchitectureDiagram, Callout, CodeBlock, FlowDiagram, H2, InterviewQuestion, KeyTakeaways, LayerStack, MentalModel,
+  References, SideBySide, Term, TLDR,
 } from '../components/ui'
+import {
+  BookOpen, Cpu, Database, FileSearch, FileText, Filter, Library, ListFilter, Search, ShieldAlert, ShieldCheck, Target,
+} from 'lucide-react'
 import type { ArchEdge, ArchNode, Reference } from '../components/ui'
 import { AiRagAnnTradeoffDemo } from './demos/ai-rag-ann-tradeoff-demo'
 import { AiRagRetrievalPlaygroundDemo } from './demos/ai-rag-retrieval-playground-demo'
@@ -45,6 +49,7 @@ export default function RagSystemsChapter() {
         'Rerank a wide candidate set with a cross-encoder for precision.',
         'Enforce permissions inside the index, and propagate deletes first.',
       ]} />
+      <MentalModel id="ai-rag" />
       <p>
         Retrieval-augmented generation (RAG) answers questions from <strong>your</strong> data. It retrieves relevant
         passages at query time and puts them into the model’s{' '}
@@ -79,14 +84,12 @@ export default function RagSystemsChapter() {
         Search returns{' '}<Term def="A passage cut from a document; the unit you embed, index, and paste into the prompt.">chunks</Term>,
         not documents. How you cut documents sets the ceiling on what retrieval can ever find.
       </p>
-      <CompareTable
-        columns={['Fixed-size', 'Recursive / structural', 'Semantic']}
-        rows={[
-          { label: 'How', cells: ['N tokens with overlap', 'Split on headings → paragraphs → sentences', 'Split where embedding similarity drops'] },
-          { label: 'Strength', cells: ['Simple, predictable cost', 'Keeps sections intact', 'Topic-coherent chunks'] },
-          { label: 'Weakness', cells: ['Cuts through tables and sentences', 'Needs parseable structure', 'Extra compute, harder to debug'] },
-        ]}
-      />
+      <SideBySide caption="Three ways to cut documents"
+        panels={[
+          { title: 'Fixed-size', points: ['N tokens with overlap', '+ Simple, predictable cost', '- Cuts through tables and sentences'] },
+          { title: 'Recursive / structural', tone: 'good', points: ['Headings → paragraphs → sentences', '+ Keeps sections intact', '- Needs parseable structure'] },
+          { title: 'Semantic', points: ['Split where embedding similarity drops', '+ Topic-coherent chunks', '- Extra compute, harder to debug'] },
+        ]} />
       <p>
         Small chunks match queries precisely but lose surrounding context. Large chunks carry context but dilute
         similarity and waste prompt tokens.
@@ -99,6 +102,13 @@ export default function RagSystemsChapter() {
 
       <H2 id="embeddings">Embeddings and similarity</H2>
       <p>Embeddings turn “similar meaning” into “nearby numbers”, which is what makes semantic search possible.</p>
+      <FlowDiagram caption="Question and chunks go through the same model, so closeness in vector space means closeness in meaning"
+        steps={[
+          { label: 'Text', sub: 'question or chunk', icon: FileText },
+          { label: 'Embedding model', sub: 'pinned version', icon: Cpu },
+          { label: 'Vector', sub: 'normalized to length 1', icon: Target },
+          { label: 'Nearest neighbors', sub: 'cosine / dot product', icon: Search },
+        ]} />
       <ul>
         <li>An{' '}<Term def="A model that turns text into a list of numbers (a vector) so similar texts get nearby vectors.">embedding model</Term>{' '}maps text to a vector; similar meaning should land nearby. Retrieval compares the query vector to chunk vectors.</li>
         <li><strong>Cosine vs dot product</strong>: identical when vectors are{' '}<Term def="Scaled to length 1, so only direction matters.">L2-normalized</Term>, which most pipelines do. Use whatever metric the model was trained for.</li>
@@ -139,6 +149,12 @@ function rrf(lists: string[][], k = 60): [string, number][] {
 
       <H2 id="rerank">Reranking and query rewriting</H2>
       <p>Fast retrieval is approximate. Two cheap steps, one before search and one after, recover most of the lost precision.</p>
+      <LayerStack legend="The retrieval funnel: cheap and wide first, precise and narrow last"
+        layers={[
+          { label: 'All chunks', sub: 'the index', icon: Library, size: 1, value: 'millions' },
+          { label: 'Retrieved', sub: 'rewritten query · hybrid search + ACL filter', icon: FileSearch, size: 0.55, value: '~50' },
+          { label: 'Reranked into the prompt', sub: 'cross-encoder scores each pair', icon: ListFilter, size: 0.22, value: '~5', highlight: true },
+        ]} />
       <ul>
         <li><strong>Rerank</strong>: a{' '}<Term def="A model that reads the query and a passage together and outputs one relevance score. Precise but slow.">cross-encoder</Term>{' '}reads query and passage together and scores relevance precisely. Retrieve ~50 cheaply, rerank to ~5. This is usually the single biggest quality lever after hybrid search.</li>
         <li><strong>Rewrite</strong>: turn a follow-up (“what about for annual plans?”) into a standalone query using chat history; split multi-part questions into sub-queries.</li>
@@ -150,14 +166,11 @@ function rrf(lists: string[][], k = 60): [string, number][] {
         Company data has{' '}<Term def="Access control lists: who may read each document.">ACLs</Term>. The retriever must
         respect them, stay fresh, and show its sources.
       </p>
-      <CompareTable
-        columns={['Filter before / during search', 'Filter after search']}
-        rows={[
-          { label: 'How', cells: ['ACL metadata as an index filter', 'Retrieve top-k, drop forbidden chunks'] },
-          { label: 'Leak risk', cells: ['None if metadata is right', 'None, but…'] },
-          { label: 'Quality', cells: ['Full top-k of allowed docs', 'Can return almost nothing for restricted users'] },
-        ]}
-      />
+      <SideBySide caption="Both avoid leaks; only one keeps answers useful for restricted users"
+        panels={[
+          { title: 'Filter before / during search', icon: ShieldCheck, tone: 'good', points: ['ACL metadata as an index filter', '+ No leaks if metadata is right', '+ Full top-k of allowed documents'] },
+          { title: 'Filter after search', icon: Filter, tone: 'bad', points: ['Retrieve top-k, then drop forbidden chunks', '+ No leaks', '- Can return almost nothing for restricted users'] },
+        ]} />
       <p>
         Treat index freshness like replication lag. Stream source changes (webhooks,{' '}
         <Term def="Change data capture: streaming row-level changes out of a database.">CDC</Term>) into incremental
@@ -174,6 +187,12 @@ function rrf(lists: string[][], k = 60): [string, number][] {
         don’t make retrieval obsolete. Stuffing everything costs tokens and latency on every request. Models also use
         information in the middle of long contexts less reliably than at the edges.
       </p>
+      <SideBySide
+        panels={[
+          { title: 'Long context', icon: BookOpen, points: ['+ One large document per request', '- Tokens and latency on every call', '- Middle of the context used less reliably'] },
+          { title: 'RAG', icon: Database, tone: 'good', points: ['+ Large, changing corpora', '+ Access control per document', '- Retrieval can miss'] },
+          { title: 'Where both fail', icon: ShieldAlert, tone: 'bad', points: ['Wrong chunk, ignored passage', 'Outdated duplicates', 'Confident answers with no support'] },
+        ]} />
       <p>
         Long context shines for a <em>single</em> large document per request. RAG shines for large, changing corpora
         with access control. The usual failures:

@@ -1,6 +1,7 @@
 import {
-  Callout, CodeBlock, CompareTable, FlowDiagram, H2, InterviewQuestion, KeyTakeaways, References, TLDR, Tabs, Term,
+  Callout, CodeBlock, FlowDiagram, H2, InterviewQuestion, KeyTakeaways, MentalModel, Quadrant, References, SideBySide, TLDR, Tabs, Term,
 } from '../components/ui'
+import { Crown, Link2, Undo2, Users, Vote } from 'lucide-react'
 import type { Reference } from '../components/ui'
 import { ConsensusQuorumPlaygroundDemo } from './demos/consensus-quorum-playground-demo'
 import { ConsensusRaftElectionDemo } from './demos/consensus-raft-election-demo'
@@ -34,6 +35,7 @@ export default function ConsistencyChapter() {
         'Quorums (R + W > N) make reads overlap writes, but that is still weaker than true linearizability.',
         'Raft lets a majority agree on one leader and one log, and prevents split brain.',
       ]} />
+      <MentalModel id="consistency" />
       <p>
         This chapter covers the models, the maths of quorums, and how consensus protocols like Raft keep a cluster
         agreeing on one leader and one history.
@@ -41,16 +43,23 @@ export default function ConsistencyChapter() {
 
       <H2 id="replication">Replication topologies</H2>
       <p>The first choice is which replicas may accept writes. Everything else, including conflicts and failover, follows from it.</p>
-      <CompareTable
-        columns={['Single-leader', 'Multi-leader', 'Leaderless']}
-        rows={[
-          { label: 'Writes go to', cells: ['One leader per partition', 'Any leader (often one per region)', 'Any replica; the client or coordinator writes to W of N'] },
-          { label: 'Conflicts', cells: ['None: the leader orders writes', 'Yes: needs resolution (LWW, CRDTs, app merge)', 'Yes: version vectors plus read repair'] },
-          { label: 'Failover', cells: ['Promote a follower; risk of split brain', 'Other leaders keep going', 'No failover needed; quorums absorb failures'] },
-          { label: 'Write latency', cells: ['One round trip to the leader', 'Local-region write', 'Wait for W acks'] },
-          { label: 'Examples', cells: ['PostgreSQL, MySQL, Kafka partitions, etcd', 'Multi-region active-active, CouchDB, collaborative editing', 'Dynamo-style: Cassandra, Riak, ScyllaDB'] },
-        ]}
-      />
+      <SideBySide panels={[
+        { title: 'Single-leader', icon: Crown, points: [
+          'Writes: one leader per partition',
+          '+ No conflicts: the leader orders writes',
+          '- Failover promotes a follower; risk of split brain',
+        ], verdict: 'PostgreSQL, MySQL, Kafka partitions, etcd' },
+        { title: 'Multi-leader', icon: Users, points: [
+          'Writes: any leader, often one per region',
+          '+ Local-region write latency; others keep going',
+          '- Conflicts need resolution (LWW, CRDTs, merge)',
+        ], verdict: 'Active-active regions, CouchDB, collab editing' },
+        { title: 'Leaderless', icon: Vote, points: [
+          'Writes: any replica; wait for W of N acks',
+          '+ No failover needed; quorums absorb failures',
+          '- Conflicts: version vectors plus read repair',
+        ], verdict: 'Dynamo-style: Cassandra, Riak, ScyllaDB' },
+      ]} />
       <Tabs items={[
         { label: 'Sync vs async', content: <p className="muted"><strong>Synchronous</strong> replication waits for followers before acking, so there is no data loss on leader failure but latency and availability depend on the slowest replica. <strong>Asynchronous</strong> is fast, but acknowledged writes can be lost on failover. The common middle ground is <strong>semi-synchronous</strong>: wait for one follower (or a quorum), and let the rest catch up.</p> },
         { label: 'Failover hazards', content: <ul>
@@ -107,15 +116,14 @@ export default function ConsistencyChapter() {
         operation), choose <strong>L</strong>atency or <strong>C</strong>onsistency. You pay this second trade-off
         every day, not just during rare partitions.
       </p>
-      <CompareTable
-        columns={['During partition', 'Normal operation', 'Example']}
-        rows={[
-          { label: 'PC/EC', cells: ['Consistency', 'Consistency', 'Spanner, etcd/ZooKeeper, HBase'] },
-          { label: 'PA/EL', cells: ['Availability', 'Latency', 'Dynamo-style stores at default quorum settings, Cassandra (ONE)'] },
-          { label: 'PA/EC', cells: ['Availability', 'Consistency', 'Some configurations of MongoDB'] },
-          { label: 'Tunable', cells: ['Per request', 'Per request', 'Cassandra/DynamoDB consistency levels'] },
-        ]}
-      />
+      <Quadrant x={['Partition: stay available', 'Partition: stay consistent']} y={['Normally: lowest latency', 'Normally: consistent']}
+        caption="PACELC map. Tunable stores (Cassandra/DynamoDB consistency levels) move per request."
+        items={[
+          { label: 'PC/EC: Spanner, etcd', x: 0.72, y: 0.9, highlight: true },
+          { label: 'PA/EL: Cassandra ONE', x: 0.27, y: 0.15 },
+          { label: 'PA/EC: some MongoDB', x: 0.27, y: 0.62 },
+          { label: 'Tunable per request', x: 0.52, y: 0.42 },
+        ]} />
 
       <H2 id="quorums">Quorums: N, R, W</H2>
       <p>
@@ -166,10 +174,15 @@ function compare(a: VV, b: VV): 'before' | 'after' | 'equal' | 'concurrent' {
 }`} />
         </> },
         { label: 'CRDTs', content: <p className="muted"><strong>Conflict-free replicated data types</strong> (G-counters, OR-sets, LWW-registers, sequence CRDTs for text) are designed so that merging replicas in any order converges to the same state. They power offline-first apps and collaborative editors, at the cost of metadata overhead and restricted operations.</p> },
-        { label: '2PC vs sagas', content: <CompareTable columns={['Two-phase commit', 'Saga']} rows={[
-          { label: 'Guarantee', cells: ['Atomic across participants', 'Eventual; compensating actions undo steps'] },
-          { label: 'Failure mode', cells: ['Blocks if the coordinator dies mid-commit (locks held)', 'Intermediate states are visible; compensation can fail'] },
-          { label: 'Use', cells: ['Inside one database or tightly coupled resources', 'Across microservices (order → payment → shipping)'] },
+        { label: '2PC vs sagas', content: <SideBySide panels={[
+          { title: 'Two-phase commit', icon: Link2, points: [
+            '+ Atomic across participants',
+            '- Blocks if the coordinator dies mid-commit (locks held)',
+          ], verdict: 'Inside one database or tightly coupled resources' },
+          { title: 'Saga', icon: Undo2, points: [
+            '+ Each step commits locally; compensations undo',
+            '- Intermediate states are visible; compensation can fail',
+          ], verdict: 'Across microservices (order → payment → shipping)' },
         ]} /> },
       ]} />
 

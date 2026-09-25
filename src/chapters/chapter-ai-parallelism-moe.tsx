@@ -1,6 +1,8 @@
 import {
-  ArchitectureDiagram, Callout, CompareTable, EstimationTable, H2, InterviewQuestion, KeyTakeaways, References, Term, TLDR,
+  ArchitectureDiagram, Callout, CompareTable, EstimationTable, H2, InterviewQuestion, KeyTakeaways, LayerStack, MentalModel,
+  References, SideBySide, StatRow, Term, TLDR,
 } from '../components/ui'
+import { Copy, Cpu, Network, Rows3, Server, SplitSquareHorizontal } from 'lucide-react'
 import type { ArchEdge, ArchNode, Reference } from '../components/ui'
 import { AiParPlannerDemo } from './demos/ai-par-planner-demo'
 
@@ -41,6 +43,7 @@ export default function AiParallelismMoeChapter() {
         'MoE models need memory for all experts but compute for only a few per token.',
         'Autoscale on queue time and KV usage, and plan for slow cold starts.',
       ]} />
+      <MentalModel id="ai-parallelism" />
       <p>
         A 70B model in 16-bit weights is about 140 GB. The largest open models are several times that. None fit on a
         single 80 GB GPU with room left for{' '}<Term def="Per-conversation attention state kept in GPU memory during generation.">KV cache</Term>.
@@ -53,16 +56,17 @@ export default function AiParallelismMoeChapter() {
 
       <H2 id="menu">The parallelism menu</H2>
       <p>There are five ways to split the work. Each cuts along a different axis and pays a different communication bill.</p>
-      <CompareTable
-        columns={['What is split', 'Communication', 'Use in inference']}
-        rows={[
-          { label: 'Data (replicas)', cells: ['Nothing: full copies', 'None between replicas', 'Scale throughput: add replicas behind a router'] },
-          { label: 'Tensor (TP)', cells: ['Each layer’s matrices across GPUs', 'All-reduce inside every layer', 'Fit + speed up one replica; keep within a node'] },
-          { label: 'Pipeline (PP)', cells: ['Consecutive layers into stages', 'Activations passed stage to stage', 'Fit very large models across nodes'] },
-          { label: 'Expert (EP)', cells: ['MoE experts across GPUs', 'All-to-all token routing per MoE layer', 'Serve large MoE models efficiently'] },
-          { label: 'Sequence / context', cells: ['The sequence (tokens) across GPUs', 'Exchange of attention blocks', 'Very long contexts (prefill of 100K+ tokens)'] },
-        ]}
-      />
+      <SideBySide caption="The three splits you will use most. Expert parallelism is covered in the MoE section below."
+        panels={[
+          { title: 'Data (replicas)', icon: Copy, points: ['Split: nothing, full copies', 'Talk: none between replicas'], verdict: 'Scale throughput behind a router' },
+          { title: 'Tensor (TP)', icon: SplitSquareHorizontal, points: ['Split: each layer’s matrices', 'Talk: all-reduce inside every layer'], verdict: 'Fit + speed up one replica, within a node' },
+          { title: 'Pipeline (PP)', icon: Rows3, points: ['Split: consecutive layers into stages', 'Talk: activations passed stage to stage'], verdict: 'Fit very large models across nodes' },
+        ]} />
+      <p>
+        Two more splits exist. <strong>Expert parallelism</strong> places MoE experts on different GPUs and routes tokens
+        with an all-to-all per MoE layer. <strong>Sequence (context) parallelism</strong> splits the tokens of a very long
+        prompt (100K+) across GPUs and exchanges attention blocks.
+      </p>
 
       <H2 id="comms">Why communication decides the layout</H2>
       <p>
@@ -77,6 +81,12 @@ export default function AiParallelismMoeChapter() {
         per GPU. Hence the rule of thumb: <strong>tensor parallel within a node, pipeline across nodes, replicas beyond
         that.</strong>
       </p>
+      <LayerStack legend="Put the chattiest split on the fastest link"
+        layers={[
+          { label: 'Inside one node: NVLink', sub: 'tensor parallel · all-reduce every layer', icon: Cpu, size: 1, value: '900 GB/s per H100', highlight: true },
+          { label: 'Across nodes: data-center network', sub: 'pipeline parallel · activations per stage', icon: Network, size: 0.4, value: '~an order of magnitude slower' },
+          { label: 'Across replicas', sub: 'data parallel · no traffic between copies', icon: Server, size: 0.18, value: 'none' },
+        ]} />
       <EstimationTable
         assumptions={['70B dense model, 16-bit weights (≈ 140 GB)', '8-GPU nodes, 80 GB each, ~30% kept for KV cache']}
         rows={[
@@ -106,6 +116,13 @@ export default function AiParallelismMoeChapter() {
         Mixtral 8×7B holds 47B parameters but uses 13B per token. DeepSeek-V3 holds 671B but activates 37B per token.
         For serving: <strong>memory scales with total parameters, compute scales with active ones.</strong>
       </p>
+      <StatRow caption="Memory pays for the total, compute pays only for the active parameters"
+        stats={[
+          { value: '47B', label: 'Mixtral 8×7B total', note: 'must sit in memory' },
+          { value: '13B', label: 'Mixtral active per token', note: 'what each token computes' },
+          { value: '671B', label: 'DeepSeek-V3 total' },
+          { value: '37B', label: 'DeepSeek-V3 active per token' },
+        ]} />
       <ul>
         <li><strong>Expert parallelism</strong> places different experts on different GPUs. Every MoE layer then does an{' '}<Term def="A collective where every GPU sends a different slice of data to every other GPU.">all-to-all</Term>: send each token to its experts’ GPUs, compute, send results back.</li>
         <li><strong>Load imbalance</strong> is the core problem. Popular experts become hot spots while others idle. Training-time balancing losses and capacity limits (as in Switch Transformers) help, but serving still sees skew by traffic type.</li>

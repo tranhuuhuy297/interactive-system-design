@@ -1,6 +1,7 @@
 import {
-  ApiSpec, Callout, CodeBlock, CompareTable, FlowDiagram, H2, InterviewQuestion, KeyTakeaways, References, Tabs, TLDR, Term,
+  ApiSpec, Callout, CodeBlock, CompareTable, FlowDiagram, H2, InterviewQuestion, KeyTakeaways, MentalModel, References, SideBySide, Tabs, TLDR, Term,
 } from '../components/ui'
+import { ArrowDownUp, Braces, Cable, Gauge, KeyRound, Layers, Lock, Monitor, Network, Radar, Route, Server, Zap } from 'lucide-react'
 import type { Reference } from '../components/ui'
 import { NetworkHandshakeTimeline } from './demos/network-handshake-timeline'
 import { NetworkRealtimeTransportSimulator } from './demos/network-realtime-transport-simulator'
@@ -32,6 +33,7 @@ export default function NetworkingApisProtocolsChapter() {
         'Pick a real-time transport by direction: SSE for server push, WebSockets for two-way traffic.',
         'Cursor pagination, idempotency keys, and additive versioning keep APIs scalable.',
       ]} />
+      <MentalModel id="networking" />
       <p>
         You don't need to recite RFCs. You do need to know what a request costs, which protocol fits which traffic
         pattern, and how API choices ripple into scalability.
@@ -62,22 +64,44 @@ export default function NetworkingApisProtocolsChapter() {
         is lost. The key problem is{' '}
         <Term def="When one slow or lost item at the front of a queue stalls everything behind it.">head-of-line blocking</Term>.
       </p>
-      <CompareTable columns={['HTTP/1.1', 'HTTP/2', 'HTTP/3']} rows={[
-        { label: 'Transport', cells: ['TCP', 'TCP', 'QUIC over UDP'] },
-        { label: 'Concurrency', cells: ['One request at a time per connection (browsers open ~6)', 'Many multiplexed streams on one connection', 'Multiplexed streams, independent at the transport layer'] },
-        { label: 'Head-of-line blocking', cells: ['At the HTTP layer', 'Moves to the TCP layer: one lost packet stalls all streams', 'Largely removed: loss only stalls the affected stream'] },
-        { label: 'Handshake', cells: ['TCP + TLS', 'TCP + TLS (1.3: 2 RTT total)', '1 RTT combined, 0-RTT on resumption'] },
-        { label: 'Connection migration', cells: ['No', 'No', 'Yes: survives Wi-Fi ↔ cellular switches'] },
+      <SideBySide caption="Each version moves or removes head-of-line blocking" panels={[
+        { title: 'HTTP/1.1', icon: Cable, points: [
+          'TCP; one request at a time per connection',
+          '- Browsers open ~6 connections to compensate',
+          '- Head-of-line blocking at the HTTP layer',
+          'Handshake: TCP + TLS',
+        ] },
+        { title: 'HTTP/2', icon: Layers, points: [
+          '+ Many multiplexed streams on one TCP connection',
+          '- One lost packet stalls all streams (TCP-level blocking)',
+          'Handshake: TCP + TLS (1.3: 2 RTT total)',
+        ] },
+        { title: 'HTTP/3', icon: Zap, tone: 'good', points: [
+          '+ QUIC over UDP; streams independent in transport',
+          '+ Loss stalls only the affected stream',
+          '+ 1 RTT handshake, 0-RTT on resumption',
+          '+ Survives Wi-Fi ↔ cellular switches',
+        ] },
       ]} />
 
       <H2 id="api-styles">REST vs gRPC vs GraphQL</H2>
       <p>These three styles solve different problems. Pick by who the client is and how it fetches data.</p>
-      <CompareTable columns={['REST (JSON/HTTP)', 'gRPC (Protobuf/HTTP/2)', 'GraphQL']} rows={[
-        { label: 'Best for', cells: ['Public APIs, resource CRUD, cacheable reads', 'Internal service-to-service, streaming, low latency', 'Client-driven aggregation across many resources'] },
-        { label: 'Contract', cells: ['OpenAPI (optional)', 'Strict .proto schema, codegen', 'Strongly typed schema'] },
-        { label: 'Payload', cells: ['Text JSON, human-readable', 'Compact binary', 'JSON; client picks fields'] },
-        { label: 'HTTP caching', cells: ['Excellent (GET + CDN)', 'Poor (POST-based)', 'Hard (single POST endpoint; persisted queries help)'] },
-        { label: 'Pitfalls', cells: ['Over/under-fetching, chatty clients', 'Browser support needs a proxy (gRPC-Web)', 'N+1 resolvers, expensive unbounded queries'] },
+      <SideBySide panels={[
+        { title: 'REST (JSON/HTTP)', icon: Route, points: [
+          '+ Human-readable JSON; OpenAPI optional',
+          '+ Excellent HTTP caching (GET + CDN)',
+          '- Over/under-fetching, chatty clients',
+        ], verdict: 'Public APIs, resource CRUD' },
+        { title: 'gRPC (Protobuf/HTTP/2)', icon: ArrowDownUp, points: [
+          '+ Strict .proto schema with codegen',
+          '+ Compact binary, streaming, low latency',
+          '- Poor HTTP caching; browsers need gRPC-Web',
+        ], verdict: 'Internal service-to-service' },
+        { title: 'GraphQL', icon: Braces, points: [
+          '+ Client picks exactly the fields it needs',
+          '+ Strongly typed schema',
+          '- Hard to cache; N+1 resolvers, unbounded queries',
+        ], verdict: 'Client-driven aggregation' },
       ]} />
       <p>
         A common production shape uses <strong>REST or GraphQL at the edge</strong> for clients and <strong>gRPC
@@ -106,11 +130,18 @@ export default function NetworkingApisProtocolsChapter() {
       <Tabs items={[
         { label: 'Pagination', content: (
           <>
-            <p>
-              <strong>Offset pagination</strong> (<code>?offset=10000&amp;limit=20</code>) is simple, but deep pages get slower
-              because the database still walks past skipped rows, and results shift when items are inserted.
-              <strong> Cursor pagination</strong> encodes the last-seen sort key, stays fast at any depth, and is stable under writes.
-            </p>
+            <SideBySide panels={[
+              { title: 'Offset', icon: Gauge, tone: 'bad', points: [
+                '+ Simple: ?offset=10000&limit=20',
+                '- Deep pages slow: the DB walks past skipped rows',
+                '- Results shift when items are inserted',
+              ] },
+              { title: 'Cursor', icon: KeyRound, tone: 'good', points: [
+                '+ Encodes the last-seen sort key',
+                '+ Fast at any depth',
+                '+ Stable under concurrent writes',
+              ] },
+            ]} />
             <ApiSpec endpoints={[
               { method: 'GET', path: '/v1/posts?limit=20&cursor=eyJpZCI6OTg3fQ', desc: 'Cursor = opaque, base64-encoded last (created_at, id).', returns: '{ items: [...], nextCursor }' },
             ]} />
@@ -141,9 +172,16 @@ curl -X POST https://api.example.com/v1/payments \\
 
       <H2 id="gateway">API gateways and the edge</H2>
       <p>
-        An API gateway handles concerns every service needs: TLS termination, authentication, rate limiting, request
-        routing, and observability. Services then don't each reimplement them.
+        An API gateway handles concerns every service needs, so services don't each reimplement them:
       </p>
+      <FlowDiagram caption="Cross-cutting concerns at the edge, business logic behind it" steps={[
+        { label: 'Client', icon: Monitor },
+        { label: 'TLS + auth', sub: 'terminate, verify', icon: Lock },
+        { label: 'Rate limit', sub: 'per key / tenant', icon: Gauge },
+        { label: 'Route', sub: 'to the right service', icon: Network },
+        { label: 'Observe', sub: 'logs, metrics, traces', icon: Radar },
+        { label: 'Services', icon: Server },
+      ]} />
       <p>
         The costs are an extra hop and a shared component that must be highly available. Keep business logic out of
         it, or it becomes the bottleneck of a{' '}

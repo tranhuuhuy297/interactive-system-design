@@ -1,6 +1,10 @@
 import {
-  Callout, CodeBlock, CompareTable, FlowDiagram, H2, InterviewQuestion, KeyTakeaways, References, Term, TLDR,
+  Callout, CodeBlock, CompareTable, FlowDiagram, H2, InterviewQuestion, KeyTakeaways, MentalModel, References, SideBySide,
+  Term, TLDR,
 } from '../components/ui'
+import {
+  Cpu, Filter, FlaskConical, GitMerge, GraduationCap, Layers, PenLine, Scale, Sparkles, ThumbsUp,
+} from 'lucide-react'
 import type { Reference } from '../components/ui'
 import { AiFtDecisionWizardDemo } from './demos/ai-ft-decision-wizard-demo'
 import { AiFtLoraCalculatorDemo } from './demos/ai-ft-lora-calculator-demo'
@@ -24,6 +28,7 @@ export default function FineTuningDecisionsChapter() {
         'Distillation copies a big model’s skill into a cheap small one for narrow, high-volume tasks.',
         'A tuned model is a maintained asset: retrain and re-evaluate on every base upgrade.',
       ]} />
+      <MentalModel id="ai-fine-tuning" />
       <p>
         “Should we fine-tune?” is one of the most common and most over-answered questions in LLM engineering.{' '}
         <Term def="Continuing to train a pretrained model on your own examples so its weights change.">Fine-tuning</Term>{' '}
@@ -87,6 +92,13 @@ function loraForward(x: Vec, W: Mat, A: Mat, B: Mat, alpha: number, r: number): 
         already solves the task, use it as a teacher. Generate outputs for a broad, realistic input set. Filter or
         human-review them. Then fine-tune a smaller student model on those pairs.
       </p>
+      <FlowDiagram caption="Teacher once, student forever: pay frontier prices only while building the dataset"
+        steps={[
+          { label: 'Teacher answers', sub: 'frontier model, broad inputs', icon: Sparkles },
+          { label: 'Filter & review', sub: 'drop wrong or unsafe outputs', icon: Filter },
+          { label: 'Train student', sub: 'smaller, faster model', icon: GraduationCap },
+          { label: 'Evaluate', sub: 'held-out data, not teacher examples', icon: FlaskConical },
+        ]} />
       <p>
         Classic distillation matches the teacher’s full probability distribution. With API-only teachers you usually
         train on sampled outputs. Check the provider’s terms of use on training with model outputs. Evaluate the student
@@ -98,15 +110,12 @@ function loraForward(x: Vec, W: Mat, A: Mat, B: Mat, alpha: number, r: number): 
         Sometimes you can’t write the perfect answer, but you can tell which of two answers is better. Preference
         tuning learns from those judgments.
       </p>
-      <CompareTable
-        columns={['Supervised fine-tuning (SFT)', 'RLHF', 'DPO']}
-        rows={[
-          { label: 'Data', cells: ['Input → ideal output', 'Pairwise preferences + a reward model', 'Pairwise preferences only'] },
-          { label: 'Training', cells: ['Standard next-token loss', 'Reinforcement learning against the reward model', 'Direct loss on preferred vs rejected'] },
-          { label: 'Complexity', cells: ['Low', 'High (reward model, RL stability)', 'Moderate'] },
-          { label: 'Use when', cells: ['You can write good targets', 'At scale, with a mature pipeline', 'Judging is easier than writing'] },
-        ]}
-      />
+      <SideBySide caption="Pick by what your data looks like"
+        panels={[
+          { title: 'SFT', icon: PenLine, points: ['Data: input → ideal output', 'Standard next-token loss', '+ Low complexity'], verdict: 'You can write good targets' },
+          { title: 'RLHF', icon: Scale, points: ['Data: pairwise preferences + a reward model', 'Reinforcement learning against the reward model', '- High complexity (reward model, RL stability)'], verdict: 'At scale, with a mature pipeline' },
+          { title: 'DPO', icon: ThumbsUp, tone: 'good', points: ['Data: pairwise preferences only', 'Direct loss on preferred vs rejected', '+ Moderate complexity'], verdict: 'Judging is easier than writing' },
+        ]} />
 
       <H2 id="data">Data and evaluation make or break it</H2>
       <p>The model learns exactly what the data shows, including its mistakes. Most fine-tuning failures are data failures.</p>
@@ -119,6 +128,12 @@ function loraForward(x: Vec, W: Mat, A: Mat, B: Mat, alpha: number, r: number): 
 
       <H2 id="serving">Serving and maintenance implications</H2>
       <p>Training is the easy part. Serving and re-training the model for years is the real cost.</p>
+      <SideBySide
+        panels={[
+          { title: 'Merge into the weights', icon: GitMerge, points: ['+ Zero serving overhead', '- One deployment per tuned model'] },
+          { title: 'Keep as an adapter', icon: Layers, tone: 'good', points: ['+ One base serves many tenants (multi-LoRA)', '- Small per-request overhead'] },
+          { title: 'Either way', icon: Cpu, tone: 'bad', points: ['- Base upgrade invalidates the tune', '- Retrain and re-evaluate every time'] },
+        ]} />
       <ul>
         <li><strong>Merged vs adapter:</strong> merging gives zero serving overhead; keeping adapters lets one base model serve many tenants or tasks (multi-LoRA). See <a href="#/ai-serving">Serving Stacks &amp; Model Routing</a> and the <a href="#/llm-serving">LLM Inference Platform</a> case study.</li>
         <li><strong>Base model upgrades</strong> invalidate adapters. You retrain and re-evaluate on each new base, so budget for it.</li>

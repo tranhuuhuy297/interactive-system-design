@@ -1,7 +1,11 @@
 import {
-  References, TLDR, Term,
-  ArchitectureDiagram, Callout, CodeBlock, CompareTable, EpisodePlayer, EstimationTable, H2, InterviewQuestion, KeyTakeaways,
+  ArchitectureDiagram, Callout, CodeBlock, CompareTable, EpisodePlayer, EstimationTable, H2, InterviewQuestion,
+  KeyTakeaways, MentalModel, References, SideBySide, StatRow, Term, TLDR, VisualTimeline,
 } from '../components/ui'
+import {
+  BookOpen, CreditCard, GitBranch, Globe, Hourglass, KeyRound, Lock, RotateCcw, ShieldAlert, ShieldCheck,
+  Shuffle, TrendingUp, UserCheck, Users, Webhook, type LucideIcon,
+} from 'lucide-react'
 import type { ArchEdge, ArchNode, Reference } from '../components/ui'
 import { EpisodeStripeRoutingDemo } from './demos/episode-stripe-routing-demo'
 import { STRIPE_SRC } from './demos/episode-stripe-sources'
@@ -31,9 +35,12 @@ const CHARGE_EDGES: ArchEdge[] = [
 const REFS: Reference[] = Object.values(STRIPE_SRC)
 
 // Timeline rows derive from the stage data so the two never drift apart.
+const STAGE_ICONS: Record<string, LucideIcon> = {
+  v0: CreditCard, v1: RotateCcw, v2: Webhook, v3: Users, v4: BookOpen, v5: ShieldAlert, v6: Lock, v7: GitBranch, v8: Globe, v9: UserCheck, v10: Shuffle, v11: TrendingUp,
+}
 const TIMELINE = STRIPE_STAGES.map((s) => {
   const [version, name] = s.title.split(' · ')
-  return { label: version, cells: [s.era ?? '', name ?? s.title] }
+  return { when: s.era ?? '', title: name ?? s.title, note: typeof s.summary === 'string' ? s.summary : undefined, icon: STAGE_ICONS[version] }
 })
 
 export default function StripeEpisode() {
@@ -46,6 +53,7 @@ export default function StripeEpisode() {
         'A double-entry ledger, not a balance column, is the source of truth for money.',
         'Tokens shrink security scope; cells limit blast radius and keep data in-country.',
       ]} />
+      <MentalModel id="ep-stripe" />
       <p>
         This episode builds a Stripe-like platform in 12 stages. It starts with one “charge a card” endpoint and ends
         with a global system that survives the busiest shopping weekend. At every stage, ask one question: <strong>what
@@ -65,12 +73,13 @@ export default function StripeEpisode() {
 
       <H2 id="timeline">Timeline at a glance</H2>
       <p>Years mark publicly documented milestones. “Design step” marks a step in our reconstruction that has no public date.</p>
-      <CompareTable columns={['When', 'What changed']} rows={TIMELINE} />
+      <VisualTimeline items={TIMELINE} />
 
       <H2 id="the-build">The build, stage by stage</H2>
       <EpisodePlayer stages={STRIPE_STAGES} height={400} />
 
       <H2 id="numbers">The numbers that shape everything</H2>
+      <StatRow caption="Two reported figures and one estimate from the assumptions below" stats={[{ value: '≈ $1T', label: 'payment volume in 2023', note: 'Stripe-reported' }, { value: '137K / min', label: 'peak transactions, BFCM 2024', note: 'Stripe-reported' }, { value: '≈ 6K / s', label: 'modelled peak payments', note: 'estimate' }]} />
       <EstimationTable
         assumptions={[
           'Total payment volume ≈ $1T per year (Stripe reported about this for 2023)',
@@ -138,22 +147,31 @@ async function createPayment(req: Req): Promise<Res> {
       </Callout>
 
       <H2 id="decisions">Key decisions and their alternatives</H2>
+      <p>The three decisions that keep money correct:</p>
+      <SideBySide panels={[
+        { title: 'Client idempotency keys', icon: KeyRound, tone: 'good', points: ['+ Only the client knows two requests are one intent', '- Instead of: server dedupe by amount + card + time'], verdict: 'Duplicate protection' },
+        { title: 'Append-only double-entry ledger', icon: BookOpen, tone: 'good', points: ['+ Auditable and self-checking', '+ No lost updates', '- Instead of: a balance column'], verdict: 'Money records' },
+        { title: 'Health-aware routing + status checks', icon: Shuffle, tone: 'good', points: ['+ Retries only when no charge can have happened', '- Instead of: blind retry on the backup'], verdict: 'Processor outage' },
+      ]} />
+      <p>Other decisions, in brief:</p>
       <CompareTable
         columns={['Chosen', 'Alternative', 'Why the choice fits']}
         rows={[
-          { label: 'Duplicate protection', cells: ['Client-supplied idempotency keys', 'Server dedupe by amount + card + time', 'Only the client knows two requests are the same intent'] },
-          { label: 'Money records', cells: ['Append-only double-entry ledger', 'Balance column on the account row', 'Auditable, self-checking, no lost updates'] },
           { label: 'Merchant updates', cells: ['Signed webhooks, at-least-once', 'Polling only', 'Results arrive days later; polling wastes both sides'] },
           { label: 'Card data', cells: ['Tokenize into an isolated vault', 'Encrypt in every service', 'Keeps security audits to one small system'] },
           { label: 'API changes', cells: ['Per-account date versions', 'URL versions (/v1, /v2)', 'Small opt-in upgrades instead of big rewrites'] },
-          { label: 'Processor outage', cells: ['Health-aware routing + status checks', 'Blind retry on backup', 'Retries only when no charge can have happened'] },
         ]}
       />
 
       <H2 id="staff">Staff-level lens</H2>
+      <SideBySide caption="Every processor call ends in one of three states. Design for the third." panels={[
+        { title: 'Success', icon: ShieldCheck, tone: 'good', points: ['+ Record the result', '+ Write ledger entries'], verdict: 'Finish the state machine' },
+        { title: 'Failure', icon: ShieldAlert, points: ['+ Proven: no charge happened', '+ Safe to retry elsewhere'], verdict: 'Fail over or decline' },
+        { title: 'Unknown', icon: Hourglass, tone: 'bad', points: ['- A timeout: the charge may exist', '- Never retry blindly'], verdict: 'Mark pending, check status' },
+      ]} />
       <Callout kind="staff">
         <ul>
-          <li><strong>Name the unknown.</strong> Every external call has three outcomes: success, failure, unknown. Design pending states, status checks, and reconciliation for the third.</li>
+          <li><strong>Name the unknown.</strong> Pending states, status checks, and reconciliation exist for the third outcome above.</li>
           <li><strong>Money is a ledger problem.</strong> The payments table drives workflow. The ledger is what finance and auditors trust.</li>
           <li><strong>Reconciliation is a product.</strong> Mismatches happen daily. Build exception queues and tools, not just a batch job.</li>
           <li><strong>Blast radius.</strong> Cells and regional data rules limit a bad deploy as much as they satisfy regulators.</li>

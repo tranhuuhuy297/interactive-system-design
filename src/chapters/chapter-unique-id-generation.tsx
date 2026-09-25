@@ -1,6 +1,7 @@
 import {
-  Callout, CodeBlock, CompareTable, H2, InterviewQuestion, KeyTakeaways, References, Requirements, TLDR, Term,
+  Callout, CodeBlock, CompareTable, FlowDiagram, H2, InterviewQuestion, KeyTakeaways, MentalModel, Quadrant, References, Requirements, SideBySide, TLDR, Term,
 } from '../components/ui'
+import { ArrowDownWideNarrow, Clock, Fingerprint, History, ListOrdered, PlusCircle, Shuffle } from 'lucide-react'
 import type { Reference } from '../components/ui'
 import { UidSnowflakeBuilderDemo } from './demos/uid-snowflake-builder-demo'
 import { UidUuidLocalityDemo } from './demos/uid-uuid-locality-demo'
@@ -29,6 +30,7 @@ export default function UniqueIdGenerationChapter() {
         'Clocks are the real risk: a clock jumping backwards can create duplicate IDs.',
         'UUIDv7 is a time-ordered UUID that keeps database indexes efficient and needs no extra service.',
       ]} />
+      <MentalModel id="unique-ids" />
       <p>
         The right answer depends on three things the interviewer might not say out loud. Must IDs{' '}
         <strong>sort by time</strong>? Must they fit in <strong>64 bits</strong>? May they be{' '}
@@ -41,11 +43,19 @@ export default function UniqueIdGenerationChapter() {
         nonFunctional={['10K+ IDs/s per node', 'No coordination on the hot path', 'Available even if one component is down']}
         outOfScope={['Strictly gap-free sequences (invoice numbers need a different design)']}
       />
-      <Callout kind="tip">
-        “Roughly ordered” and “strictly ordered” are very different. Strict global order across nodes needs
-        coordination, which means a single sequencer or a consensus log. Almost every product only needs <em>k-sorted</em> IDs:
-        ordered to within a few milliseconds.
-      </Callout>
+      <p>“Roughly ordered” and “strictly ordered” sound close but cost very different amounts:</p>
+      <SideBySide panels={[
+        { title: 'Strictly ordered', icon: ListOrdered, tone: 'bad', points: [
+          '- Needs a single sequencer or a consensus log',
+          '- Coordination on every ID',
+          'Only if the product truly needs it',
+        ] },
+        { title: 'k-sorted', icon: Shuffle, tone: 'good', points: [
+          '+ Ordered to within a few milliseconds',
+          '+ No coordination on the hot path',
+          '+ What almost every product needs',
+        ] },
+      ]} />
 
       <H2 id="options">The option space</H2>
       <p>Six common designs, from simplest to most scalable. Each trades size, ordering, and coordination differently.</p>
@@ -60,6 +70,17 @@ export default function UniqueIdGenerationChapter() {
           { label: 'Snowflake', cells: ['64-bit', 'Yes (ms)', 'Assign worker IDs once', 'Clock skew and clocks going backwards; managing worker IDs'] },
         ]}
       />
+      <Quadrant x={['Coordination per ID', 'No coordination']} y={['Not time-ordered', 'Time-ordered']}
+        sweetSpot="What most systems want"
+        caption="Snowflake, ticket servers and range leasing are 64-bit; UUIDs are 128-bit"
+        items={[
+          { label: 'Ticket server', x: 0.12, y: 0.82 },
+          { label: 'Range leasing', x: 0.42, y: 0.55 },
+          { label: 'Multi-primary step', x: 0.5, y: 0.25 },
+          { label: 'UUIDv4', x: 0.88, y: 0.1 },
+          { label: 'UUIDv7 / ULID', x: 0.88, y: 0.72 },
+          { label: 'Snowflake', x: 0.7, y: 0.88, highlight: true },
+        ]} />
 
       <H2 id="snowflake">Snowflake: spending 63 bits</H2>
       <p>
@@ -97,6 +118,13 @@ export function nextId(workerId: bigint): bigint {
         <Term def="Network Time Protocol: the service that keeps server clocks in sync, sometimes by jumping them.">NTP</Term>{' '}
         and can jump, so this is where things go wrong.
       </p>
+      <FlowDiagram caption="Every ID passes these checks before it is issued" steps={[
+        { label: 'Read clock', icon: Clock },
+        { label: 'Behind last ts?', sub: 'wait, or reuse last ts if tiny', icon: History },
+        { label: 'Same ms?', sub: 'bump the sequence', icon: PlusCircle },
+        { label: 'Sequence full?', sub: 'wait for the next ms', icon: ArrowDownWideNarrow },
+        { label: 'Emit ID', sub: 'ts · worker · seq', icon: Fingerprint },
+      ]} />
       <ul>
         <li><strong>Clock moving backwards</strong> (an NTP step or a VM migration) can reissue old timestamps, which means duplicate IDs. Refuse to issue until time catches up, or, if the jump is small, keep using the last timestamp and increment the sequence.</li>
         <li><strong>Skew between nodes</strong> only affects ordering, not uniqueness, because worker IDs differ. IDs are sortable to within the skew, which is what “k-sorted” means.</li>

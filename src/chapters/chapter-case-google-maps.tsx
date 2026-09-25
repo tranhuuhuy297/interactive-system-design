@@ -1,8 +1,9 @@
 import {
-  ApiSpec, ArchitectureDiagram, Callout, CodeBlock, CompareTable, EstimationTable, H2, InterviewQuestion,
-  KeyTakeaways, Requirements, References, TLDR, Term,
+  ApiSpec, ArchitectureDiagram, Callout, CodeBlock, CompareTable, EstimationTable, FlowDiagram, H2,
+  InterviewQuestion, KeyTakeaways, MentalModel, References, Requirements, SideBySide, StatRow, Term, TLDR,
 } from '../components/ui'
 import type { ArchEdge, ArchNode, Reference } from '../components/ui'
+import { Archive, BatteryCharging, BatteryWarning, Blend, CalendarClock, Gauge, History, MapPinned, Navigation, Smartphone } from 'lucide-react'
 import { MapsRoutingVisualizerDemo } from './demos/maps-routing-visualizer-demo'
 import { MapsTilePyramidDemo } from './demos/maps-tile-pyramid-demo'
 
@@ -59,6 +60,7 @@ export default function GoogleMapsChapter() {
         'The hard part: fast routing on a continental graph whose edge weights change every minute.',
         'Staff insight: preprocess the graph once per map version, then re-weight it in seconds when traffic changes.',
       ]} />
+      <MentalModel id="google-maps" />
       <p>“Design Google Maps” is really three systems glued together:</p>
       <ul>
         <li>A <strong>static content system</strong>: map tiles, shaped for a CDN.</li>
@@ -96,10 +98,13 @@ export default function GoogleMapsChapter() {
         The naive tile number is the point. Nobody stores 150 PB of mostly ocean, so dedupe identical tiles and
         render sparse deep zooms lazily.
       </p>
-      <p>
-        The location stream is a <strong>write-heavy firehose</strong>. Batch it on the device, and never make the
-        upload path wait for processing.
-      </p>
+      <StatRow caption="The location stream is a write-heavy firehose: batch it on the device and never make the upload path wait for processing"
+        stats={[
+          { value: '≈ 3.5M/s', label: 'GPS fixes' },
+          { value: '≈ 230K/s', label: 'batched uploads' },
+          { value: '≈ 60K/s', label: 'peak route queries' },
+          { value: '≈ 5.9T', label: 'tiles z0–z21', note: '≈ 150 PB if stored naively' },
+        ]} />
 
       <H2 id="api">3 · API</H2>
       <p>Each plane gets its own endpoints: tiles, routes, location uploads, and in-trip updates.</p>
@@ -189,13 +194,22 @@ function route(origin: Node, dest: Node) {
       </Callout>
 
       <H2 id="eta">7 · Deep dive: ETA and live traffic</H2>
-      <p>A route is only as good as its travel-time estimate. ETA blends four ingredients:</p>
-      <ul>
-        <li><strong>Historical profiles</strong>: expected speed per segment per 15-minute slot of the week. This is the baseline for any departure time.</li>
-        <li><strong>Live probes</strong>:{' '}<Term def="Snapping a noisy sequence of GPS points onto the road segments the device most likely drove along.">map-matched</Term>{' '}GPS traces give current segment speeds, trusted more where probe density is high.</li>
-        <li><strong>Blend</strong>: weight live vs historical by freshness and sample count, then sum segment times along the path. A learned model corrects systematic error such as turns, lights and merges. Google has published work on graph neural networks for this.</li>
-        <li><strong>Prediction</strong>: for a 40-minute trip, the segment you reach at minute 35 should use the <em>predicted</em> speed for then, not the speed now.</li>
-      </ul>
+      <p>
+        A route is only as good as its travel-time estimate. ETA blends four ingredients. Live speeds come from{' '}
+        <Term def="Snapping a noisy sequence of GPS points onto the road segments the device most likely drove along.">map-matched</Term>{' '}
+        GPS traces, trusted more where probe density is high.
+      </p>
+      <FlowDiagram caption="Historical baseline, corrected by live probes, projected forward to when you'll actually reach each segment" steps={[
+        { label: 'Historical profile', sub: 'speed per segment per 15-min slot of the week', icon: History },
+        { label: 'Live probes', sub: 'map-matched current speeds', icon: MapPinned },
+        { label: 'Blend', sub: 'weight by freshness + sample count, learned correction', icon: Blend },
+        { label: 'Predict', sub: 'use the speed expected when you arrive', icon: CalendarClock },
+      ]} />
+      <p>
+        The learned correction fixes systematic error such as turns, lights and merges; Google has published work on
+        graph neural networks for this. Prediction matters on long trips: for a 40-minute trip, the segment you reach
+        at minute 35 should use the <em>predicted</em> speed for then, not the speed now.
+      </p>
       <CodeBlock lang="ts" title="blending a segment speed" code={`
 function segmentSpeed(seg: SegmentId, at: Date): number {
   const hist = historicalProfile(seg, slotOfWeek(at))       // e.g. 42 km/h
@@ -207,14 +221,10 @@ function segmentSpeed(seg: SegmentId, at: Date): number {
 
       <H2 id="ingestion">8 · Deep dive: location ingestion and rerouting</H2>
       <p>Last, how phones send locations, and when a driver gets a new route. Start with upload frequency.</p>
-      <CompareTable
-        columns={['Send every fix', 'Batch on device (chosen)']}
-        rows={[
-          { label: 'Requests', cells: ['≈ 3.5M/s', '≈ 230K/s (15× fewer)'] },
-          { label: 'Battery / radio', cells: ['Radio awake constantly', 'Radio wakes briefly'] },
-          { label: 'Freshness', cells: ['~1 s', '≤ 15 s, fine for traffic aggregation'] },
-        ]}
-      />
+      <SideBySide caption="Traffic aggregation doesn't need 1-second freshness, so batching is almost free" panels={[
+        { title: 'Send every fix', icon: BatteryWarning, tone: 'bad', points: ['- ≈ 3.5M requests/s', '- Radio awake constantly', '+ ~1 s freshness'] },
+        { title: 'Batch on device', icon: BatteryCharging, tone: 'good', points: ['+ ≈ 230K requests/s (15× fewer)', '+ Radio wakes briefly', '- ≤ 15 s freshness, fine for traffic'], verdict: 'Chosen' },
+      ]} />
       <p>
         <strong>Rerouting</strong> happens in two places. The client detects <em>deviation</em> locally, since it
         knows the route{' '}
@@ -238,6 +248,13 @@ type RoadSegment = {
 type LiveSpeed = { segmentId: bigint; kmh: number; samples: number; updatedAt: number } // KV, TTL ~10 min
 type LocationFix = { sessionId: string; ts: number; lat: number; lng: number; speed: number; heading: number }
 // Fixes: Kafka (hours) → anonymized aggregates (long term). Raw traces are not kept per user by default.`} />
+
+      <FlowDiagram caption="Location data lifecycle: raw traces are short-lived, only aggregates are kept long term" steps={[
+        { label: 'Location fix', sub: 'from the phone', icon: Smartphone },
+        { label: 'Kafka', sub: 'raw, hours', icon: Navigation },
+        { label: 'Live speed', sub: 'per segment, TTL ~10 min', icon: Gauge },
+        { label: 'Aggregates', sub: 'anonymized, long term', icon: Archive },
+      ]} />
 
       <H2 id="staff">10 · Going beyond: staff-level extensions</H2>
       <Callout kind="staff">

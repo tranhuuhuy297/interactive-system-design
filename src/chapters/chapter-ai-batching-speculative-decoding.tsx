@@ -1,6 +1,8 @@
 import {
-  ArchitectureDiagram, Callout, CodeBlock, CompareTable, H2, InterviewQuestion, KeyTakeaways, References, Term, TLDR,
+  ArchitectureDiagram, Callout, CodeBlock, CompareTable, FlowDiagram, H2, InterviewQuestion, KeyTakeaways, MentalModel,
+  References, SideBySide, Term, TLDR,
 } from '../components/ui'
+import { Layers, ListOrdered, MemoryStick, Play, Repeat, Scissors, Timer, Users } from 'lucide-react'
 import type { ArchEdge, ArchNode, Reference } from '../components/ui'
 import { AiBatchSpeculativeDemo } from './demos/ai-batch-speculative-demo'
 
@@ -42,6 +44,7 @@ export default function AiBatchingSpeculativeChapter() {
         'Speculative decoding: a cheap model guesses tokens, the big model checks them in one pass. Output is unchanged.',
         'Speculation helps most at low load. Measure the acceptance rate on your own traffic.',
       ]} />
+      <MentalModel id="ai-batching" />
       <p>
         One LLM replica serves many users at once. Every few milliseconds, its scheduler decides which sequences run
         in the next{' '}<Term def="One run of the model over the current batch, producing the next token for each sequence.">forward pass</Term>.
@@ -55,14 +58,12 @@ export default function AiBatchingSpeculativeChapter() {
 
       <H2 id="batching-kinds">Static, dynamic, and continuous batching</H2>
       <p>Batching lets one weight read serve many users. How you form the batch decides how much of that win you keep.</p>
-      <CompareTable
-        columns={['How it works', 'Problem']}
-        rows={[
-          { label: 'Static', cells: ['Wait for N requests, run them together until all finish', 'Short answers wait for the longest; slots sit idle'] },
-          { label: 'Dynamic (request-level)', cells: ['Start a batch after N requests or a timeout', 'Still finishes the whole batch before admitting new work'] },
-          { label: 'Continuous (iteration-level)', cells: ['Re-form the batch every decode step: finished sequences leave, queued ones join', 'Needs paged KV memory and a smarter scheduler'] },
-        ]}
-      />
+      <SideBySide caption="Only continuous batching keeps every slot busy"
+        panels={[
+          { title: 'Static', icon: Timer, tone: 'bad', points: ['Wait for N requests, run until all finish', '- Short answers wait for the longest', '- Slots sit idle'] },
+          { title: 'Dynamic', icon: Layers, points: ['Start after N requests or a timeout', '- Still finishes the whole batch before admitting new work'] },
+          { title: 'Continuous', icon: Repeat, tone: 'good', points: ['Re-form the batch every decode step', '+ Finished sequences leave, queued ones join', '- Needs paged KV memory and a smarter scheduler'], verdict: 'The modern default' },
+        ]} />
       <p>
         Continuous batching was introduced by Orca as <strong>iteration-level scheduling</strong>. The engine runs one
         model iteration on the batch, then the scheduler decides again. It is now standard in vLLM, SGLang,
@@ -80,6 +81,13 @@ export default function AiBatchingSpeculativeChapter() {
         ongoing decodes each iteration, so every step does a bounded amount of work. Sarathi calls this piggybacking
         decodes onto prefill chunks.
       </p>
+      <FlowDiagram caption="Every iteration does a bounded amount of work, so nobody’s stream stutters"
+        steps={[
+          { label: 'Decodes first', sub: '1 token each · protects TPOT', icon: Play },
+          { label: 'Fill the budget', sub: 'with a prefill chunk', icon: Scissors },
+          { label: 'Run one pass', sub: 'bounded token budget', icon: Timer },
+          { label: 'Repeat', sub: 'until the prompt is done', icon: Repeat },
+        ]} />
       <CodeBlock lang="ts" title="one scheduler iteration (simplified)" code={`
 const TOKEN_BUDGET = 2048                   // max tokens processed per forward pass
 
@@ -114,6 +122,13 @@ function nextBatch(running: Seq[], waiting: Seq[]): Work[] {
 
       <H2 id="scheduling">Scheduling policy: who runs next?</H2>
       <p>When demand exceeds capacity, someone waits. The policy decides who, and it shows up directly in tail latency.</p>
+      <FlowDiagram caption="Admission as a pipeline: each gate maps to one policy below"
+        steps={[
+          { label: 'Request arrives', sub: 'queued in order', icon: ListOrdered },
+          { label: 'Priority tier', sub: 'interactive before batch', icon: Layers },
+          { label: 'Tenant budget', sub: 'tokens per window', icon: Users },
+          { label: 'KV fits?', sub: 'admit, queue, or preempt', icon: MemoryStick },
+        ]} />
       <ul>
         <li><strong>FCFS</strong> is simple and fair in arrival order, but one huge prompt blocks everyone behind it (head-of-line blocking).</li>
         <li><strong>Priority tiers</strong>: interactive before batch, paid before free. Pair them with admission caps so low tiers still make progress.</li>

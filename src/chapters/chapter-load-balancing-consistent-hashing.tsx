@@ -1,6 +1,7 @@
 import {
-  ArchitectureDiagram, Callout, CodeBlock, CompareTable, FlowDiagram, H2, InterviewQuestion, KeyTakeaways, References, TLDR, Tabs, Term,
+  ArchitectureDiagram, Callout, CodeBlock, CompareTable, FlowDiagram, H2, InterviewQuestion, KeyTakeaways, MentalModel, References, SideBySide, TLDR, Tabs, Term,
 } from '../components/ui'
+import { CheckCircle2, FileSearch, HeartPulse, Hourglass, Network, Power, XCircle } from 'lucide-react'
 import type { ArchEdge, ArchNode, Reference } from '../components/ui'
 import { LbAlgorithmRaceDemo } from './demos/lb-algorithm-race-demo'
 import { LbConsistentHashRingDemo } from './demos/lb-consistent-hash-ring-demo'
@@ -47,6 +48,7 @@ export default function LoadBalancingChapter() {
         'Health checks and draining are what make zero-downtime deploys possible.',
         'Consistent hashing moves only about 1/N of keys when a server joins or leaves.',
       ]} />
+      <MentalModel id="load-balancing" />
       <p>
         Consistent hashing is the companion idea. It matters when <em>which</em> server handles a key is important, as
         with caches, shards, and stateful sessions.
@@ -57,17 +59,20 @@ export default function LoadBalancingChapter() {
         The names come from the network layer each balancer inspects. An L4 balancer sees only addresses and ports.
         An L7 balancer reads the HTTP request itself.
       </p>
-      <CompareTable
-        columns={['Layer 4 (transport)', 'Layer 7 (application)']}
-        rows={[
-          { label: 'Sees', cells: ['IP, port, protocol', 'Full HTTP: path, headers, cookies, body'] },
-          { label: 'Unit of balancing', cells: ['Connection (or flow)', 'Request'] },
-          { label: 'TLS', cells: ['Passed through', 'Usually terminated here'] },
-          { label: 'Features', cells: ['Raw throughput, low latency', 'Path routing, retries, auth, canaries, rate limits'] },
-          { label: 'Gotcha', cells: ['Long-lived HTTP/2 or gRPC connections pin to one backend', 'CPU cost; it becomes a critical, stateful tier'] },
-          { label: 'Examples', cells: ['AWS NLB, IPVS, Maglev, Katran', 'AWS ALB, Envoy, NGINX, HAProxy (HTTP mode)'] },
-        ]}
-      />
+      <SideBySide panels={[
+        { title: 'Layer 4 (transport)', icon: Network, points: [
+          'Sees IP, port, protocol; balances connections',
+          'TLS passed through',
+          '+ Raw throughput, low latency',
+          '- Long-lived HTTP/2 or gRPC connections pin to one backend',
+        ], verdict: 'AWS NLB, IPVS, Maglev, Katran' },
+        { title: 'Layer 7 (application)', icon: FileSearch, points: [
+          'Sees full HTTP: path, headers, cookies; balances requests',
+          'Usually terminates TLS',
+          '+ Path routing, retries, auth, canaries, rate limits',
+          '- CPU cost; becomes a critical, stateful tier',
+        ], verdict: 'AWS ALB, Envoy, NGINX, HAProxy' },
+      ]} />
       <Callout kind="pitfall">
         With gRPC or HTTP/2, an L4 balancer spreads <em>connections</em>, but each client keeps a single connection
         open for hours. One backend ends up hot while the rest idle. You need L7 (per-request) balancing or
@@ -92,10 +97,16 @@ export default function LoadBalancingChapter() {
 
       <H2 id="health">Health checks, draining & sticky sessions</H2>
       <p>A balancer is only as good as its knowledge of which backends can take traffic right now.</p>
+      <FlowDiagram caption="The life of a backend behind the balancer" steps={[
+        { label: 'Alive', sub: 'process up, not ready yet', icon: HeartPulse },
+        { label: 'Ready', sub: 'passes checks, gets traffic', icon: CheckCircle2 },
+        { label: 'Ejected', sub: 'N errors or timeouts', icon: XCircle },
+        { label: 'Draining', sub: 'no new requests, finish in-flight', icon: Hourglass },
+        { label: 'Terminated', sub: 'zero-downtime deploy', icon: Power },
+      ]} />
       <ul>
-        <li><strong>Active checks</strong> probe <code>/healthz</code> on an interval. <strong>Passive checks</strong> (outlier detection) eject a backend after N consecutive 5xx responses or timeouts. Use both.</li>
-        <li><strong>Liveness ≠ readiness.</strong> A process can be alive but not ready (cache still warming, dependency down). Route only to ready backends.</li>
-        <li><strong>Connection draining</strong>: stop sending new requests, let in-flight requests finish, then terminate. This is essential for zero-downtime deploys.</li>
+        <li><strong>Use both kinds of check.</strong> Active checks probe <code>/healthz</code> on an interval. Passive checks (outlier detection) eject a backend after N consecutive 5xx responses or timeouts.</li>
+        <li><strong>Liveness ≠ readiness.</strong> A process can be alive while its cache warms or a dependency is down. Route only to ready backends.</li>
         <li><strong>Sticky sessions</strong> (cookie or IP affinity) make stateful servers work, but they undermine balancing and failover. Prefer stateless services with state in Redis or the DB.</li>
       </ul>
 

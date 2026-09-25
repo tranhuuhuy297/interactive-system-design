@@ -1,7 +1,8 @@
 import {
-  ApiSpec, ArchitectureDiagram, Callout, CodeBlock, CompareTable, EstimationTable, H2, InterviewQuestion,
-  KeyTakeaways, References, Requirements, TLDR, Term,
+  ApiSpec, ArchitectureDiagram, Callout, CodeBlock, CompareTable, EstimationTable, FlowDiagram, H2,
+  InterviewQuestion, KeyTakeaways, MentalModel, References, Requirements, StatRow, Term, TLDR,
 } from '../components/ui'
+import { CalendarClock, FileCheck, Fingerprint, Hash, History, Link, RefreshCw, ShieldAlert, Timer } from 'lucide-react'
 import type { ArchEdge, ArchNode, Reference } from '../components/ui'
 import { CrawlerBloomCalculator } from './demos/crawler-bloom-calculator'
 import { CrawlerFrontierSim } from './demos/crawler-frontier-sim'
@@ -53,6 +54,7 @@ export default function WebCrawlerChapter() {
         'Normalize URLs and use a Bloom filter to skip what you have already seen; fingerprints catch near-duplicates.',
         'Defend against spider traps, and recrawl pages based on how often they actually change.',
       ]} />
+      <MentalModel id="web-crawler" />
 
       <p>
         A crawler looks like a breadth-first search over a graph, and in an interview it is easy to treat it that
@@ -89,6 +91,12 @@ export default function WebCrawlerChapter() {
           { label: 'URL-seen set', math: '10B URLs × ~10 bits', result: '≈ 12 GB Bloom' },
         ]}
       />
+      <StatRow stats={[
+        { value: '770/s', label: 'pages fetched', note: '≈ 1.5K/s at peak' },
+        { value: '1.2 Gbps', label: 'inbound bandwidth' },
+        { value: '1.4 PB', label: 'snapshots over 3 years' },
+        { value: '12 GB', label: 'Bloom filter for 10B URLs' },
+      ]} />
       <p>
         Throughput is modest per machine: async I/O on one node handles hundreds of pages per second. The real limits
         are <strong>per-host politeness</strong>, <strong>DNS latency</strong> and <strong>storage growth</strong>.
@@ -176,6 +184,13 @@ function normalize(raw: string, base: string): string | null {
         <Term def="Pages that generate endless new URLs, such as infinite calendars, trapping a crawler forever.">spider traps</Term>,
         and keep its copy fresh.
       </p>
+      <FlowDiagram caption="Every fetch passes the same polite checks" steps={[
+        { label: 'robots.txt', sub: 'cached per host, ≤ ~1 day', icon: FileCheck },
+        { label: 'Per-host delay', sub: 'back off on 429/503', icon: Timer },
+        { label: 'Trap guards', sub: 'depth, length, host budget', icon: ShieldAlert },
+        { label: 'Conditional GET', sub: '304 if unchanged', icon: RefreshCw },
+        { label: 'Recrawl schedule', sub: 'by observed change rate', icon: CalendarClock },
+      ]} />
       <ul>
         <li><strong>robots.txt</strong>: fetch once per host, cache it (RFC 9309 suggests no longer than about a day), and obey <code>Allow</code>/<code>Disallow</code>. <code>Crawl-delay</code> is not part of the standard, but honor it where given. Identify yourself with a user agent that has a contact URL.</li>
         <li><strong>Adaptive delay</strong>: back off when response time or 429/503 rates rise. Treat a slow host as a signal, not an obstacle.</li>
@@ -185,6 +200,13 @@ function normalize(raw: string, base: string): string | null {
 
       <H2 id="data-model">8 · Data model</H2>
       <p>One metadata record per URL tracks fetch history, fingerprints and how often the page changes.</p>
+      <FlowDiagram caption="What one page record answers" steps={[
+        { label: 'Normalized URL', sub: 'hashed to urlHash', icon: Link },
+        { label: 'Partition key', sub: 'urlHash', icon: Hash },
+        { label: 'Fetch history', sub: 'status, ETag, Last-Modified', icon: History },
+        { label: 'Fingerprints', sub: 'contentHash + SimHash', icon: Fingerprint },
+        { label: 'Change rate', sub: 'sets the recrawl interval', icon: CalendarClock },
+      ]} />
       <CodeBlock lang="ts" title="page metadata (wide-column, key = urlHash)" code={`
 type PageRecord = {
   urlHash: string          // partition key: hash(normalizedUrl)

@@ -1,7 +1,8 @@
 import {
-  ArchitectureDiagram, Callout, CompareTable, EpisodePlayer, EstimationTable, H2, InterviewQuestion, KeyTakeaways,
-  References, TLDR, Term,
+  ArchitectureDiagram, Callout, CompareTable, EpisodePlayer, EstimationTable, H2, InterviewQuestion,
+  KeyTakeaways, MentalModel, References, SideBySide, StatRow, Term, TLDR, VisualTimeline,
 } from '../components/ui'
+import { Database, HardDrive, Layers, Mic, Radio, Search, Server, Users, Zap } from 'lucide-react'
 import type { ArchEdge, ArchNode } from '../components/ui'
 import { DISCORD_REFS } from './demos/episode-discord-sources'
 import { EpisodeDiscordCoalescingDemo } from './demos/episode-discord-coalescing-demo'
@@ -35,6 +36,8 @@ const TIMELINE = [
   { year: '2023', what: 'Relays and passive sessions for million-online servers' },
 ]
 
+const TIMELINE_ICONS = [Database, Server, Search, Mic, Users, Zap, HardDrive, Radio]
+
 export default function DiscordEpisode() {
   return (
     <>
@@ -45,6 +48,7 @@ export default function DiscordEpisode() {
         'Hot channels are tamed by routing each channel to one place and merging duplicate reads.',
         'Huge servers work because only people actually looking get live updates.',
       ]} />
+      <MentalModel id="ep-discord" />
       <p>
         Discord looks like a chat app. Underneath are two hard systems. One is a <strong>fan-out engine</strong> that
         holds millions of open sockets. The other is a <strong>message archive</strong> that must return the latest
@@ -63,12 +67,13 @@ export default function DiscordEpisode() {
       <p className="muted"><em>This episode is an independent reconstruction from public sources. It is not affiliated with or endorsed by Discord; all trademarks belong to their owners.</em></p>
 
       <H2 id="timeline">Timeline at a glance</H2>
-      <CompareTable columns={['What changed']} rows={TIMELINE.map((t) => ({ label: t.year, cells: [t.what] }))} />
+      <VisualTimeline items={TIMELINE.map((t, i) => ({ when: t.year, title: t.what, icon: TIMELINE_ICONS[i] }))} />
 
       <H2 id="the-build">The build, stage by stage</H2>
       <EpisodePlayer stages={DISCORD_STAGES} height={400} />
 
       <H2 id="numbers">The numbers that shape everything</H2>
+      <StatRow caption="Illustrative estimates from the assumptions below" stats={[{ value: '≈ 46K / s', label: 'messages written on average', note: 'estimate' }, { value: '≈ 12 TB / day', label: 'message storage with replicas', note: 'estimate' }, { value: '100K → 5K', label: 'pushes for one big-server message', note: 'lazy fan-out, estimate' }]} />
       <EstimationTable
         assumptions={['Illustrative: 10M concurrent connections at peak', '4B messages/day, ~1 KB each with metadata', 'Replication factor 3', 'Big-server message: 100K members, ~5% online and viewing']}
         rows={[
@@ -108,14 +113,18 @@ export default function DiscordEpisode() {
       </Callout>
 
       <H2 id="decisions">Key decisions and their alternatives</H2>
+      <p>The three decisions that tame fan-out and hot reads:</p>
+      <SideBySide panels={[
+        { title: 'One process owns each guild', icon: Users, tone: 'good', points: ['+ A single consistent view for permissions and fan-out', '+ Memory beats round-trips', '- Instead of: a shared DB with stateless workers'], verdict: 'Server state' },
+        { title: 'Data services + request coalescing', icon: Layers, tone: 'good', points: ['+ Merges duplicate in-flight reads', '+ Protects the DB from stampedes', '- Instead of: a bigger cache in front'], verdict: 'Hot reads' },
+        { title: 'SFU media servers', icon: Mic, tone: 'good', points: ['+ Scales past a few peers without transcoding', '- Instead of: a peer-to-peer mesh or MCU'], verdict: 'Voice' },
+      ]} />
+      <p>Other decisions, in brief:</p>
       <CompareTable
         columns={['Chosen', 'Alternative', 'Why the choice fits']}
         rows={[
-          { label: 'Server state', cells: ['One process owns each guild', 'Shared DB + stateless workers', 'Permissions and fan-out need a single consistent view; memory beats round-trips'] },
           { label: 'Sending path', cells: ['HTTP API, then fan out', 'Send over the socket', 'Stateless writes are easy to rate-limit, retry, and scale separately from sockets'] },
           { label: 'Message storage', cells: ['Wide-column, (channel, bucket)', 'Sharded SQL', 'The main query is “latest N in one channel”: one sequential partition read'] },
-          { label: 'Hot reads', cells: ['Data services + coalescing', 'Bigger cache in front', 'Merges duplicate in-flight reads at the source and protects the DB from stampedes'] },
-          { label: 'Voice', cells: ['SFU media servers', 'Peer-to-peer mesh / MCU', 'Mesh collapses past a few peers; MCU transcoding costs too much CPU'] },
         ]}
       />
 

@@ -1,7 +1,10 @@
 import {
-  References, TLDR, Term,
-  ArchitectureDiagram, Callout, CompareTable, EpisodePlayer, EstimationTable, H2, InterviewQuestion, KeyTakeaways,
+  ArchitectureDiagram, Callout, CompareTable, EpisodePlayer, EstimationTable, H2, InterviewQuestion,
+  KeyTakeaways, MentalModel, References, SideBySide, StatRow, Term, TLDR, VisualTimeline,
 } from '../components/ui'
+import {
+  Blocks, Cloud, Download, HardDrive, ListChecks, ListMusic, Podcast, Radio, Search, Share2, Sparkles, Unplug,
+} from 'lucide-react'
 import type { ArchEdge, ArchNode, Reference } from '../components/ui'
 import { EpisodeSpotifyInstantStartDemo } from './demos/episode-spotify-instant-start-demo'
 import { SPOTIFY_STAGES } from './demos/episode-spotify-stages'
@@ -41,6 +44,8 @@ const TIMELINE = [
   ['2022', 'Semantic podcast search; audiobooks launch in the U.S.'],
 ] as const
 
+const TIMELINE_ICONS = [Share2, Download, Unplug, Sparkles, Radio, Cloud, Podcast, Blocks, Search]
+
 export default function SpotifyEpisode() {
   return (
     <>
@@ -51,6 +56,7 @@ export default function SpotifyEpisode() {
         <>New features ride old rails: recommendations ship as <strong>ordinary playlists</strong>.</>,
         <>At scale, the hard problems become organizational: cloud migration and a <strong>service catalog</strong> for hundreds of teams.</>,
       ]} />
+      <MentalModel id="ep-spotify" />
       <p>
         Spotify’s hardest problem is not storing music. It is making play <strong>feel instant</strong> on a flaky
         phone network. Then it must <strong>count every play correctly</strong>, because those counts drive charts
@@ -68,14 +74,13 @@ export default function SpotifyEpisode() {
       <p className="muted"><em>This episode is an independent reconstruction from public sources. It is not affiliated with or endorsed by Spotify; all trademarks belong to their owners.</em></p>
 
       <H2 id="timeline">Timeline at a glance</H2>
-      <ol className="spf-timeline">
-        {TIMELINE.map(([year, what]) => <li key={year}><strong>{year}</strong> {what}</li>)}
-      </ol>
+      <VisualTimeline items={TIMELINE.map(([year, what], i) => ({ when: year, title: what, icon: TIMELINE_ICONS[i] }))} />
 
       <H2 id="the-build">The build, stage by stage</H2>
       <EpisodePlayer stages={SPOTIFY_STAGES} height={400} />
 
       <H2 id="numbers">The numbers that shape everything</H2>
+      <StatRow caption="Two estimates from the assumptions below and one published figure" stats={[{ value: '≈ 6B', label: 'plays per day', note: 'estimate' }, { value: '≈ 3.8 Tbps', label: 'peak audio egress', note: 'estimate' }, { value: '700K+ / s', label: 'client events', note: 'Spotify-reported, 2016' }]} />
       <EstimationTable
         assumptions={[
           '~600M monthly active users (publicly reported order of magnitude, 2024)',
@@ -136,12 +141,16 @@ export default function SpotifyEpisode() {
       </ul>
 
       <H2 id="decisions">Key decisions and their alternatives</H2>
+      <p>The three decisions behind instant play and correct payouts:</p>
+      <SideBySide panels={[
+        { title: 'Encrypted chunks on a CDN + key service', icon: HardDrive, tone: 'good', points: ['+ Bytes cache anywhere', '+ Rights checks stay small and central', '- Instead of: streaming through app servers'], verdict: 'Audio delivery' },
+        { title: 'At-least-once + dedupe by event id', icon: ListChecks, tone: 'good', points: ['+ Far simpler and cheaper', '+ Same numbers for payouts', '- Instead of: exactly-once end to end'], verdict: 'Play counting' },
+        { title: 'Versioned change log + snapshots', icon: ListMusic, tone: 'good', points: ['+ Offline edits merge by replaying ops', '+ Clients sync deltas', '- Instead of: mutable list rows'], verdict: 'Playlist storage' },
+      ]} />
+      <p>Other decisions, in brief:</p>
       <CompareTable
         columns={['Chosen', 'Alternative', 'Why the choice fits']}
         rows={[
-          { label: 'Audio delivery', cells: ['Encrypted chunks on a CDN + key service', 'Stream through app servers', 'Bytes are cacheable anywhere; rights enforcement lives in small, central key checks'] },
-          { label: 'Playlist storage', cells: ['Versioned change log + snapshots', 'Mutable list rows', 'Offline edits and collaborators merge by replaying ops; clients sync deltas'] },
-          { label: 'Play counting', cells: ['At-least-once + dedupe by event id', 'Exactly-once end to end', 'Far cheaper and simpler; dedupe gives the same numbers for payouts'] },
           { label: 'Discovery', cells: ['Batch-generated personal playlists', 'Fully online recommendations', 'Reuses playlist sync, predictable cost; add real-time ranking only where it pays'] },
           { label: 'Infrastructure', cells: ['Public cloud + managed data services', 'Own data centers', 'Teams ship faster; data platform is someone else’s pager'] },
         ]}

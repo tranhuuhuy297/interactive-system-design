@@ -1,7 +1,10 @@
 import {
-  ApiSpec, ArchitectureDiagram, Callout, CodeBlock, CompareTable, EstimationTable, H2, InterviewQuestion,
-  KeyTakeaways, References, Requirements, Term, TLDR,
+  ApiSpec, ArchitectureDiagram, Callout, CodeBlock, EstimationTable, FlowDiagram, H2, InterviewQuestion,
+  KeyTakeaways, MentalModel, References, Requirements, SideBySide, StatRow, Term, TLDR,
 } from '../components/ui'
+import {
+  Calculator, CalendarClock, Copy, Gauge, Lock, Search, ShieldAlert, ShieldCheck, Timer, Undo2, Zap,
+} from 'lucide-react'
 import type { ArchEdge, ArchNode, Reference } from '../components/ui'
 import { AiCaseGwRoutingDemo } from './demos/ai-case-gw-routing-demo'
 
@@ -52,6 +55,7 @@ export default function LlmGatewayChapter() {
         'Quotas count tokens: reserve at admission, then reconcile with actual usage.',
         'Bill from provider-reported usage, keyed by request id, so retries never double-charge.',
       ]} />
+      <MentalModel id="ai-case-gateway" />
       <p>
         Once a company has more than a handful of teams calling LLMs, the same problems show up everywhere:
       </p>
@@ -72,6 +76,11 @@ export default function LlmGatewayChapter() {
         nonFunctional={['Gateway overhead < ~10–20 ms at p99', 'Availability above any single provider', 'Streaming passthrough with no buffering', 'Never double-bill or double-execute a request']}
         outOfScope={['Training models', 'Application-level prompt management']}
       />
+      <SideBySide caption="Every problem from the intro has one home"
+        panels={[
+          { title: 'Every team on its own', icon: ShieldAlert, tone: 'bad', points: ['- Provider keys pasted into repos', '- One batch job exhausts the org-wide limit', '- Nobody knows who spent $80K', '- One provider outage breaks every feature'] },
+          { title: 'Through one gateway', icon: ShieldCheck, tone: 'good', points: ['+ Keys held centrally', '+ Token quotas per team', '+ Cost attributed per team and project', '+ Failover across providers'] },
+        ]} />
 
       <H2 id="estimation">2 · Back-of-the-envelope</H2>
       <EstimationTable
@@ -83,6 +92,13 @@ export default function LlmGatewayChapter() {
           { label: 'Raw log volume', math: '50M × ~14 KB', result: '≈ 700 GB / day' },
         ]}
       />
+      <StatRow
+        stats={[
+          { value: '≈ 1.7K', label: 'calls/s at peak', note: 'modest' },
+          { value: '≈ 14K', label: 'open streams at once', note: 'sizes the fleet' },
+          { value: '≈ 175B', label: 'tokens per day' },
+          { value: '≈ 700 GB', label: 'raw logs per day', note: 'sizes the storage bill' },
+        ]} />
       <p>
         QPS is modest. <strong>Long-lived streaming connections</strong> and <strong>payload logs</strong> size the
         fleet and the storage bill. So the gateway must use fully async,{' '}
@@ -129,6 +145,13 @@ export default function LlmGatewayChapter() {
         reconcile</strong>, like a hotel holding a deposit on your card and settling at checkout. The budget itself is a{' '}
         <Term def="A counter that refills at a fixed rate; each request takes some capacity out, and requests wait or fail when it is empty.">token bucket</Term>:
       </p>
+      <FlowDiagram caption="Like a hotel deposit: hold the maximum, charge what was actually used"
+        steps={[
+          { label: 'Estimate', sub: 'input tokens + max_tokens', icon: Calculator },
+          { label: 'Reserve', sub: 'atomic in Redis, or 429', icon: Lock },
+          { label: 'Stream', sub: 'provider call', icon: Zap },
+          { label: 'Settle', sub: 'refund unused, bill actual', icon: Undo2 },
+        ]} />
       <CodeBlock lang="ts" title="reserve-then-reconcile token budget" code={`
 async function admit(team: string, req: ChatRequest) {
   const estimate = countTokens(req.messages) + (req.max_tokens ?? DEFAULT_MAX_OUTPUT)
@@ -143,26 +166,20 @@ async function settle(team: string, reserved: number, usage: Usage) {
   await quota.refund(team, reserved - actual)            // return the unused reservation
   await ledger.record(team, usage)                       // bill actual usage only
 }`} />
-      <CompareTable
-        columns={['Requests/sec limit', 'Token bucket (reserve + reconcile)', 'Monthly budget']}
-        rows={[
-          { label: 'Protects', cells: ['Gateway CPU', 'Provider TPM limits and fairness between teams', 'Spend'] },
-          { label: 'Granularity', cells: ['Per call', 'Per token', 'Per dollar'] },
-          { label: 'Use it for', cells: ['Abuse protection', 'Day-to-day admission control', 'Alerts and hard caps'] },
-        ]}
-      />
+      <SideBySide caption="Three limits, three jobs"
+        panels={[
+          { title: 'Requests/sec limit', icon: Timer, points: ['Protects gateway CPU', 'Granularity: per call'], verdict: 'Abuse protection' },
+          { title: 'Token bucket', icon: Gauge, tone: 'good', points: ['Protects provider TPM limits and fairness between teams', 'Granularity: per token'], verdict: 'Day-to-day admission control' },
+          { title: 'Monthly budget', icon: CalendarClock, points: ['Protects spend', 'Granularity: per dollar'], verdict: 'Alerts and hard caps' },
+        ]} />
 
       <H2 id="caching">7 · Deep dive: caching and logging</H2>
       <p>The gateway sees every prompt, which makes it the natural place for caching and the riskiest place for logs.</p>
-      <CompareTable
-        columns={['Exact-match cache', 'Semantic cache']}
-        rows={[
-          { label: 'Key', cells: ['Hash of full request + model + params + tenant', 'Embedding similarity of the prompt'] },
-          { label: 'Correctness', cells: ['Safe for deterministic calls', 'Can return an answer to a different question'] },
-          { label: 'Leak risk', cells: ['None if tenant-scoped', 'High if shared across users or tenants'] },
-          { label: 'Use', cells: ['Batch jobs, evals, repeated tool calls', 'Only for narrow, public, FAQ-style flows'] },
-        ]}
-      />
+      <SideBySide
+        panels={[
+          { title: 'Exact-match cache', icon: Copy, tone: 'good', points: ['Key: hash of request + model + params + tenant', '+ Safe for deterministic calls', '+ No leak risk if tenant-scoped'], verdict: 'Batch jobs, evals, repeated tool calls' },
+          { title: 'Semantic cache', icon: Search, tone: 'bad', points: ['Key: embedding similarity of the prompt', '- Can answer a different question', '- High leak risk if shared across users or tenants'], verdict: 'Only narrow, public, FAQ-style flows' },
+        ]} />
       <ul>
         <li><strong>Logs are sensitive data.</strong> Prompts contain customer data. Redact{' '}<Term def="Personally identifiable information: names, emails, phone numbers, and similar.">PII</Term>{' '}before storage, allow per-team payload logging opt-out, set short retention, and restrict access. Always keep usage metadata, even when payloads are dropped.</li>
         <li><strong>Bill from provider-reported usage.</strong> Use the usage block in the final response or stream event, not your own estimate. Keep a request id end to end so retries never create a second charge.</li>

@@ -1,7 +1,8 @@
 import {
-  ApiSpec, ArchitectureDiagram, Callout, CodeBlock, CompareTable, EstimationTable, H2, InterviewQuestion,
-  KeyTakeaways, References, Requirements, TLDR, Term,
+  ApiSpec, ArchitectureDiagram, Callout, CodeBlock, CompareTable, EstimationTable, FlowDiagram, H2,
+  InterviewQuestion, KeyTakeaways, MentalModel, References, Requirements, StatRow, Term, TLDR,
 } from '../components/ui'
+import { Grid3x3, ListOrdered, MapPin, Ruler, ScanSearch } from 'lucide-react'
 import type { ArchEdge, ArchNode, Reference } from '../components/ui'
 import { GeoGeohashExplorer } from './demos/geo-geohash-explorer'
 import { GeoQuadtreeDemo } from './demos/geo-quadtree-demo'
@@ -50,6 +51,7 @@ export default function ProximityServiceChapter() {
         'For static businesses the whole index fits in memory, so replicate it instead of sharding.',
         'Moving objects (drivers, friends) need a different, write-heavy design.',
       ]} />
+      <MentalModel id="proximity" />
 
       <p>
         “Find restaurants within 2 km” looks like a database query. But ordinary indexes are one-dimensional, and
@@ -87,6 +89,11 @@ export default function ProximityServiceChapter() {
           { label: 'Business details', math: '200M × ~1 KB', result: '≈ 200 GB (DB + cache)' },
         ]}
       />
+      <StatRow stats={[
+        { value: '5.8K/s', label: 'searches', note: '≈ 17K/s at meal times' },
+        { value: '5 GB', label: 'geo index, fits in RAM' },
+        { value: 'tens/s', label: 'business writes at most' },
+      ]} />
       <p>
         A 5 GB index fits in RAM on one machine, so <strong>replicate rather than shard</strong>. Read QPS scales
         linearly with replicas, and writes are rare enough to rebuild the index.
@@ -160,6 +167,13 @@ export default function ProximityServiceChapter() {
 
       <H2 id="data-model">7 · Data model & scaling</H2>
       <p>The geo index is one table keyed by geohash. The service computes the covering cells, then filters by exact distance.</p>
+      <FlowDiagram caption="Coarse cells first, exact distance last" steps={[
+        { label: 'User location', sub: 'lat, lon, radius', icon: MapPin },
+        { label: 'Covering cells', sub: 'center + 8 neighbors', icon: Grid3x3 },
+        { label: 'Prefix scan', sub: 'geohash LIKE …%', icon: ScanSearch },
+        { label: 'Exact filter', sub: 'haversine distance', icon: Ruler },
+        { label: 'Rank', sub: 'distance, rating', icon: ListOrdered },
+      ]} />
       <CodeBlock lang="ts" title="geo index + business table" code={`
 -- geo index: one row per (cell, business). Precompute several precisions if needed.
 CREATE TABLE geo_index (

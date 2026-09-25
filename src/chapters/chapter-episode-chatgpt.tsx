@@ -1,7 +1,10 @@
 import {
-  References, TLDR, Term,
-  ArchitectureDiagram, Callout, CompareTable, EpisodePlayer, EstimationTable, H2, InterviewQuestion, KeyTakeaways,
+  ArchitectureDiagram, Callout, CompareTable, EpisodePlayer, EstimationTable, H2, InterviewQuestion,
+  KeyTakeaways, MentalModel, References, SideBySide, StatRow, Term, TLDR, VisualTimeline,
 } from '../components/ui'
+import {
+  Brain, Building2, Code, Cpu, Crown, Gauge, Layers, Mic, Plug, Sparkles, Users, Volume2, Zap,
+} from 'lucide-react'
 import type { ArchEdge, ArchNode, Reference } from '../components/ui'
 import { EpisodeChatgptContextBudgetDemo } from './demos/episode-chatgpt-context-budget-demo'
 import { CHATGPT_STAGES } from './demos/episode-chatgpt-stages'
@@ -43,6 +46,8 @@ const TIMELINE = [
   ['Jan 2025', 'Stargate infrastructure venture announced'],
 ] as const
 
+const TIMELINE_ICONS = [Sparkles, Building2, Crown, Plug, Code, Mic, Users, Brain, Volume2, Cpu]
+
 export default function ChatgptEpisode() {
   return (
     <>
@@ -53,6 +58,7 @@ export default function ChatgptEpisode() {
         <>Tools make it useful and risky. <strong>Tool output is untrusted input</strong>, and code runs in a sandbox.</>,
         <>Plan the <strong>degradation ladder</strong> before launch day: queue, spill, smaller model, shed.</>,
       ]} />
+      <MentalModel id="ep-chatgpt" />
       <p>
         ChatGPT looks like a text box. The product is really an orchestration layer around a slow, expensive
         function call. Two facts drive every decision: <strong>GPU time is scarce</strong>, and
@@ -71,14 +77,13 @@ export default function ChatgptEpisode() {
       <p className="muted"><em>This episode is an independent reconstruction from public sources. It is not affiliated with or endorsed by OpenAI; all trademarks belong to their owners.</em></p>
 
       <H2 id="timeline">Timeline at a glance</H2>
-      <ol className="gpt-timeline">
-        {TIMELINE.map(([when, what]) => <li key={when}><strong>{when}</strong> {what}</li>)}
-      </ol>
+      <VisualTimeline items={TIMELINE.map(([when, what], i) => ({ when, title: what, icon: TIMELINE_ICONS[i] }))} />
 
       <H2 id="the-build">The build, stage by stage</H2>
       <EpisodePlayer stages={CHATGPT_STAGES} height={400} />
 
       <H2 id="numbers">The numbers that shape everything</H2>
+      <StatRow caption="Illustrative estimates from the assumptions below" stats={[{ value: '≈ 1B', label: 'messages per day', note: 'illustrative' }, { value: '≈ 180K', label: 'concurrent streams', note: 'Little’s law, estimate' }, { value: '1.5T vs 400B', label: 'prompt vs output tokens per day', note: 'estimate' }]} />
       <EstimationTable
         assumptions={[
           'Illustrative: 100M daily users × 10 messages each',
@@ -134,14 +139,18 @@ export default function ChatgptEpisode() {
       </Callout>
 
       <H2 id="decisions">Key decisions and their alternatives</H2>
+      <p>The three decisions users feel most:</p>
+      <SideBySide panels={[
+        { title: 'Stream tokens over SSE', icon: Zap, tone: 'good', points: ['+ Time to first token matters more than total time', '- Instead of: returning the full answer'], verdict: 'Response delivery' },
+        { title: 'Tokens per minute + tiers', icon: Gauge, tone: 'good', points: ['+ Request cost varies ~100×', '+ Tokens track real GPU cost', '- Instead of: requests per minute'], verdict: 'Rate limiting' },
+        { title: 'Queue → spill → smaller model → shed', icon: Layers, tone: 'good', points: ['+ Protects paid and interactive traffic', '+ Degrades predictably', '- Instead of: failing requests randomly'], verdict: 'Overload' },
+      ]} />
+      <p>Other decisions, in brief:</p>
       <CompareTable
         columns={['Chosen', 'Alternative', 'Why the choice fits']}
         rows={[
-          { label: 'Response delivery', cells: ['Stream tokens over SSE', 'Return the full answer', 'Time to first token matters more to users than total time'] },
           { label: 'Transport', cells: ['SSE (one-way HTTP stream)', 'WebSockets', 'Simple, works through proxies, fits request-then-stream; WebSockets only for truly bidirectional features'] },
           { label: 'Conversation model', cells: ['Message tree (branches)', 'Linear message list', 'Edit and regenerate create siblings without destroying history'] },
-          { label: 'Rate limiting', cells: ['Tokens per minute + tiers', 'Requests per minute', 'Request cost varies ~100×; tokens track real GPU cost'] },
-          { label: 'Overload', cells: ['Queue → spill → smaller model → shed', 'Fail requests randomly', 'Protects paid and interactive traffic, degrades predictably'] },
           { label: 'Grounding', cells: ['Retrieval + short memory', 'Stuff everything into context', 'Cheaper per request; quality depends on retrieval recall'] },
         ]}
       />

@@ -1,7 +1,8 @@
 import {
-  ApiSpec, ArchitectureDiagram, Callout, CodeBlock, CompareTable, EstimationTable, H2, InterviewQuestion,
-  KeyTakeaways, References, Requirements, TLDR, Term,
+  ApiSpec, ArchitectureDiagram, Callout, CodeBlock, CompareTable, EstimationTable, FlowDiagram, H2,
+  InterviewQuestion, KeyTakeaways, MentalModel, References, Requirements, StatRow, Term, TLDR,
 } from '../components/ui'
+import { ArrowRightLeft, BookOpen, CircleCheck, FilePlus, Hourglass, KeyRound, Radio, Undo2 } from 'lucide-react'
 import type { ArchEdge, ArchNode, Reference } from '../components/ui'
 import { PayIdempotencyDemo } from './demos/pay-idempotency-demo'
 import { PayLedgerDemo } from './demos/pay-ledger-demo'
@@ -55,6 +56,7 @@ export default function PaymentSystemChapter() {
         'A strict state machine with conditional updates makes late or duplicate webhooks harmless.',
         'An append-only double-entry ledger plus daily reconciliation catches every bug you did not predict.',
       ]} />
+      <MentalModel id="payments" />
 
       <p>
         Payments look like a small CRUD problem: the traffic is modest and the objects are simple. What makes the
@@ -93,6 +95,11 @@ export default function PaymentSystemChapter() {
           { label: 'Ledger growth', math: '30M × 200 B × 365', result: '≈ 2.2 TB/yr' },
         ]}
       />
+      <StatRow caption="Small numbers: throughput is not the hard part" stats={[
+        { value: '116/s', label: 'average payments', note: '≈ 1.2K/s at peak' },
+        { value: '30M', label: 'ledger rows per day' },
+        { value: '2.2 TB', label: 'ledger growth per year' },
+      ]} />
       <p>
         One well-tuned relational primary handles this write rate. <strong>Throughput is not the problem</strong>.
         Say so explicitly, and spend your time on the failure modes.
@@ -158,6 +165,12 @@ async function withIdempotency(key: string, fingerprint: string, run: () => Prom
 
       <H2 id="state-machine">6 · Deep dive: the payment state machine</H2>
       <p>Next, make status changes safe. A payment may only move along legal transitions, enforced in the database.</p>
+      <FlowDiagram caption="Happy path; PENDING can also go to FAILED, or UNKNOWN on timeout until reconciled" steps={[
+        { label: 'CREATED', icon: FilePlus },
+        { label: 'PENDING', sub: 'sent to the PSP', icon: Hourglass },
+        { label: 'SUCCEEDED', sub: 'confirmed by webhook', icon: CircleCheck },
+        { label: 'REFUNDED', sub: 'or DISPUTED', icon: Undo2 },
+      ]} />
       <CodeBlock lang="ts" title="legal transitions only" code={`
 const transitions: Record<Status, Status[]> = {
   CREATED:    ['PENDING'],
@@ -202,6 +215,12 @@ const transitions: Record<Status, Status[]> = {
 
       <H2 id="data-model">8 · Data model</H2>
       <p>Four tables hold the state: payments, idempotency keys, ledger entries and the outbox.</p>
+      <FlowDiagram caption="Each arrow is a commit boundary; nothing is published that wasn't committed" steps={[
+        { label: 'Payment + key', sub: 'one transaction', icon: KeyRound },
+        { label: 'State change + outbox', sub: 'one transaction', icon: ArrowRightLeft },
+        { label: 'Relay publishes', sub: 'outbox → Kafka', icon: Radio },
+        { label: 'Ledger entries', sub: 'balanced debit + credit', icon: BookOpen },
+      ]} />
       <CodeBlock lang="ts" title="core tables (SQL)" code={`
 // payments(id PK, order_id, amount_minor BIGINT, currency CHAR(3),
 //          status, psp_ref UNIQUE, version INT, created_at, updated_at)

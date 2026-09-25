@@ -1,6 +1,11 @@
 import {
-  Callout, CodeBlock, CompareTable, FlowDiagram, H2, InterviewQuestion, KeyTakeaways, References, Term, TLDR,
+  Callout, CodeBlock, CompareTable, FlowDiagram, H2, InterviewQuestion, KeyTakeaways, LayerStack, MentalModel, References,
+  SideBySide, Term, TLDR,
 } from '../components/ui'
+import {
+  Bot, CheckCheck, Eye, FileSearch, Gauge, Ghost, MousePointerClick, PenLine, Ruler, Search, SplitSquareHorizontal,
+  Users, Wrench, XCircle,
+} from 'lucide-react'
 import type { Reference } from '../components/ui'
 import { AiEvalHarnessDemo } from './demos/ai-eval-harness-demo'
 import { AiEvalJudgeBiasDemo } from './demos/ai-eval-judge-bias-demo'
@@ -24,6 +29,7 @@ export default function EvaluationChapter() {
         'Small eval sets are noisy. Compare versions on the same items and report an interval.',
         'Gate changes in CI, then confirm with a canary and live metrics.',
       ]} />
+      <MentalModel id="ai-evals" />
       <p>
         In traditional software, tests check code against a spec. With LLMs, the{' '}
         <Term def="Evaluation: a set of test inputs plus a way to score outputs, run on every change.">eval</Term>{' '}
@@ -37,11 +43,11 @@ export default function EvaluationChapter() {
 
       <H2 id="spec">Evals are the product spec</H2>
       <p>Without evals, every change is a guess. With them, it is a measurement.</p>
-      <ul>
-        <li>Every model upgrade, prompt edit, or retrieval tweak is a behavior change across thousands of inputs. You need a way to see all of it at once.</li>
-        <li>Evals turn debates (“the new prompt feels better”) into numbers with uncertainty.</li>
-        <li>They make vendor and model choices reversible: you can swap models when a cheaper one passes the same suite.</li>
-      </ul>
+      <SideBySide
+        panels={[
+          { title: 'Without evals', icon: XCircle, tone: 'bad', points: ['- Every change is a guess across thousands of inputs', '- Debates: “the new prompt feels better”', '- Stuck with one model vendor'] },
+          { title: 'With evals', icon: CheckCheck, tone: 'good', points: ['+ See every behavior change at once', '+ Numbers with uncertainty', '+ Swap models when a cheaper one passes the same suite'] },
+        ]} />
 
       <H2 id="datasets">Building the eval set</H2>
       <p>
@@ -70,16 +76,14 @@ export default function EvaluationChapter() {
 
       <H2 id="metrics">Choosing metrics</H2>
       <p>Metrics range from cheap and strict to flexible and costly. Pick per failure type.</p>
-      <CompareTable
-        columns={['Type', 'Examples', 'Cost / reliability']}
-        rows={[
-          { label: 'Deterministic', cells: ['Exact match, schema valid, unit tests pass, regex, citations resolve', 'Cheap, reliable, narrow'] },
-          { label: 'Reference-based', cells: ['Similarity to a gold answer, key facts present', 'Cheap; penalizes valid alternative phrasings'] },
-          { label: 'Model-graded', cells: ['LLM judge with a rubric; pairwise preference', 'Flexible; needs calibration against humans'] },
-          { label: 'RAG-specific', cells: ['Context precision/recall, faithfulness to context, answer relevance', 'Separates retrieval from generation failures'] },
-          { label: 'Human', cells: ['Expert review, side-by-side ratings', 'Gold standard; slow and costly'] },
-        ]}
-      />
+      <LayerStack legend="Run the cheap checks on everything, the expensive ones on samples · bar = how widely you can afford to run it"
+        caption="RAG adds its own metrics (context precision/recall, faithfulness, answer relevance) to separate retrieval from generation failures."
+        layers={[
+          { label: 'Human', sub: 'expert review, side-by-side ratings', icon: Users, size: 0.2, value: 'gold standard · slow, costly' },
+          { label: 'Model-graded', sub: 'LLM judge with a rubric, pairwise', icon: Bot, size: 0.45, value: 'flexible · calibrate vs humans' },
+          { label: 'Reference-based', sub: 'similarity to gold, key facts present', icon: Ruler, size: 0.7, value: 'cheap · penalizes valid rephrasing' },
+          { label: 'Deterministic', sub: 'exact match, schema, unit tests, regex', icon: CheckCheck, size: 1, value: 'cheap, reliable, narrow', highlight: true },
+        ]} />
       <Callout kind="tip">
         Prefer the cheapest metric that captures the failure. If “valid JSON with a known label” is the requirement, a
         deterministic check beats any judge. Reserve LLM judges for qualities code can’t check.
@@ -143,6 +147,13 @@ export const gate = {
 
       <H2 id="online">Online evaluation</H2>
       <p>Offline evals decide whether to try a change. Live traffic decides whether to keep it.</p>
+      <FlowDiagram caption="From no user impact to full exposure, measuring at every step"
+        steps={[
+          { label: 'Shadow mode', sub: 'live inputs, hidden outputs', icon: Ghost },
+          { label: 'A/B test', sub: 'outcomes + guardrails', icon: SplitSquareHorizontal },
+          { label: 'Implicit feedback', sub: 'regenerate, copy, edit', icon: MousePointerClick },
+          { label: 'Sampled scoring', sub: 'judges on real traces daily', icon: Eye },
+        ]} />
       <ul>
         <li><strong>A/B tests</strong> on product outcomes (resolution rate, retention), with guardrail metrics: latency, cost, safety flags, complaint rate.</li>
         <li><strong>Implicit feedback</strong>: regenerate clicks, copy events, edits to drafts, and abandonment are cheaper and more plentiful than thumbs ratings.</li>
@@ -155,6 +166,14 @@ export const gate = {
         For RAG and agent systems, record every step of a request: rewritten query, retrieved chunk IDs and scores,
         final prompt, tool calls, model output, latency, and tokens.
       </p>
+      <FlowDiagram caption="One trace, one row per step: the failing step is usually obvious"
+        steps={[
+          { label: 'Rewritten query', icon: PenLine },
+          { label: 'Retrieved chunks', sub: 'IDs + scores', icon: FileSearch },
+          { label: 'Final prompt', icon: Search },
+          { label: 'Tool calls', icon: Wrench },
+          { label: 'Output', sub: 'latency + tokens', icon: Gauge },
+        ]} />
       <p>
         When an eval case fails, the{' '}<Term def="A step-by-step record of everything that happened for one request.">trace</Term>{' '}
         shows whether retrieval, the prompt, the model, or a tool was at fault. Without it, teams guess. See{' '}

@@ -255,3 +255,13 @@
   }
   .term:hover .term__tip, .term:focus .term__tip { opacity: 1; translate: 0 0; }
 }
+
+@layer components {
+  /* Wide demo content scrolls inside its frame instead of widening the page. */
+  .demo__body { overflow-x: auto; }
+  /* On phones, glossary tooltips become a bottom sheet so they never overflow the viewport. */
+  @media (max-width: 640px) {
+    .term__tip { position: fixed; left: 12px; right: 12px; bottom: 16px; top: auto; width: auto; max-width: none; translate: 0 8px; font-size: var(--text-sm); }
+    .term:hover .term__tip, .term:focus .term__tip { translate: 0 0; }
+  }
+}

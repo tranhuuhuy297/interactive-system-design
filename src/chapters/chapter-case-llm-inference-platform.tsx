@@ -1,8 +1,9 @@
 import {
-  ApiSpec, ArchitectureDiagram, Callout, CodeBlock, CompareTable, EstimationTable, H2, InterviewQuestion,
-  KeyTakeaways, Requirements, References, TLDR, Term,
+  ApiSpec, ArchitectureDiagram, Callout, CodeBlock, CompareTable, EstimationTable, FlowDiagram, H2,
+  InterviewQuestion, KeyTakeaways, MentalModel, References, Requirements, SideBySide, StatRow, Term, TLDR,
 } from '../components/ui'
 import type { ArchEdge, ArchNode, Reference } from '../components/ui'
+import { Calculator, Cpu, Gauge, HandCoins, ListFilter, MemoryStick, Receipt, Send, Undo2, Zap } from 'lucide-react'
 import { LlmBatchingSimulatorDemo } from './demos/llm-batching-simulator-demo'
 import { LlmGpuMemoryCalculatorDemo } from './demos/llm-gpu-memory-calculator-demo'
 
@@ -53,6 +54,7 @@ export default function LlmInferencePlatformChapter() {
         'The hard part: GPU memory. The KV cache, not compute, decides how many requests run at once.',
         'Staff insight: frame every choice as cost per million tokens at a latency target.',
       ]} />
+      <MentalModel id="llm-serving" />
       <p>
         An LLM inference platform is a request/response API on the outside and a <strong>GPU scheduling
         problem</strong> on the inside. Everything classic still applies: gateways, rate limits, queues, autoscaling.
@@ -94,7 +96,13 @@ export default function LlmInferencePlatformChapter() {
           { label: 'Cost / 1M output tokens', math: '$24/h ÷ 9M tok/h', result: '≈ $2.7 (illustrative)' },
         ]}
       />
-      <p>The punchline: the fleet is <strong>thousands of GPUs</strong>.</p>
+      <StatRow caption="The punchline: the fleet is thousands of GPUs (numbers illustrative)"
+        stats={[
+          { value: '≈ 1.7K/s', label: 'peak requests' },
+          { value: '≈ 520K/s', label: 'peak output tokens' },
+          { value: '≈ 210 × 8', label: 'GPUs in decode replicas' },
+          { value: '≈ $2.7', label: 'per 1M output tokens' },
+        ]} />
       <p>So a 20% utilization gain from batching or caching is worth more than any other optimization in the design.</p>
 
       <H2 id="api">3 · API</H2>
@@ -107,6 +115,12 @@ export default function LlmInferencePlatformChapter() {
         { method: 'POST', path: '/v1/chat/completions', desc: 'Generate a response. With stream=true, returns Server-Sent Events carrying token deltas, then a final usage event.', body: '{ model, messages[], max_tokens, temperature, stream }', returns: 'text/event-stream · data: { delta } … data: { usage }' },
         { method: 'POST', path: '/v1/batches', desc: 'Submit many requests for asynchronous processing within a window, at lower priority and price.', body: '{ input_file_id, completion_window }', returns: '202 { batch_id }' },
         { method: 'GET', path: '/v1/models', desc: 'List available models and adapters with context limits.', returns: '{ data: [{ id, context_window }] }' },
+      ]} />
+
+      <FlowDiagram caption="A stream can't be transparently retried once tokens have been sent" steps={[
+        { label: 'POST stream: true', sub: 'model, messages, max_tokens', icon: Send },
+        { label: 'Token deltas', sub: 'one SSE event per chunk', icon: Zap },
+        { label: 'Usage event', sub: 'final input/output counts', icon: Receipt },
       ]} />
 
       <H2 id="high-level">4 · High-level design</H2>
@@ -131,15 +145,10 @@ export default function LlmInferencePlatformChapter() {
         <Term def="The second phase: the model generates output one token at a time, reusing the KV cache.">decode</Term>{' '}
         generates the answer.
       </p>
-      <CompareTable
-        columns={['Prefill', 'Decode']}
-        rows={[
-          { label: 'Work', cells: ['All prompt tokens at once, in parallel', 'One new token per sequence per step'] },
-          { label: 'Bottleneck', cells: ['Compute (FLOPs)', 'Memory bandwidth: weights + KV read every step'] },
-          { label: 'Drives', cells: ['TTFT', 'TPOT and throughput'] },
-          { label: 'Scales with', cells: ['Prompt length', 'Output length × batch size'] },
-        ]}
-      />
+      <SideBySide caption="Two phases, two different hardware limits" panels={[
+        { title: 'Prefill', icon: Cpu, points: ['All prompt tokens at once, in parallel', 'Bottleneck: compute (FLOPs)', 'Scales with prompt length'], verdict: 'Drives TTFT' },
+        { title: 'Decode', icon: MemoryStick, points: ['One new token per sequence per step', 'Bottleneck: memory bandwidth (weights + KV read every step)', 'Scales with output length × batch size'], verdict: 'Drives TPOT and throughput' },
+      ]} />
       <p>
         Because the two phases stress different hardware limits, large deployments increasingly{' '}
         <strong>disaggregate</strong> them. Prefill and decode run on separate GPU pools, and the KV cache is shipped
@@ -196,6 +205,13 @@ export default function LlmInferencePlatformChapter() {
         ]}
       />
       <p>Admission control ties quotas to tokens, not requests, because one request can cost 1,000× another.</p>
+      <FlowDiagram caption="Reserve the worst case, shed early, refund the difference" steps={[
+        { label: 'Count prompt', sub: 'tokens in messages', icon: Calculator },
+        { label: 'Reserve', sub: 'prompt + max_tokens; empty bucket → 429', icon: HandCoins },
+        { label: 'Check queue', sub: 'too deep for the tier → 503', icon: ListFilter },
+        { label: 'Serve', sub: 'protects TTFT', icon: Gauge },
+        { label: 'Refund', sub: 'reserved minus used', icon: Undo2 },
+      ]} />
       <CodeBlock lang="ts" title="token-aware admission (sketch)" code={`
 // Reserve the worst case up front so one request can't blow the quota mid-stream.
 function admit(key: ApiKey, req: CompletionRequest): Admission {

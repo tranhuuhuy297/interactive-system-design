@@ -1,6 +1,7 @@
 import {
-  ArchitectureDiagram, Callout, CodeBlock, CompareTable, FlowDiagram, H2, InterviewQuestion, KeyTakeaways, References, TLDR, Tabs, Term,
+  ArchitectureDiagram, Callout, CodeBlock, CompareTable, FlowDiagram, H2, InterviewQuestion, KeyTakeaways, MentalModel, References, SideBySide, TLDR, Tabs, Term,
 } from '../components/ui'
+import { CreditCard, Inbox, PackageX, ScrollText, ShoppingCart, Undo2, XCircle } from 'lucide-react'
 import type { ArchEdge, ArchNode, Reference } from '../components/ui'
 import { MqDeliverySemanticsDemo } from './demos/mq-delivery-semantics-demo'
 import { MqKafkaConsumerGroupDemo } from './demos/mq-kafka-consumer-group-demo'
@@ -45,6 +46,7 @@ export default function QueuesStreamsChapter() {
         'Move messages that keep failing to a dead-letter queue instead of blocking the stream.',
         'Use the outbox pattern to save data and publish its event without them getting out of sync.',
       ]} />
+      <MentalModel id="messaging" />
       <p>
         The price is a new class of bugs: duplicates, reordering, messages that always fail, and invisible lag.
         Interviewers probe exactly those.
@@ -52,17 +54,22 @@ export default function QueuesStreamsChapter() {
 
       <H2 id="queue-vs-log">Queue vs log: two different tools</H2>
       <p>People often say “queue” for both, but they behave very differently once a message is read.</p>
-      <CompareTable
-        columns={['Message queue (SQS, RabbitMQ)', 'Distributed log (Kafka, Kinesis, Pulsar)']}
-        rows={[
-          { label: 'Model', cells: ['Messages are deleted once acknowledged', 'Append-only log, retained by time or size'] },
-          { label: 'Consumers', cells: ['Competing workers share one queue', 'Each consumer group keeps its own offset'] },
-          { label: 'Replay', cells: ['No, once it is consumed it is gone', 'Yes, rewind the offset'] },
-          { label: 'Ordering', cells: ['Best effort (FIFO variants exist, with lower throughput)', 'Strict within a partition'] },
-          { label: 'Per-message features', cells: ['Delays, visibility timeouts, per-message ack, DLQ', 'Mostly none; the consumer manages it'] },
-          { label: 'Sweet spot', cells: ['Task distribution, background jobs', 'Event streams, fan-out to many systems, analytics'] },
-        ]}
-      />
+      <SideBySide panels={[
+        { title: 'Message queue', icon: Inbox, points: [
+          'SQS, RabbitMQ',
+          'Deleted once acknowledged; no replay',
+          'Competing workers share one queue',
+          '+ Delays, visibility timeouts, per-message ack, DLQ',
+          '- Ordering is best effort (FIFO variants are slower)',
+        ], verdict: 'Commands: task distribution, background jobs' },
+        { title: 'Distributed log', icon: ScrollText, points: [
+          'Kafka, Kinesis, Pulsar',
+          'Append-only, retained by time or size',
+          'Each consumer group keeps its own offset',
+          '+ Replay by rewinding the offset',
+          '+ Strict order within a partition',
+        ], verdict: 'Facts: event streams, fan-out, analytics' },
+      ]} />
       <Callout kind="tip">
         A quick heuristic: if the message is a <em>command</em> (“resize this image”), use a queue. If it is a
         <em> fact</em> (“order 42 was placed”) that several teams will care about, use a log.
@@ -149,6 +156,13 @@ export default function QueuesStreamsChapter() {
         Services don’t share a database, so one transaction can’t span them. A saga runs a sequence of local steps
         and undoes earlier ones with compensating actions if a later step fails.
       </p>
+      <FlowDiagram caption="A failed saga: no rollback, only compensating actions" steps={[
+        { label: 'Order placed', icon: ShoppingCart },
+        { label: 'Charge card', sub: 'local commit', icon: CreditCard },
+        { label: 'Reserve stock', sub: 'fails: out of stock', icon: PackageX },
+        { label: 'Refund', sub: 'compensation', icon: Undo2 },
+        { label: 'Order cancelled', icon: XCircle },
+      ]} />
       <Tabs items={[
         { label: 'Choreography', content: <>
           <p>Each service reacts to events and emits its own. There is no central coordinator.</p>

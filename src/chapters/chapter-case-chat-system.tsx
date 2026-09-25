@@ -1,7 +1,8 @@
 import {
-  ApiSpec, ArchitectureDiagram, Callout, CodeBlock, CompareTable, EstimationTable, H2, InterviewQuestion,
-  KeyTakeaways, References, Requirements, TLDR, Term,
+  ApiSpec, ArchitectureDiagram, Callout, CodeBlock, CompareTable, EstimationTable, FlowDiagram, H2,
+  InterviewQuestion, KeyTakeaways, MentalModel, References, Requirements, SideBySide, StatRow, Term, TLDR,
 } from '../components/ui'
+import { CheckCheck, HeartPulse, Megaphone, Plug, RefreshCw, Send, Users } from 'lucide-react'
 import type { ArchEdge, ArchNode, Reference } from '../components/ui'
 import { ChatConnectionRoutingDemo } from './demos/chat-connection-routing-demo'
 import { ChatOrderingSyncDemo } from './demos/chat-ordering-sync-demo'
@@ -52,6 +53,7 @@ export default function ChatSystemChapter() {
         'Delivery is at-least-once; clients dedupe by sequence number so each message displays once.',
         'Presence and large groups are where naive fan-out explodes.',
       ]} />
+      <MentalModel id="chat" />
 
       <p>
         Chat is the classic <strong>stateful connection</strong> problem. In a normal request/response service, any
@@ -83,6 +85,12 @@ export default function ChatSystemChapter() {
           { label: 'Storage per year', math: '4B × 200 B × 365', result: '≈ 290 TB' },
         ]}
       />
+      <StatRow stats={[
+        { value: '46K/s', label: 'messages', note: '≈ 140K/s at peak' },
+        { value: '50M', label: 'open sockets at peak' },
+        { value: '100–150', label: 'gateway servers' },
+        { value: '290 TB', label: 'new storage per year' },
+      ]} />
       <p>
         The QPS (queries per second) is modest. The difficulty is <strong>connection count</strong> and{' '}
         <strong>storage growth</strong>. So the design centers on gateways and a write-optimized store.
@@ -93,6 +101,13 @@ export default function ChatSystemChapter() {
         Messages flow over a <Term def="A protocol that keeps one TCP connection open so client and server can both send messages at any time.">WebSocket</Term>.
         Plain HTTP calls handle catch-up sync and read markers.
       </p>
+      <FlowDiagram caption="The life of one connection" steps={[
+        { label: 'Connect', sub: 'auth once at handshake', icon: Plug },
+        { label: 'Heartbeat', sub: 'every ~30 s', icon: HeartPulse },
+        { label: 'Send frame', sub: 'with clientMsgId', icon: Send },
+        { label: 'Ack', sub: 'server assigns seq', icon: CheckCheck },
+        { label: 'Sync', sub: 'after reconnect, from cursor', icon: RefreshCw },
+      ]} />
       <ApiSpec endpoints={[
         { method: 'WS', path: '/v1/connect', desc: 'Upgrade to WebSocket. Auth once at handshake, then heartbeat every ~30 s.', returns: 'bidirectional frames' },
         { method: 'WS', path: 'frame: send', desc: 'Client → server message. clientMsgId makes retries idempotent.', body: '{ clientMsgId, conversationId, body }', returns: 'ack { clientMsgId, seq }' },
@@ -172,14 +187,10 @@ async function handleSend(userId: string, f: SendFrame): Promise<Ack> {
 
       <H2 id="groups-presence">7 · Deep dive: groups and presence</H2>
       <p>Group size changes the delivery strategy. Small groups fan out on send; huge channels let readers pull.</p>
-      <CompareTable
-        columns={['Small groups (≤ ~500)', 'Large channels (10K+)']}
-        rows={[
-          { label: 'Delivery', cells: ['Fan out to each member\'s gateway', 'Fan-out on read: clients fetch from the channel log'] },
-          { label: 'Receipts', cells: ['Per-member delivered/read', 'Aggregate counts only'] },
-          { label: 'Cost driver', cells: ['Members × messages', 'Readers polling or subscribing'] },
-        ]}
-      />
+      <SideBySide caption="Group size decides who does the work: the sender or the readers" panels={[
+        { title: 'Small groups (≤ ~500)', icon: Users, points: ['+ Fan out to each member\'s gateway on send', '+ Per-member delivered/read receipts', '- Cost grows with members × messages'], verdict: 'Push on write' },
+        { title: 'Large channels (10K+)', icon: Megaphone, points: ['+ Clients fetch from the channel log', '+ Aggregate receipt counts only', '- Cost driven by readers polling or subscribing'], verdict: 'Pull on read' },
+      ]} />
       <p>
         <strong>Presence</strong> (online or offline) is a heartbeat with a{' '}
         <Term def="Time to live: an expiry after which a key is deleted automatically.">TTL</Term>. Each heartbeat

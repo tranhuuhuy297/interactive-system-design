@@ -1,6 +1,7 @@
 import {
-  Callout, CodeBlock, CompareTable, FlowDiagram, H2, InterviewQuestion, KeyTakeaways, References, TLDR, Tabs, Term,
+  Callout, CodeBlock, CompareTable, FlowDiagram, H2, InterviewQuestion, KeyTakeaways, MentalModel, Quadrant, References, TLDR, Tabs, Term,
 } from '../components/ui'
+import { ArrowRightLeft, CheckCheck, Copy, Trash2 } from 'lucide-react'
 import type { Reference } from '../components/ui'
 import { DbIsolationAnomaliesDemo } from './demos/db-isolation-anomalies-demo'
 import { DbLsmTreeVisualizerDemo } from './demos/db-lsm-tree-visualizer-demo'
@@ -32,6 +33,7 @@ export default function DatabasesChapter() {
         'Tune, cache, and add replicas before you shard. Sharding is hard to undo.',
         'The shard key should keep your most common queries on one machine.',
       ]} />
+      <MentalModel id="databases" />
       <p>
         The storage engine, data model, and partitioning scheme all follow from those. Interviewers want to hear you
         reason from workload to choice.
@@ -51,6 +53,17 @@ export default function DatabasesChapter() {
           { label: 'Search', cells: ['Inverted index', 'Full-text, faceting, relevance', 'Being the source of truth', 'Elasticsearch, OpenSearch'] },
         ]}
       />
+      <Quadrant x={['Fixed access pattern', 'Ad-hoc queries']} y={['Harder to scale writes out', 'Scales writes out']}
+        caption="Rough positioning only. Distributed SQL (Spanner, CockroachDB) pulls relational upward."
+        items={[
+          { label: 'Relational', x: 0.88, y: 0.25, highlight: true },
+          { label: 'Key-value', x: 0.1, y: 0.92 },
+          { label: 'Wide-column', x: 0.25, y: 0.78 },
+          { label: 'Document', x: 0.52, y: 0.6 },
+          { label: 'Time-series', x: 0.35, y: 0.45 },
+          { label: 'Search', x: 0.7, y: 0.5 },
+          { label: 'Graph', x: 0.66, y: 0.12 },
+        ]} />
       <Callout kind="tip">
         A good default: <strong>start relational</strong> unless you can name the specific scale or access-pattern
         reason not to. Modern PostgreSQL on one big node handles more than most interview prompts need. Say when
@@ -146,9 +159,15 @@ export default function DatabasesChapter() {
         <li><strong>Cross-shard joins</strong> disappear. Denormalise, co-locate related data on the same shard key (all of a user's rows under <code>user_id</code>), or join in the application.</li>
         <li><strong>Cross-shard transactions</strong> need <Term def="Two-phase commit: a coordinator asks every shard to prepare, then tells all of them to commit or abort.">2PC</Term> or sagas. Design the shard key so most transactions stay single-shard.</li>
         <li><strong>Global uniqueness and auto-increment</strong> break. Use distributed IDs (see the Unique IDs chapter).</li>
-        <li><strong>Resharding</strong> is an online migration: dual writes or CDC backfill, verification, cutover, cleanup. Budget weeks, not hours.</li>
+        <li><strong>Resharding</strong> is an online migration (see below). Budget weeks, not hours.</li>
         <li><strong>Hot tenants</strong>: one big customer can outgrow a shard. Plan to give them a dedicated shard (directory-based placement).</li>
       </ul>
+      <FlowDiagram caption="Resharding is a migration, not a command" steps={[
+        { label: 'Copy', sub: 'dual writes or CDC backfill', icon: Copy },
+        { label: 'Verify', sub: 'compare old vs new', icon: CheckCheck },
+        { label: 'Cut over', sub: 'flip reads, then writes', icon: ArrowRightLeft },
+        { label: 'Clean up', sub: 'drop the old copies', icon: Trash2 },
+      ]} />
       <CodeBlock lang="ts" title="co-location keeps the hot path single-shard" code={`
 // Shard key = user_id → a user's profile, posts and settings share a shard.
 // "Load my home screen" = 1 shard, 1 round trip.

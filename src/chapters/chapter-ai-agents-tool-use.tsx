@@ -1,6 +1,11 @@
 import {
-  ArchitectureDiagram, Callout, CodeBlock, CompareTable, FlowDiagram, H2, InterviewQuestion, KeyTakeaways, References, Term, TLDR,
+  ArchitectureDiagram, Callout, CodeBlock, CompareTable, FlowDiagram, H2, InterviewQuestion, KeyTakeaways, LayerStack,
+  MentalModel, References, SideBySide, Term, TLDR,
 } from '../components/ui'
+import {
+  Archive, Bot, BookOpen, ChefHat, Database, Eye, FileText, Hourglass, ListChecks, Network, PencilLine, Play, RotateCcw,
+  Save, Trash2,
+} from 'lucide-react'
 import type { ArchEdge, ArchNode, Reference } from '../components/ui'
 import { AiAgentLoopDemo } from './demos/ai-agent-loop-demo'
 
@@ -47,6 +52,7 @@ export default function AgentsChapter() {
         'Budgets, loop detection, approvals, and checkpoints are mandatory in production.',
         'Cost grows faster than steps, because the whole context is re-sent every turn.',
       ]} />
+      <MentalModel id="ai-agents" />
       <p>
         An <strong>agent</strong> is a language model placed in a loop with tools. The model decides what to do next.
         The{' '}<Term def="The ordinary code around the model that runs the loop, calls tools, and enforces limits.">runtime</Term>{' '}
@@ -64,16 +70,15 @@ export default function AgentsChapter() {
         A workflow is a recipe; an agent is a chef improvising. Reach for an agent only when the steps cannot be known
         in advance.
       </p>
-      <CompareTable
-        columns={['Workflow (code decides)', 'Agent (model decides)']}
-        rows={[
-          { label: 'Control flow', cells: ['Predefined: chain, route, fan-out', 'Chosen at runtime by the model'] },
-          { label: 'Predictability', cells: ['High; easy to test', 'Lower; needs trajectory evals'] },
-          { label: 'Cost & latency', cells: ['Bounded and known', 'Variable; must be capped'] },
-          { label: 'Best for', cells: ['Well-understood tasks (classify → extract → draft)', 'Open-ended tasks (debug this repo, research a question)'] },
-          { label: 'Failure mode', cells: ['Breaks on inputs it wasn’t designed for', 'Loops, wanders, or takes unsafe actions'] },
-        ]}
-      />
+      <SideBySide caption="A workflow is a recipe; an agent is a chef improvising"
+        panels={[
+          { title: 'Workflow: code decides', icon: BookOpen, tone: 'good',
+            points: ['Predefined: chain, route, fan-out', '+ Predictable, easy to test', '+ Bounded cost and latency', '- Breaks on inputs it wasn’t designed for'],
+            verdict: 'Well-understood tasks (classify → extract → draft)' },
+          { title: 'Agent: model decides', icon: ChefHat,
+            points: ['Control flow chosen at runtime', '- Needs trajectory evals', '- Variable cost; must be capped', '- Loops, wanders, or takes unsafe actions'],
+            verdict: 'Open-ended tasks (debug a repo, research a question)' },
+        ]} />
 
       <H2 id="the-loop">The loop</H2>
       <p>
@@ -109,6 +114,12 @@ async function runAgent(goal: string, budget = { steps: 12, tokens: 200_000 }) {
 
       <H2 id="tools">Designing tools the model can use well</H2>
       <p>The model only knows your tools through their names, descriptions, and schemas. Design them as carefully as a public API.</p>
+      <LayerStack legend="Side-effect classes: more risk, more ceremony"
+        layers={[
+          { label: 'Read', sub: 'search, get, list', icon: Eye, size: 0.4, value: 'runs freely' },
+          { label: 'Write', sub: 'send, create, update', icon: PencilLine, size: 0.7, value: 'budgeted, logged, idempotency key' },
+          { label: 'Destructive', sub: 'delete, pay, deploy', icon: Trash2, size: 1, value: 'explicit confirmation', highlight: true },
+        ]} />
       <ul>
         <li><strong>Few, well-named tools</strong> beat many overlapping ones. The tool descriptions <em>are</em> the prompt.</li>
         <li><strong>Strict schemas</strong> with enums and required fields. Validate before executing, and return validation errors so the model can self-correct. A{' '}<Term def="A machine-readable description of a tool: its name, purpose, and typed parameters (usually JSON Schema).">tool schema</Term>{' '}is the model’s only manual.</li>
@@ -163,15 +174,13 @@ async function runAgent(goal: string, budget = { steps: 12, tokens: 200_000 }) {
         its{' '}<Term def="The text sent to the model on this call; it has a hard size limit and a per-token cost.">context window</Term>{' '}
         each turn.
       </p>
-      <CompareTable
-        columns={['What it holds', 'Where it lives', 'Watch out for']}
-        rows={[
-          { label: 'Working context', cells: ['Current goal, recent steps, tool results', 'The prompt itself', 'Bloat: every turn re-sends it, so cost grows roughly quadratically with steps'] },
-          { label: 'Run state', cells: ['Step index, pending approvals, partial outputs', 'Durable store (checkpoints)', 'Must be resumable and idempotent'] },
-          { label: 'Long-term memory', cells: ['User preferences, past episodes, learned facts', 'Vector / key-value store', 'Stale or wrong memories; privacy and deletion'] },
-          { label: 'Summaries', cells: ['Compressed older history', 'Replaces raw turns in context', 'Lossy: summaries drop details the model later needs'] },
-        ]}
-      />
+      <LayerStack legend="Four kinds of memory, from what the model sees now to what it can look up"
+        layers={[
+          { label: 'Working context', sub: 'goal, recent steps, tool results · lives in the prompt', icon: FileText, value: 'bloat: re-sent every turn' },
+          { label: 'Summaries', sub: 'compressed older history · replaces raw turns', icon: Archive, value: 'lossy: drops details' },
+          { label: 'Run state', sub: 'step index, approvals, partial outputs · checkpoints', icon: Save, value: 'must be resumable, idempotent' },
+          { label: 'Long-term memory', sub: 'preferences, past episodes · vector / key-value store', icon: Database, value: 'stale facts, privacy, deletion' },
+        ]} />
 
       <H2 id="guardrails">Budgets, failures, and approvals</H2>
       <p>
@@ -192,15 +201,12 @@ async function runAgent(goal: string, budget = { steps: 12, tokens: 200_000 }) {
 
       <H2 id="multi-agent">Multi-agent patterns (and when not to)</H2>
       <p>Splitting work across several agents can help, but each split adds overhead. These are the common patterns.</p>
-      <CompareTable
-        columns={['How it works', 'Use when']}
-        rows={[
-          { label: 'Orchestrator-workers', cells: ['A lead agent splits the task and delegates subtasks to workers with narrower tools', 'Subtasks are independent and can run in parallel (research, multi-file edits)'] },
-          { label: 'Evaluator-optimizer', cells: ['One model drafts, another critiques against criteria, repeat', 'Clear quality criteria exist (tests pass, rubric met)'] },
-          { label: 'Routing', cells: ['A classifier sends each request to a specialized prompt or model', 'Traffic splits into distinct, well-defined categories'] },
-          { label: 'Single agent', cells: ['One loop, good tools', 'Default. Add agents only when measurements show one agent is the bottleneck'] },
-        ]}
-      />
+      <SideBySide caption="A fourth pattern, routing, sends each request to a specialized prompt or model when traffic splits into distinct categories."
+        panels={[
+          { title: 'Single agent', icon: Bot, tone: 'good', points: ['One loop, good tools', '+ Least overhead'], verdict: 'The default' },
+          { title: 'Orchestrator-workers', icon: Network, points: ['Lead splits the task, workers get narrower tools', '+ Parallel subtasks', '- Handoffs, duplicated context'], verdict: 'Independent subtasks (research, multi-file edits)' },
+          { title: 'Evaluator-optimizer', icon: ListChecks, points: ['One drafts, another critiques, repeat', '- Extra model calls per round'], verdict: 'Clear criteria exist (tests pass, rubric met)' },
+        ]} />
       <p>
         Every extra agent adds handoff overhead, duplicated context, and new failure modes. Multi-agent designs pay
         off for broad, parallelizable work, and rarely for tightly coupled tasks where each step depends on the last.
@@ -215,6 +221,13 @@ async function runAgent(goal: string, budget = { steps: 12, tokens: 200_000 }) {
         Persist state after every step. Make tool calls idempotent. Resume from the last checkpoint after a crash or
         deploy. A run waiting two days for approval should cost nothing while it waits.
       </p>
+      <FlowDiagram caption="A crash or a two-day approval wait is just a pause"
+        steps={[
+          { label: 'Run a step', icon: Play },
+          { label: 'Checkpoint', sub: 'persist state', icon: Save },
+          { label: 'Crash or wait', sub: 'deploy, approval, flaky API', icon: Hourglass },
+          { label: 'Resume', sub: 'from the last checkpoint', icon: RotateCcw },
+        ]} />
 
       <H2 id="evaluation">Evaluating agents</H2>
       <p>

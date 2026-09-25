@@ -1,4 +1,8 @@
-import { Callout, CompareTable, H2, KeyTakeaways, References, TLDR } from '../components/ui'
+import {
+  Callout, CompareTable, FlowDiagram, H2, KeyTakeaways, LayerStack, MentalModel, References, TLDR,
+} from '../components/ui'
+import { CheckCircle2, Crosshair, FileQuestion, Flag, HelpCircle, Network, PencilRuler, Repeat, Ruler, Wrench } from 'lucide-react'
+import type { LucideIcon } from 'lucide-react'
 import { INTERVIEW_FURTHER_READING } from '../data/interview-further-reading'
 import { MOCK_PROMPTS } from '../data/mock-prompts-data'
 import { MockSimulator } from './demos/mock-simulator'
@@ -13,6 +17,7 @@ export default function MockInterviewChapter() {
         'Hit “Curveball” to practice adapting, then score yourself honestly.',
         'On curveballs: redo the affected numbers, name what breaks, make the smallest change.',
       ]} />
+      <MentalModel id="mock" />
       <p>
         Reading about system design is not the same as doing it out loud against a clock. This simulator:
       </p>
@@ -37,6 +42,11 @@ export default function MockInterviewChapter() {
         Most loops give you 45–60 minutes. About 5 go to introductions and 5 to your questions at the end. That leaves
         about 35–45 minutes of design. The coach uses this split:
       </p>
+      <LayerStack legend="Bar width = minutes in the phase"
+        caption="Say the budget out loud as you go"
+        layers={MOCK_PHASES.map((p) => ({
+          label: p.title, icon: PHASE_ICONS[p.id] ?? Flag, size: p.minutes / 15, value: `${p.minutes} min`, highlight: p.id === 'deep',
+        }))} />
       <CompareTable
         columns={['Minutes', 'Goal', 'Common failure']}
         rows={MOCK_PHASES.map((p) => ({
@@ -55,12 +65,12 @@ export default function MockInterviewChapter() {
         Curveballs such as “now 10× the traffic”, “a region goes down” or “the provider times out” test whether your
         design is built on reasoning or memorized. A reliable response pattern:
       </p>
-      <ol>
-        <li><strong>Restate the new constraint</strong> and redo only the numbers it affects.</li>
-        <li><strong>Name what breaks first</strong> in your current design, and why.</li>
-        <li><strong>Make the smallest change</strong> that fixes it, and say what it costs.</li>
-        <li><strong>Say what stays the same.</strong> It shows the design is modular.</li>
-      </ol>
+      <FlowDiagram caption="Change as little as possible, and say why" steps={[
+        { label: 'Restate', sub: 'the new constraint; redo only the affected numbers', icon: Repeat },
+        { label: 'What breaks first', sub: 'in the current design, and why', icon: Crosshair },
+        { label: 'Smallest change', sub: 'that fixes it, and what it costs', icon: Wrench },
+        { label: 'What stays', sub: 'shows the design is modular', icon: CheckCircle2 },
+      ]} />
       <Callout kind="pitfall">
         Tearing up the whole design in response to a curveball. It signals that your first design had no clear
         reasoning behind it. Change as little as possible, and say why you are changing it.
@@ -85,6 +95,10 @@ export default function MockInterviewChapter() {
       ]} />
     </>
   )
+}
+
+const PHASE_ICONS: Record<string, LucideIcon> = {
+  clarify: HelpCircle, estimate: Ruler, api: FileQuestion, hld: Network, deep: PencilRuler, wrap: Flag,
 }
 
 const FAILURES: Record<string, string> = {

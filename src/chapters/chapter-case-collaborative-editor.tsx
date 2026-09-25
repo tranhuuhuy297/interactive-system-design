@@ -1,8 +1,9 @@
 import {
-  ApiSpec, ArchitectureDiagram, Callout, CodeBlock, CompareTable, EstimationTable, H2, InterviewQuestion,
-  KeyTakeaways, Requirements, References, TLDR, Term,
+  ApiSpec, ArchitectureDiagram, Callout, CodeBlock, CompareTable, EstimationTable, FlowDiagram, H2,
+  InterviewQuestion, KeyTakeaways, MentalModel, References, Requirements, SideBySide, StatRow, Term, TLDR,
 } from '../components/ui'
 import type { ArchEdge, ArchNode, Reference } from '../components/ui'
+import { DatabaseBackup, KeyRound, ListOrdered, MousePointer2, RotateCcw, ShieldCheck, Undo2, WifiOff } from 'lucide-react'
 import { CollabCrdtTombstoneDemo } from './demos/collab-crdt-tombstone-demo'
 import { CollabOtSyncDemo } from './demos/collab-ot-sync-demo'
 
@@ -53,6 +54,7 @@ export default function CollaborativeEditorChapter() {
         'The hard part: concurrent edits at shifting positions. OT rewrites them; CRDTs give every character an id.',
         'Staff insight: writes are rarely the bottleneck. Fan-out and presence on hot documents are.',
       ]} />
+      <MentalModel id="collab-editor" />
       <p>
         Real-time collaborative editing looks like a chat problem, since it is just pushing small messages over
         WebSockets. It is really a <strong>concurrency-control</strong> problem.
@@ -94,7 +96,13 @@ export default function CollaborativeEditorChapter() {
           { label: 'Raw op log / day', math: '100M × ~5K ops × 100 B', result: '≈ 50 TB' },
         ]}
       />
-      <p>Two numbers drive the design.</p>
+      <StatRow caption="Two numbers drive the design: a huge but mostly cold op log, and fan-out that is usually tiny"
+        stats={[
+          { value: '10M', label: 'concurrent sockets' },
+          { value: '≈ 100', label: 'gateway nodes' },
+          { value: '≈ 15M/s', label: 'op messages' },
+          { value: '≈ 50 TB', label: 'raw op log per day' },
+        ]} />
       <p>
         The{' '}
         <Term def="The append-only list of every edit (operation) applied to a document, in order.">op log</Term>{' '}
@@ -140,9 +148,14 @@ export default function CollaborativeEditorChapter() {
       </p>
       <ul>
         <li><strong>Routing:</strong> gateways route by doc id using a directory with{' '}<Term def="Time-limited ownership that must be renewed; if the owner dies, the lease expires and someone else can take over.">leases</Term>, or consistent hashing plus a{' '}<Term def="An increasing number handed out with each lease, so storage can reject writes from an old owner.">fencing token</Term>, so two servers never both believe they own a doc.</li>
-        <li><strong>Failover:</strong> when the owner dies, its lease expires. The new owner loads snapshot + log. Clients reconnect and resend any unacknowledged ops with their base revision, so nothing is lost.</li>
-        <li><strong>Durability:</strong> ack only after the op is durable in the log. The in-memory copy is a cache.</li>
       </ul>
+      <FlowDiagram caption="Ack only after the op is durable in the log; the in-memory copy is a cache, so failover loses nothing" steps={[
+        { label: 'Hold the lease', sub: 'one owner per doc id', icon: KeyRound },
+        { label: 'Order + persist', sub: 'rev N+1 appended to the log', icon: ListOrdered },
+        { label: 'Ack + broadcast', sub: 'only after it is durable', icon: ShieldCheck },
+        { label: 'Owner dies?', sub: 'lease expires; new owner loads snapshot + log', icon: DatabaseBackup },
+        { label: 'Clients resend', sub: 'unacked ops with their base rev', icon: RotateCcw },
+      ]} />
 
       <H2 id="ot">6 · Deep dive: operational transformation</H2>
       <p>
@@ -197,13 +210,17 @@ function transform(a: Op, b: Op): Op {
       />
 
       <H2 id="presence-undo-offline">8 · Presence, undo and offline</H2>
-      <p>Four features look small but shape the protocol:</p>
-      <ul>
-        <li><strong><Term def="Live signals about who is here: cursors, selections, avatars.">Presence</Term></strong> travels on the same socket but is ephemeral. Throttle it to a few updates per second, transform cursor positions through incoming ops, and drop it on disconnect.</li>
-        <li><strong>Undo</strong> must be <em>local</em>: undo my last op, not the last op in the document. Implement it as the inverse op, transformed against everything applied since.</li>
-        <li><strong>Offline</strong>: queue ops with their base revision, fetch <code>ops?from=rev</code> on reconnect, then rebase (OT) or merge (CRDT). Cap how long a client may stay offline before it must reload a snapshot.</li>
-        <li><strong>Permissions</strong> are enforced per op on the server. Never trust a client’s role, and push revocations to open sessions.</li>
-      </ul>
+      <p>
+        Four features look small but shape the protocol. The first,{' '}
+        <Term def="Live signals about who is here: cursors, selections, avatars.">presence</Term>, travels on the same
+        socket but never touches the op log.
+      </p>
+      <SideBySide caption="Small features, big protocol consequences" panels={[
+        { title: 'Presence', icon: MousePointer2, points: ['Ephemeral, same socket', 'Throttle to a few updates/s', 'Transform cursors through incoming ops', 'Drop on disconnect'] },
+        { title: 'Undo', icon: Undo2, points: ['Local: undo my last op, not the doc’s', 'Inverse op, transformed against everything since'] },
+        { title: 'Offline', icon: WifiOff, points: ['Queue ops with their base revision', 'Fetch ops?from=rev on reconnect', 'Rebase (OT) or merge (CRDT)', 'Cap offline time, then reload a snapshot'] },
+        { title: 'Permissions', icon: ShieldCheck, points: ['Enforced per op on the server', 'Never trust a client’s role', 'Push revocations to open sessions'] },
+      ]} />
 
       <H2 id="data-model">9 · Data model</H2>
       <p>Three records: the op log, periodic snapshots, and document metadata with the access list.</p>

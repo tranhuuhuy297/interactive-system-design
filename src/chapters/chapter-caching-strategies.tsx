@@ -1,7 +1,10 @@
 import {
-  ArchitectureDiagram, Callout, CodeBlock, CompareTable, FlowDiagram, H2, InterviewQuestion, KeyTakeaways, References, TLDR, Tabs, Term,
+  ArchitectureDiagram, Callout, CodeBlock, CompareTable, FlowDiagram, H2, InterviewQuestion, KeyTakeaways, LayerStack, MentalModel, References, SideBySide, TLDR, Tabs, Term,
 } from '../components/ui'
 import type { ArchEdge, ArchNode, Reference } from '../components/ui'
+import {
+  Building2, Clock3, Cpu, Database as DbIcon, Globe, ListOrdered, Monitor, PenLine, ScrollText, Server, ShieldCheck, Trash2, Workflow, Zap,
+} from 'lucide-react'
 import { CacheEvictionSimulatorDemo } from './demos/cache-eviction-simulator-demo'
 import { CacheStampedeSimulatorDemo } from './demos/cache-stampede-simulator-demo'
 
@@ -43,6 +46,7 @@ export default function CachingChapter() {
         'Four named failures (stampede, penetration, avalanche, hot keys) each have a standard fix.',
         'The database must survive the cache going away, because the cache carries real load.',
       ]} />
+      <MentalModel id="caching" />
       <p>
         The questions that matter are <strong>where</strong> to cache, <strong>how</strong> reads and writes flow,{' '}
         <strong>what gets evicted</strong>, and <strong>what happens when the cache is wrong or empty</strong>.
@@ -50,14 +54,16 @@ export default function CachingChapter() {
 
       <H2 id="layers">Where to cache</H2>
       <p>You can cache at every hop between the user and the database. Closer to the user is faster but harder to keep fresh.</p>
-      <FlowDiagram steps={[
-        { label: 'Client', sub: 'HTTP cache, app memory' },
-        { label: 'CDN / edge', sub: 'static + cacheable GETs' },
-        { label: 'Gateway / LB', sub: 'response cache' },
-        { label: 'App local', sub: 'in-process LRU' },
-        { label: 'Distributed', sub: 'Redis / Memcached' },
-        { label: 'DB', sub: 'buffer pool, query cache' },
-      ]} caption="Each layer closer to the user is faster and cheaper, but harder to invalidate" />
+      <LayerStack legend="Closer to the user (top) = faster, but harder to keep fresh"
+        caption="Bar width shows how many requests each layer can absorb before the next one sees them"
+        layers={[
+          { label: 'Client', sub: 'HTTP cache, app memory', icon: Monitor, size: 0.35, value: 'no network hop' },
+          { label: 'CDN / edge', sub: 'static + cacheable GETs', icon: Globe, size: 0.5, value: 'nearest edge' },
+          { label: 'Gateway / LB', sub: 'response cache', icon: Building2, size: 0.6, value: 'inside your network' },
+          { label: 'App local', sub: 'in-process LRU', icon: Cpu, size: 0.72, value: 'same process' },
+          { label: 'Distributed cache', sub: 'Redis / Memcached', icon: Zap, size: 0.86, value: '1 network hop', highlight: true },
+          { label: 'Database', sub: 'buffer pool, query cache', icon: DbIcon, size: 1, value: 'source of truth' },
+        ]} />
       <Callout kind="tip">
         In-process caches cost nothing per lookup but go incoherent across N servers. A distributed cache is
         coherent but adds a network hop. A common production pattern is <strong>two tiers</strong>: a small local LRU
@@ -83,6 +89,12 @@ export default function CachingChapter() {
           { name: 'Write-around', path: ['client', 'app', 'db'],
             steps: ['Write request', 'App writes the DB directly and deletes the cached key'] },
         ]} />
+      <p>The three write strategies differ in one thing: when the database learns about the write.</p>
+      <SideBySide caption="Pick by what hurts more: slow writes, stale reads, or lost writes" panels={[
+        { title: 'Write-through', icon: ShieldCheck, tone: 'good', points: ['+ Cache is always fresh', '+ No data loss', '- Every write pays two hops', '- Caches data nobody reads'], verdict: 'Read-after-write matters' },
+        { title: 'Write-behind', icon: Clock3, points: ['+ Fastest writes, batched', '- DB lags behind', '- Crash can lose writes'], verdict: 'Counters, metrics, bursts' },
+        { title: 'Write-around', icon: Server, points: ['+ Writes stay simple', '+ No cache pollution', '- First read after a write misses'], verdict: 'Write-once, read-rarely data' },
+      ]} />
       <CompareTable
         columns={['Latency', 'Consistency', 'Risk', 'Use when']}
         rows={[
@@ -124,6 +136,13 @@ t4  Reader A: writes v1 into cache   ← stale value repopulated after the delet
         <li><strong><Term def="Change data capture: streaming every committed database change (from its log) to other systems.">CDC</Term>-driven invalidation</strong> (DB binlog → Kafka → invalidator) removes the dual-write problem from app code.</li>
         <li>Leases, as used in Facebook's memcache, let the cache refuse a stale set from a reader that started before the delete.</li>
       </ul>
+      <FlowDiagram caption="CDC-driven invalidation: the app writes only to the database; the log tells the cache" steps={[
+        { label: 'App write', sub: 'DB only, no cache call', icon: PenLine },
+        { label: 'Commit log', sub: 'binlog / WAL', icon: ScrollText },
+        { label: 'Stream', sub: 'Kafka topic', icon: ListOrdered },
+        { label: 'Invalidator', sub: 'maps rows → keys', icon: Workflow },
+        { label: 'Cache delete', sub: 'bounded delay', icon: Trash2 },
+      ]} />
 
       <H2 id="failure-modes">Failure modes: stampede, penetration, avalanche, hot keys</H2>
       <p>

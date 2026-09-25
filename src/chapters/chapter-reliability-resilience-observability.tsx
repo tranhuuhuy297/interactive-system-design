@@ -1,6 +1,7 @@
 import {
-  Callout, CodeBlock, CompareTable, FlowDiagram, H2, InterviewQuestion, KeyTakeaways, References, TLDR, Tabs, Term,
+  Callout, CodeBlock, CompareTable, FlowDiagram, H2, InterviewQuestion, KeyTakeaways, MentalModel, References, SideBySide, TLDR, Tabs, Term,
 } from '../components/ui'
+import { BellRing, FileText, Gauge, LineChart, Ruler, Target, Waypoints } from 'lucide-react'
 import type { Reference } from '../components/ui'
 import { ReliabilityAvailabilityComposerDemo } from './demos/reliability-availability-composer-demo'
 import { ReliabilityCircuitBreakerDemo } from './demos/reliability-circuit-breaker-demo'
@@ -35,21 +36,23 @@ export default function ReliabilityChapter() {
         'Circuit breakers, bulkheads, and load shedding stop one failure from spreading.',
         'Most outages start with a change, so roll out gradually and roll back automatically.',
       ]} />
+      <MentalModel id="reliability" />
       <p>In interviews, this is where you show you have been on call.</p>
 
       <H2 id="slos">SLIs, SLOs, SLAs and error budgets</H2>
       <p>
         These four terms turn “be reliable” into numbers that teams can agree on and act on. They build on each other.
       </p>
-      <CompareTable
-        columns={['What it is', 'Example']}
-        rows={[
-          { label: 'SLI', cells: ['A measured ratio of good events to total events', 'Share of checkout requests returning 2xx within 300 ms'] },
-          { label: 'SLO', cells: ['An internal target for an SLI over a window', '99.9% of checkout requests are good over 28 days'] },
-          { label: 'SLA', cells: ['A contract with consequences, looser than the SLO', '99.5% monthly, or service credits'] },
-          { label: 'Error budget', cells: ['1 − SLO, the failure you are allowed', '0.1% ≈ 40 minutes of full outage per 28 days'] },
-        ]}
-      />
+      <FlowDiagram caption="Each term builds on the one before it" steps={[
+        { label: 'SLI', sub: 'good ÷ total events, e.g. 2xx within 300 ms', icon: Ruler },
+        { label: 'SLO', sub: 'target: 99.9% good over 28 days', icon: Target },
+        { label: 'Error budget', sub: '1 − SLO: 0.1% ≈ 40 min / 28 days', icon: Gauge },
+        { label: 'Burn-rate alert', sub: 'page when spending too fast', icon: BellRing },
+      ]} />
+      <p>
+        An <strong>SLA</strong> is the contract version, with consequences such as service credits. Keep it looser
+        than the SLO (for example 99.5% monthly), so you break your own target long before you break a promise.
+      </p>
       <p>
         The error budget turns reliability into a <strong>shared decision</strong>. While budget remains, ship fast.
         When it is spent, freeze risky launches and invest in reliability.
@@ -135,13 +138,20 @@ async function withRetry<T>(fn: () => Promise<T>, { attempts = 3, baseMs = 100, 
         all three.
       </p>
       <Tabs items={[
-        { label: 'Signals', content: <CompareTable
-          columns={['Best at', 'Cost / pitfall']}
-          rows={[
-            { label: 'Metrics', cells: ['Cheap aggregates, alerting, dashboards', 'High-cardinality labels such as user_id explode storage'] },
-            { label: 'Logs', cells: ['Rich detail for one event', 'Volume and cost. Make them structured (JSON) and sample debug logs'] },
-            { label: 'Traces', cells: ['Latency breakdown across services', 'Needs context propagation everywhere, and sampling'] },
-          ]} /> },
+        { label: 'Signals', content: <SideBySide panels={[
+          { title: 'Metrics', icon: LineChart, points: [
+            '+ Cheap aggregates for alerts and dashboards',
+            '- High-cardinality labels (user_id) explode storage',
+          ], verdict: 'Is something wrong?' },
+          { title: 'Logs', icon: FileText, points: [
+            '+ Rich detail for one event',
+            '- Volume and cost: structure as JSON, sample debug logs',
+          ], verdict: 'What exactly happened?' },
+          { title: 'Traces', icon: Waypoints, points: [
+            '+ Latency breakdown across services',
+            '- Needs context propagation everywhere, and sampling',
+          ], verdict: 'Where did the time go?' },
+        ]} /> },
         { label: 'RED & USE', content: <>
           <p><strong>RED</strong> for request-driven services: <em>Rate</em>, <em>Errors</em>, <em>Duration</em> (as percentiles, never averages).</p>
           <p><strong>USE</strong> for resources: <em>Utilization</em>, <em>Saturation</em> (queue length), <em>Errors</em>. Saturation is the early warning that utilization hides.</p>

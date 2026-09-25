@@ -1,6 +1,10 @@
 import {
-  Callout, CodeBlock, CompareTable, FlowDiagram, H2, InterviewQuestion, KeyTakeaways, References, Term, TLDR,
+  Callout, CodeBlock, FlowDiagram, H2, InterviewQuestion, KeyTakeaways, LayerStack, MentalModel, References, SideBySide,
+  Term, TLDR,
 } from '../components/ui'
+import {
+  Archive, Bot, Braces, Database, FileCheck2, FlaskConical, KeyRound, Rocket, ScrollText, ShieldCheck, User, Wrench,
+} from 'lucide-react'
 import type { Reference } from '../components/ui'
 import { AiPromptConstrainedDecodingDemo } from './demos/ai-prompt-constrained-decoding-demo'
 
@@ -23,6 +27,7 @@ export default function PromptingStructuredOutputChapter() {
         'A tool call from a model is a request, not a permission. Authorize it in code.',
         'Temperature 0 is not deterministic. Pin versions and bound retries.',
       ]} />
+      <MentalModel id="ai-prompting" />
       <p>
         In a production LLM system, the prompt is not a clever sentence. It is an <strong>interface</strong>: the contract
         between your application and a probabilistic component you don’t control.
@@ -34,6 +39,13 @@ export default function PromptingStructuredOutputChapter() {
 
       <H2 id="contracts">Prompts are versioned contracts</H2>
       <p>A prompt has inputs, outputs, and consumers, just like an endpoint. Manage it the same way.</p>
+      <FlowDiagram caption="The same lifecycle as any API change"
+        steps={[
+          { label: 'Registry', sub: 'versioned, owned prompts', icon: Archive },
+          { label: 'Eval gate', sub: 'same bar as code', icon: FlaskConical },
+          { label: 'Canary', sub: 'small slice of traffic', icon: Rocket },
+          { label: 'Log per call', sub: 'prompt version + model ID', icon: ScrollText },
+        ]} />
       <ul>
         <li><strong>Inputs</strong>: instructions, context (retrieved documents, user data), examples, tool definitions.</li>
         <li><strong>Outputs</strong>: free text for humans, or <em>structured data</em> for code. Code is the demanding consumer.</li>
@@ -53,6 +65,13 @@ export default function PromptingStructuredOutputChapter() {
         Keep durable rules in the system message. Delimit untrusted content clearly. Models weigh instructions by
         position and role, so structure matters.
       </p>
+      <LayerStack legend="One request, top to bottom"
+        layers={[
+          { label: 'System', sub: 'policy, persona, output rules · durable', icon: ShieldCheck, highlight: true },
+          { label: 'User', sub: 'the task · untrusted text goes in clear delimiters', icon: User },
+          { label: 'Assistant', sub: 'prior model turns', icon: Bot },
+          { label: 'Tool', sub: 'results your code returns to the model', icon: Wrench },
+        ]} />
       <CodeBlock lang="ts" title="a templated request" code={`
 const request = {
   model: MODEL_ID,                       // pinned, never "latest" in production
@@ -76,15 +95,12 @@ const request = {
         Examples are the most reliable way to pin down format and edge cases. But they cost tokens on every call, and
         the model can copy their surface features too closely.
       </p>
-      <CompareTable
-        columns={['Zero-shot', 'Few-shot', 'Dynamic few-shot']}
-        rows={[
-          { label: 'How', cells: ['Instructions only', 'Fixed examples in the template', 'Retrieve the k most similar labeled examples per request'] },
-          { label: 'Cost', cells: ['Lowest', '+ tokens every call', '+ tokens + a retrieval hop'] },
-          { label: 'Best for', cells: ['Simple, well-known tasks', 'Strict formats, tricky edge cases', 'Long-tail inputs with a labeled pool'] },
-          { label: 'Risk', cells: ['Ambiguous output format', 'Model copies example content', 'Retrieval quality becomes prompt quality'] },
-        ]}
-      />
+      <SideBySide
+        panels={[
+          { title: 'Zero-shot', points: ['Instructions only', '+ Lowest cost', '- Ambiguous output format'], verdict: 'Simple, well-known tasks' },
+          { title: 'Few-shot', points: ['Fixed examples in the template', '- Extra tokens every call', '- Model copies example content'], verdict: 'Strict formats, tricky edge cases' },
+          { title: 'Dynamic few-shot', points: ['Retrieve the k most similar labeled examples', '- Tokens + a retrieval hop', '- Retrieval quality becomes prompt quality'], verdict: 'Long-tail inputs with a labeled pool' },
+        ]} />
       <p>
         Asking the model to reason step by step before answering (
         <Term def="Prompting the model to write out intermediate reasoning before its final answer.">chain-of-thought</Term>)
@@ -94,15 +110,12 @@ const request = {
 
       <H2 id="structured-output">Structured output: three levels of guarantee</H2>
       <p>When code reads the output, “usually valid” isn’t good enough. You can buy three levels of guarantee.</p>
-      <CompareTable
-        columns={['Ask in the prompt', 'JSON mode', 'Schema-constrained decoding']}
-        rows={[
-          { label: 'Mechanism', cells: ['“Respond with JSON like …”', 'Decoder restricted to syntactically valid JSON', 'Decoder restricted to your exact schema'] },
-          { label: 'Parses?', cells: ['Usually', 'Yes', 'Yes'] },
-          { label: 'Matches schema?', cells: ['Usually', 'Not guaranteed (keys, enums, types)', 'Yes, for the supported schema subset'] },
-          { label: 'Semantically right?', cells: ['Not guaranteed', 'Not guaranteed', 'Still not guaranteed'] },
-        ]}
-      />
+      <LayerStack legend="Each level adds a guarantee · none guarantees the answer is right"
+        layers={[
+          { label: 'Ask in the prompt', sub: '“Respond with JSON like …”', icon: ScrollText, size: 0.34, value: 'usually parses, usually matches' },
+          { label: 'JSON mode', sub: 'decoder allows only valid JSON', icon: Braces, size: 0.67, value: 'parses · schema not guaranteed' },
+          { label: 'Schema-constrained decoding', sub: 'decoder allows only your schema', icon: FileCheck2, size: 1, value: 'parses + matches (supported subset)', highlight: true },
+        ]} />
       <Callout kind="warn">
         Schema-valid does not mean correct. A constrained model will happily return <code>{'{"status": "ok"}'}</code> for a
         failed job. Constraints remove parsing failures so your evals can focus on the failures that matter.
@@ -142,6 +155,14 @@ const request = {
     "required": ["order_id", "reason"]
   }
 }`} />
+      <FlowDiagram caption="The model proposes; your code decides"
+        steps={[
+          { label: 'Model proposes', sub: 'a structured call', icon: Bot },
+          { label: 'Validate', sub: 'schema + business rules', icon: FileCheck2 },
+          { label: 'Authorize', sub: 'does this user own the order?', icon: KeyRound },
+          { label: 'Execute', sub: 'idempotent, with a key', icon: Database },
+          { label: 'Return result', sub: 'as a tool message', icon: Wrench },
+        ]} />
       <ul>
         <li><strong>Authorize in code, not in the prompt.</strong> The model choosing a tool is a request, not a permission.</li>
         <li><strong>Make side-effecting tools{' '}<Term def="Safe to repeat: running it twice has the same effect as running it once.">idempotent</Term></strong> (pass an idempotency key), because agent loops retry.</li>

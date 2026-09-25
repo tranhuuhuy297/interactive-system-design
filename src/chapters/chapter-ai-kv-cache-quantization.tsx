@@ -1,6 +1,8 @@
 import {
-  Callout, CodeBlock, CompareTable, FlowDiagram, H2, InterviewQuestion, KeyTakeaways, References, Term, TLDR,
+  Callout, Chips, CodeBlock, CompareTable, FlowDiagram, H2, InterviewQuestion, KeyTakeaways, LayerStack, MentalModel,
+  References, SideBySide, StatRow, Term, TLDR,
 } from '../components/ui'
+import { CheckCircle2, Cpu, HardDrive, MemoryStick, XCircle } from 'lucide-react'
 import type { Reference } from '../components/ui'
 import { AiKvPagingDemo } from './demos/ai-kv-paging-demo'
 
@@ -26,6 +28,7 @@ export default function AiKvCacheQuantizationChapter() {
         'Paged allocation and prefix caching fit more users and skip repeated work.',
         'Quantizing weights and KV cuts bytes per step, but gate it on your own evals.',
       ]} />
+      <MentalModel id="ai-kv-cache" />
       <p>
         During decode, attention needs the key and value vectors of <em>every</em> earlier token. Recomputing them each
         step would be quadratic work. So servers keep them in GPU memory as the <strong>KV cache</strong>, like notes
@@ -51,6 +54,12 @@ totalKV = kvBytesPerToken × contextTokens × concurrentSequences
 // 70B-class shape (80 layers, head dim 128, 8 KV heads, BF16):
 // 2 × 80 × 8 × 128 × 2 = 327,680 B ≈ 320 KiB per token
 // one 32K-token conversation ≈ 10 GiB of KV cache`} />
+      <StatRow caption="70B-class model with GQA (8 KV heads), BF16"
+        stats={[
+          { value: '≈ 140 GB', label: 'weights', note: 'fixed, loaded once' },
+          { value: '320 KiB', label: 'KV cache per token' },
+          { value: '≈ 10 GiB', label: 'KV for one 32K-token conversation', note: 'grows with every user' },
+        ]} />
       <p>
         The KV cache grows linearly with <strong>context × concurrency</strong>, while the weights stay fixed. So a GPU
         that holds a model comfortably can still run out of memory with a handful of long conversations. The{' '}
@@ -72,15 +81,12 @@ totalKV = kvBytesPerToken × contextTokens × concurrentSequences
       <p>
         The GQA paper reports quality close to MHA at speed comparable to MQA. That is why most recent open models use it.
       </p>
-      <CompareTable
-        columns={['KV heads', 'KV per token', '32K context, 1 sequence']}
-        caption="Same 70B-class shape (80 layers, head dim 128, BF16); only the KV head count changes."
-        rows={[
-          { label: 'MHA', cells: ['64', '2.5 MiB', '80 GiB — the whole GPU'] },
-          { label: 'GQA (8 groups)', cells: ['8', '320 KiB', '10 GiB'] },
-          { label: 'MQA', cells: ['1', '40 KiB', '1.25 GiB'] },
-        ]}
-      />
+      <LayerStack legend="Bar = KV cache per token · same 70B-class shape (80 layers, head dim 128, BF16); only the KV head count changes"
+        layers={[
+          { label: 'MHA', sub: '64 KV heads', size: 1, value: '2.5 MiB/token · 80 GiB at 32K (the whole GPU)' },
+          { label: 'GQA (8 groups)', sub: '8 KV heads', size: 8 / 64, value: '320 KiB/token · 10 GiB at 32K', highlight: true },
+          { label: 'MQA', sub: '1 KV head', size: 1 / 64, value: '40 KiB/token · 1.25 GiB at 32K' },
+        ]} />
       <Callout kind="info">
         The attention variant is fixed at training time. As a serving engineer you don’t pick it, but you should read it
         off the model config, because it can change capacity planning by 8× between two models of the same size.
@@ -117,6 +123,15 @@ totalKV = kvBytesPerToken × contextTokens × concurrentSequences
         <Term def="A tree that stores strings by shared prefixes, so common beginnings are stored once.">radix tree</Term>{' '}
         of cached prefixes (RadixAttention) and schedules requests to maximize reuse.
       </p>
+      <SideBySide caption="Prompt order decides whether the cache can help"
+        panels={[
+          { title: 'Cache-friendly', icon: CheckCircle2, tone: 'good',
+            picture: <Chips items={['System prompt', '→', 'Tools', '→', 'Documents', '→', 'User turn']} />,
+            points: ['+ Stable content first', '+ Identical prefix → same KV blocks', '+ Prefill only the new tail'] },
+          { title: 'Cache-hostile', icon: XCircle, tone: 'bad',
+            picture: <Chips items={['Timestamp', '→', 'System prompt', '→', 'Tools', '→', 'User turn']} />,
+            points: ['- One changed early token', '- Invalidates everything after it', '- Full prefill every request'] },
+        ]} />
       <ul>
         <li><strong>Win:</strong> lower TTFT and prefill compute for repeated context. Agents and RAG with fixed instructions benefit most.</li>
         <li><strong>Design for it:</strong> put stable content first (system prompt, tools, documents) and volatile content last (user turn, timestamps). One changed token early in the prompt invalidates everything after it.</li>
@@ -125,6 +140,12 @@ totalKV = kvBytesPerToken × contextTokens × concurrentSequences
 
       <H2 id="offload">When the cache doesn’t fit: evict, offload, recompute</H2>
       <p>Sooner or later memory runs out. You have four ways to respond, and each moves the pain somewhere else.</p>
+      <LayerStack legend="Where KV blocks can live: faster at the top, bigger at the bottom"
+        layers={[
+          { label: 'GPU HBM', sub: 'where decode reads from', icon: MemoryStick, size: 0.3, value: '80 GB on an H100 · 3.35 TB/s', highlight: true },
+          { label: 'CPU memory', sub: 'swap target over PCIe', icon: Cpu, size: 0.65, value: 'PCIe ≪ HBM bandwidth' },
+          { label: 'SSD tier', sub: 'popular prefixes kept for reuse', icon: HardDrive, size: 1, value: 'largest, slowest' },
+        ]} />
       <CompareTable
         columns={['How it works', 'Cost']}
         rows={[
@@ -142,16 +163,13 @@ totalKV = kvBytesPerToken × contextTokens × concurrentSequences
         <Term def="Storing numbers in fewer bits (e.g. 8 or 4 instead of 16), trading a little accuracy for memory and speed.">Quantization</Term>{' '}
         comes in three flavors that are often mixed:
       </p>
-      <CompareTable
-        columns={['What shrinks', '70B weights', 'Typical quality impact*']}
-        caption="*Model- and task-dependent; always re-run your own evals."
-        rows={[
-          { label: 'BF16 / FP16', cells: ['Baseline', '≈ 140 GB', 'Reference'] },
-          { label: 'FP8 / INT8 (W8A8)', cells: ['Weights + activations', '≈ 70 GB', 'Usually small; FP8 has hardware support on recent GPUs'] },
-          { label: 'INT4 weight-only (GPTQ, AWQ)', cells: ['Weights only', '≈ 35 GB + scales', 'Noticeable on some tasks; strong on others'] },
-          { label: 'FP8 KV cache', cells: ['KV values', 'KV halves', 'Usually small; matters most at long context'] },
-        ]}
-      />
+      <LayerStack legend="Bar = memory for 70B weights"
+        caption="Quality impact is model- and task-dependent; always re-run your own evals. An FP8 KV cache separately halves KV memory, usually with small impact that matters most at long context."
+        layers={[
+          { label: 'BF16 / FP16', sub: 'baseline · reference quality', size: 1, value: '≈ 140 GB' },
+          { label: 'FP8 / INT8 (W8A8)', sub: 'weights + activations · usually small impact', size: 0.5, value: '≈ 70 GB', highlight: true },
+          { label: 'INT4 weight-only (GPTQ, AWQ)', sub: 'noticeable on some tasks, strong on others', size: 0.25, value: '≈ 35 GB + scales' },
+        ]} />
       <ul>
         <li><strong>Outliers</strong> are the core difficulty: a few{' '}<Term def="The intermediate values flowing between layers while the model runs, as opposed to the stored weights.">activation</Term>{' '}channels have huge magnitudes. LLM.int8() handles them in higher precision. AWQ protects the weights that matter most to activations. GPTQ uses second-order information to minimize layer-wise error.</li>
         <li><strong>Weight-only 4-bit</strong> helps the memory-bound decode phase most. Compute-bound prefill gains less unless kernels also run low-precision math.</li>

@@ -1,7 +1,8 @@
 import {
-  ArchitectureDiagram, Callout, CompareTable, EpisodePlayer, EstimationTable, H2, InterviewQuestion, KeyTakeaways,
-  References, TLDR, Term,
+  ArchitectureDiagram, Callout, CompareTable, EpisodePlayer, EstimationTable, H2, InterviewQuestion,
+  KeyTakeaways, MentalModel, References, SideBySide, StatRow, Term, TLDR, VisualTimeline,
 } from '../components/ui'
+import { Activity, Cloud, Film, Globe, HardDrive, Play, Radio, ShieldAlert, ShieldCheck } from 'lucide-react'
 import type { ArchEdge, ArchNode, Reference } from '../components/ui'
 import { EpisodeNetflixPerTitleDemo } from './demos/episode-netflix-per-title-demo'
 import { S } from './demos/episode-netflix-stage-library'
@@ -38,6 +39,7 @@ export default function NetflixEpisode() {
         'Encoding is tuned per title and per shot, so every stream uses fewer bits.',
         'Recent chapters: global launch, personalization, an ads plan, and live events at tens of millions of streams.',
       ]} />
+      <MentalModel id="ep-netflix" />
 
       <p>
         Netflix splits its work in two. The <strong>control plane</strong> runs on AWS. It handles sign-in, browsing,
@@ -55,25 +57,23 @@ export default function NetflixEpisode() {
       <p className="muted"><em>This episode is an independent reconstruction from public sources. It is not affiliated with or endorsed by Netflix; all trademarks belong to their owners.</em></p>
 
       <H2 id="timeline">Timeline at a glance</H2>
-      <CompareTable
-        columns={['What changed', 'Why']}
-        rows={[
-          { label: '2007', cells: ['Streaming launches beside DVDs', 'Test demand with minimal new systems'] },
-          { label: '2008', cells: ['Database corruption stops shipping for 3 days', 'Triggers the move to the cloud'] },
-          { label: '2009–2011', cells: ['Rebuilt as services on AWS, Cassandra', 'Scale out, no single database'] },
-          { label: '2011–2012', cells: ['Open Connect caches inside ISPs', 'Video is most of the bytes'] },
-          { label: '2011–2013', cells: ['Hystrix, Chaos Monkey, per-device APIs, multi-region', 'Everything fails; devices differ'] },
-          { label: '2015–2018', cells: ['Chaos Kong drills, Keystone data pipeline, Iceberg', 'Prove failover; data for every team'] },
-          { label: '2016', cells: ['130+ countries in one day', 'Cloud capacity made it possible'] },
-          { label: '2015–2021', cells: ['Per-title and per-shot encoding, AV1', 'Fewer bits at equal quality'] },
-          { label: '2022–2025', cells: ['Ads plan, live events', 'New business models, new traffic shapes'] },
-        ]}
-      />
+      <VisualTimeline items={[
+        { when: '2007', title: 'Streaming launches beside DVDs', note: 'Test demand with minimal new systems', icon: Play },
+        { when: '2008', title: 'Database corruption stops shipping for 3 days', note: 'Triggers the move to the cloud', icon: ShieldAlert },
+        { when: '2009–2011', title: 'Rebuilt as services on AWS, Cassandra', note: 'Scale out, no single database', icon: Cloud },
+        { when: '2011–2012', title: 'Open Connect caches inside ISPs', note: 'Video is most of the bytes', icon: HardDrive },
+        { when: '2011–2013', title: 'Hystrix, Chaos Monkey, per-device APIs, multi-region', note: 'Everything fails; devices differ', icon: ShieldCheck },
+        { when: '2015–2018', title: 'Chaos Kong drills, Keystone data pipeline, Iceberg', note: 'Prove failover; data for every team', icon: Activity },
+        { when: '2016', title: '130+ countries in one day', note: 'Cloud capacity made it possible', icon: Globe },
+        { when: '2015–2021', title: 'Per-title and per-shot encoding, AV1', note: 'Fewer bits at equal quality', icon: Film },
+        { when: '2022–2025', title: 'Ads plan, live events', note: 'New business models, new traffic shapes', icon: Radio },
+      ]} />
 
       <H2 id="the-build">The build, stage by stage</H2>
       <EpisodePlayer stages={NETFLIX_STAGES} height={400} />
 
       <H2 id="numbers">The numbers that shape everything</H2>
+      <StatRow caption="Rough estimates from the assumptions below, not Netflix figures" stats={[{ value: '≈ 30M', label: 'peak concurrent streams', note: 'estimate' }, { value: '≈ 150 Tbps', label: 'peak video egress', note: 'estimate' }, { value: '≫ 1000 : 1', label: 'video bytes vs API bytes', note: 'estimate' }]} />
       <EstimationTable
         assumptions={['~300M member accounts (order of magnitude, estimate)', 'Evening peak ≈ 10% of members streaming (estimate)', 'Average stream ≈ 5 Mbps across SD/HD/4K (estimate)']}
         rows={[
@@ -113,14 +113,18 @@ export default function NetflixEpisode() {
       <EpisodeNetflixPerTitleDemo />
 
       <H2 id="decisions">Key decisions and their alternatives</H2>
+      <p>The three decisions that shaped Netflix most:</p>
+      <SideBySide panels={[
+        { title: 'Own caches inside ISPs', icon: HardDrive, tone: 'good', points: ['+ Known catalog allows off-peak fill', '+ Cheaper at huge scale', '- Instead of: a commercial CDN'], verdict: 'Video delivery' },
+        { title: 'Services on AWS', icon: Cloud, tone: 'good', points: ['+ Elastic capacity', '+ The heavy bytes live elsewhere', '- Instead of: own data centers'], verdict: 'Control plane' },
+        { title: 'Chaos drills + active-active', icon: ShieldCheck, tone: 'good', points: ['+ Failure paths get exercised, not assumed', '- Instead of: redundancy on paper'], verdict: 'Resilience' },
+      ]} />
+      <p>Other decisions, in brief:</p>
       <CompareTable
         columns={['Chosen', 'Alternative', 'Why the choice fits']}
         rows={[
-          { label: 'Video delivery', cells: ['Own caches inside ISPs', 'Commercial CDN', 'Known catalog allows off-peak fill; cheaper at huge scale'] },
-          { label: 'Control plane', cells: ['Services on AWS', 'Own data centers', 'Elastic capacity; the heavy bytes live elsewhere'] },
           { label: 'Member data', cells: ['Cassandra', 'Sharded SQL', 'Write-heavy, per member, replicated across regions'] },
           { label: 'Device APIs', cells: ['Per-device adapters', 'One generic REST API', 'Fewer round trips on slow devices'] },
-          { label: 'Resilience', cells: ['Chaos drills + active-active', 'Redundancy on paper', 'Failure paths get exercised, not assumed'] },
           { label: 'Home screen', cells: ['Precomputed + cached', 'Fully online ranking', 'Predictable latency on TVs'] },
         ]}
       />

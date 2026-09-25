@@ -1,7 +1,8 @@
 import {
-  ApiSpec, ArchitectureDiagram, Callout, CodeBlock, CompareTable, EstimationTable, H2, InterviewQuestion,
-  KeyTakeaways, References, Requirements, TLDR, Term,
+  ApiSpec, ArchitectureDiagram, Callout, CodeBlock, CompareTable, EstimationTable, FlowDiagram, H2,
+  InterviewQuestion, KeyTakeaways, MentalModel, References, Requirements, SideBySide, StatRow, Term, TLDR,
 } from '../components/ui'
+import { Database, Hash, Link2, RefreshCw, Server, Share2 } from 'lucide-react'
 import type { ArchEdge, ArchNode, Reference } from '../components/ui'
 import { UrlBase62EncoderDemo } from './demos/url-base62-encoder-demo'
 
@@ -49,6 +50,7 @@ export default function UrlShortenerChapter() {
         'Leasing ID ranges to each writer gives collision-free codes with almost no coordination.',
         'Staff depth: abuse, hot keys, multi-region, and storage cost at 180 TB.',
       ]} />
+      <MentalModel id="url-shortener" />
 
       <p>
         The URL shortener is the “hello world” of system design. That is exactly why it is dangerous. Everyone
@@ -84,6 +86,12 @@ export default function UrlShortenerChapter() {
           { label: 'Code space', math: '62⁷', result: '≈ 3.5T ≫ 365B' },
         ]}
       />
+      <StatRow stats={[
+        { value: '1.2K/s', label: 'writes' },
+        { value: '12K/s', label: 'reads', note: '≈ 30K/s at peak' },
+        { value: '180 TB', label: 'storage over 10 years' },
+        { value: '3.5T', label: 'codes from 7 base62 chars' },
+      ]} />
       <p>
         Seven <Term def="An alphabet of 62 characters: digits 0–9, lowercase a–z and uppercase A–Z. Each character encodes about 6 bits.">base62</Term> characters
         are enough, with about 10× headroom. The storage is large but simple, so this is a <strong>partitioned KV</strong> problem,
@@ -158,15 +166,10 @@ class IdRange {
         The redirect status code decides whether browsers come back to you on repeat clicks. That choice trades server
         load against analytics.
       </p>
-      <CompareTable
-        columns={['301 Moved Permanently', '302 Found / 307']}
-        rows={[
-          { label: 'Browser caching', cells: ['Cacheable by default, so repeat clicks may never reach you', 'Cached only if you send explicit freshness headers'] },
-          { label: 'Server load', cells: ['Lower', 'Higher'] },
-          { label: 'Analytics', cells: ['Lose repeat clicks', 'Every click observed'] },
-          { label: 'Changing target', cells: ['Hard, stale in browsers', 'Easy'] },
-        ]}
-      />
+      <SideBySide caption="If clicks are the product, every click must reach you" panels={[
+        { title: '301 Moved Permanently', icon: Share2, points: ['+ Lower server load', '- Cacheable by default, so repeat clicks may never reach you', '- Lose repeat-click analytics', '- Hard to change the target later'], verdict: 'Pure redirect, no analytics' },
+        { title: '302 Found / 307', icon: RefreshCw, tone: 'good', points: ['+ Every click observed', '+ Target easy to change', '- Higher server load', '- Cached only with explicit freshness headers'], verdict: 'Clicks are the product' },
+      ]} />
       <p>
         If clicks are the product, every click must reach you. Use <strong>302/307</strong>, or a 301 with a short{' '}
         <code>Cache-Control: max-age</code> so browsers only cache it briefly.
@@ -183,6 +186,12 @@ class IdRange {
         Every lookup is by code, so the code is the <Term def="The field a distributed database hashes to decide which node stores a record.">partition key</Term>.
         That spreads records evenly and makes each lookup a single-node read.
       </p>
+      <FlowDiagram caption="One key, one partition, one read" steps={[
+        { label: 'Short code', sub: "'aZ3kP9q'", icon: Link2 },
+        { label: 'Hash the key', sub: 'partition key = code', icon: Hash },
+        { label: 'One node', sub: 'uniform spread', icon: Server },
+        { label: 'Single read', sub: 'O(1) lookup', icon: Database },
+      ]} />
       <CodeBlock lang="ts" title="record (KV / wide-column)" code={`
 // partition key = code  → uniform spread, O(1) lookup
 type UrlRecord = {

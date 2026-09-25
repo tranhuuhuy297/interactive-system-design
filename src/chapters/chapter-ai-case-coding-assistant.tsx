@@ -1,7 +1,11 @@
 import {
-  ApiSpec, ArchitectureDiagram, Callout, CodeBlock, CompareTable, EstimationTable, H2, InterviewQuestion,
-  KeyTakeaways, References, Requirements, Term, TLDR,
+  ApiSpec, ArchitectureDiagram, Callout, CodeBlock, EstimationTable, FlowDiagram, H2, InterviewQuestion,
+  KeyTakeaways, LayerStack, MentalModel, References, Requirements, SideBySide, StatRow, Term, TLDR,
 } from '../components/ui'
+import {
+  BookOpen, Braces, CheckCircle2, FileCode, FlaskConical, GitPullRequest, Keyboard, ListTree, MessageSquare, PauseCircle,
+  PenLine, Scissors, Search, SearchX, TerminalSquare, TextCursorInput, Zap,
+} from 'lucide-react'
 import type { ArchEdge, ArchNode, Reference } from '../components/ui'
 import { AiCaseCodeLatencyDemo } from './demos/ai-case-code-latency-demo'
 
@@ -54,6 +58,7 @@ export default function CodingAssistantChapter() {
         'Quality comes from context: pack the most useful code into a small token budget.',
         'Agents run code only in a sandbox, and humans approve every diff.',
       ]} />
+      <MentalModel id="ai-case-coding" />
       <p>
         An AI coding assistant is really <strong>two products with opposite latency budgets</strong>.
       </p>
@@ -72,6 +77,11 @@ export default function CodingAssistantChapter() {
         nonFunctional={['Completion p50 well under the typing pause (~a few hundred ms)', 'Chat first token < 1–2 s', 'Customer code never used for training by default; configurable retention', 'Graceful degradation: the IDE works normally if the service is down']}
         outOfScope={['Training the base models', 'Code review bots in the CI system']}
       />
+      <SideBySide caption="Two products with opposite latency budgets: separate the paths early"
+        panels={[
+          { title: 'Inline completions', icon: Keyboard, points: ['Budget: a few hundred ms', 'Small, fast model', 'p90 latency beats average quality', 'Most requests get cancelled'] },
+          { title: 'Chat & agent edits', icon: MessageSquare, points: ['Budget: seconds to minutes', 'Large model, more context', 'Must be correct and reviewable', 'Runs code only in a sandbox'] },
+        ]} />
       <Callout kind="tip">
         Ask what “fast enough” means. For inline completion, a suggestion that arrives after the user resumes typing
         is thrown away, so <strong>p90 latency matters more than average quality</strong>. Say this out loud and the
@@ -89,6 +99,13 @@ export default function CodingAssistantChapter() {
           { label: 'Share of requests cancelled', math: 'typing continues', result: 'large (design for it)' },
         ]}
       />
+      <StatRow
+        stats={[
+          { value: '100M', label: 'completions per day' },
+          { value: '≈ 3.5K', label: 'completion QPS at peak' },
+          { value: '≈ 200B', label: 'completion prompt tokens per day' },
+          { value: '≈ 100B', label: 'chat / agent tokens per day' },
+        ]} />
       <p>
         Hundreds of billions of prompt tokens per day make{' '}
         <strong><Term def="The model’s first pass over the prompt; its cost grows with prompt length.">prefill</Term>{' '}the dominant cost</strong>.
@@ -132,16 +149,14 @@ export default function CodingAssistantChapter() {
         Quality depends less on the model than on what goes into its limited prompt. Rank context sources and pack them
         into a{' '}<Term def="The maximum number of prompt tokens you allow per request, set by latency and cost.">token budget</Term>:
       </p>
-      <CompareTable
-        columns={['Source', 'Cost to fetch', 'Value']}
-        rows={[
-          { label: 'Prefix / suffix around cursor', cells: ['Free (local)', 'Highest; always included'] },
-          { label: 'Open tabs, recently edited files', cells: ['Free (local)', 'High; similarity-matched snippets'] },
-          { label: 'Symbol definitions (language server)', cells: ['Low (local)', 'High; correct signatures and types'] },
-          { label: 'Repo-wide retrieval (embeddings)', cells: ['Network + search', 'Medium for completions, high for chat'] },
-          { label: 'Docs / tickets', cells: ['Network', 'Mostly for chat and agents'] },
-        ]}
-      />
+      <LayerStack legend="Packed top to bottom until the budget runs out · bar = value to the suggestion"
+        layers={[
+          { label: 'Prefix / suffix around the cursor', sub: 'always included', icon: TextCursorInput, size: 1, value: 'free (local)', highlight: true },
+          { label: 'Open tabs, recently edited files', sub: 'similarity-matched snippets', icon: FileCode, size: 0.85, value: 'free (local)' },
+          { label: 'Symbol definitions', sub: 'language server: signatures, types', icon: Braces, size: 0.8, value: 'low (local)' },
+          { label: 'Repo-wide retrieval', sub: 'medium for completions, high for chat', icon: Search, size: 0.55, value: 'network + search' },
+          { label: 'Docs / tickets', sub: 'mostly for chat and agents', icon: BookOpen, size: 0.35, value: 'network' },
+        ]} />
       <CodeBlock lang="ts" title="packing context into a token budget" code={`
 function buildPrompt(ctx: Context, budget = 2048) {
   const parts: Part[] = [
@@ -165,6 +180,14 @@ function buildPrompt(ctx: Context, budget = 2048) {
 
       <H2 id="agents">7 · Deep dive: agentic edits and the sandbox</H2>
       <p>Agents that edit code and run tests are powerful and risky. The design goal is useful autonomy with a small blast radius.</p>
+      <FlowDiagram caption="Capped steps, tokens, and wall time; stop with a report instead of flailing"
+        steps={[
+          { label: 'Plan', icon: ListTree },
+          { label: 'Search the repo', icon: Search },
+          { label: 'Edit files', icon: PenLine },
+          { label: 'Run tests', sub: 'in a sandbox', icon: TerminalSquare },
+          { label: 'Propose a diff', sub: 'a human approves', icon: GitPullRequest },
+        ]} />
       <ul>
         <li><strong>Loop with limits.</strong> Plan, search the repo, edit, build and run tests, read failures, repeat. Cap the steps, tokens, and wall time, and stop with a report instead of flailing.</li>
         <li><strong>Execute only in a sandbox.</strong> Use an ephemeral VM or container with no production credentials, CPU and memory limits, and network egress off or allow-listed. The developer’s laptop is not the sandbox.</li>
@@ -177,14 +200,11 @@ function buildPrompt(ctx: Context, budget = 2048) {
         Benchmarks tell you if a model <em>can</em> code. Telemetry tells you if developers <em>keep</em> its code. You
         need both, in layers.
       </p>
-      <CompareTable
-        columns={['Offline', 'Online']}
-        rows={[
-          { label: 'Completions', cells: ['pass@k on held-out function tasks; exact and edit-distance match on real repos', 'Acceptance rate, retained characters after N minutes, latency percentiles'] },
-          { label: 'Agents', cells: ['Repository-level task suites (issue → passing tests)', 'Task success, diff acceptance, number of review round-trips'] },
-          { label: 'Watch out for', cells: ['Benchmark contamination (tasks seen in training)', 'Acceptance of code that is later deleted; bias toward short suggestions'] },
-        ]}
-      />
+      <SideBySide
+        panels={[
+          { title: 'Offline', icon: FlaskConical, points: ['Completions: pass@k, exact and edit-distance match on real repos', 'Agents: repo-level task suites (issue → passing tests)', '- Benchmark contamination'] },
+          { title: 'Online', icon: CheckCircle2, points: ['Completions: acceptance, retained characters, latency percentiles', 'Agents: task success, diff acceptance, review round-trips', '- Accepted code later deleted; bias toward short suggestions'] },
+        ]} />
 
       <H2 id="data-model">9 · Data model</H2>
       <p>Telemetry records outcomes, not code, so quality can be measured without storing customer source.</p>
@@ -204,6 +224,13 @@ type CompletionEvent = {
 }`} />
 
       <H2 id="staff">10 · Staff-level extensions</H2>
+      <LayerStack legend="Degradation ladder under load: step down one rung at a time; the editor never blocks"
+        layers={[
+          { label: 'Normal service', sub: 'full context, multi-line suggestions', icon: Zap, size: 1 },
+          { label: 'Shorter suggestions', icon: Scissors, size: 0.75 },
+          { label: 'Drop repo retrieval', sub: 'local context only', icon: SearchX, size: 0.5 },
+          { label: 'Pause completions', sub: 'the IDE keeps working normally', icon: PauseCircle, size: 0.25 },
+        ]} />
       <Callout kind="staff">
         <ul>
           <li><strong>Privacy is the product.</strong> Offer no training on customer code by default, configurable or zero retention, regional processing, and a self-hosted or VPC option for regulated customers. Enterprise sales depend on it.</li>

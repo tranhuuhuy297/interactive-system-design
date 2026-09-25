@@ -1,6 +1,11 @@
 import {
-  Callout, CodeBlock, CompareTable, FlowDiagram, H2, InterviewQuestion, KeyTakeaways, References, Term, TLDR,
+  Callout, CodeBlock, CompareTable, FlowDiagram, H2, InterviewQuestion, KeyTakeaways, LayerStack, MentalModel, References,
+  SideBySide, Term, TLDR,
 } from '../components/ui'
+import {
+  AlertTriangle, Bell, Bot, Box, Braces, Brackets, FileCheck2, FlaskConical, Hand, Link2Off, Lock, Power, Scan, ShieldCheck,
+  Swords, Users, Wrench,
+} from 'lucide-react'
 import type { Reference } from '../components/ui'
 import { AiSecInjectionDemo } from './demos/ai-sec-injection-demo'
 
@@ -25,6 +30,7 @@ export default function AiSafetySecurityChapter() {
         'Put real controls in code: least-privilege tools, confirmations, output encoding.',
         'Treat model output like user input before it reaches HTML, SQL, or a shell.',
       ]} />
+      <MentalModel id="ai-safety" />
       <p>
         Classic application security separates <strong>code</strong> from <strong>data</strong>: SQL has parameters,
         HTML has escaping. Language models have no such boundary. Instructions and data arrive in the same stream of
@@ -90,22 +96,27 @@ export default function AiSafetySecurityChapter() {
 
       <H2 id="defense-in-depth">Defense in depth</H2>
       <p>No single layer stops everything. Know what each one stops, and what it lets through.</p>
-      <CompareTable
-        columns={['Stops', 'Doesn’t stop']}
-        rows={[
-          { label: 'Input classifiers / “injection detectors”', cells: ['Known, crude attacks', 'Novel or obfuscated phrasing. It’s an arms race'] },
-          { label: 'Delimiting untrusted content', cells: ['Some naive injections', 'Adaptive attacks. It lowers probability, not possibility'] },
-          { label: 'Least-privilege tools', cells: ['Actions the task never needed', 'Misuse of tools the task does need'] },
-          { label: 'Human confirmation', cells: ['Unwanted side effects, when users read prompts', 'Approval fatigue: users click “yes”'] },
-          { label: 'Output filtering (URLs, HTML)', cells: ['Exfiltration via rendered links and images', 'Exfiltration via tools'] },
-          { label: 'Dual-LLM / quarantine', cells: ['The privileged model never reads untrusted text directly', 'Adds complexity; limits what tasks can do'] },
-        ]}
-      />
+      <LayerStack legend="Outer layers are probabilistic; the highlighted inner layers are enforced in code and hold every time"
+        layers={[
+          { label: 'Input classifiers', sub: 'stop: known, crude attacks', icon: Scan, size: 1, value: 'miss: novel or obfuscated phrasing' },
+          { label: 'Delimit untrusted content', sub: 'stop: some naive injections', icon: Brackets, size: 0.88, value: 'miss: adaptive attacks' },
+          { label: 'Human confirmation', sub: 'stop: unwanted side effects', icon: Hand, size: 0.76, value: 'miss: approval fatigue' },
+          { label: 'Output filtering (URLs, HTML)', sub: 'stop: exfiltration via links and images', icon: Link2Off, size: 0.64, value: 'miss: exfiltration via tools', highlight: true },
+          { label: 'Least-privilege tools', sub: 'stop: actions the task never needed', icon: Lock, size: 0.52, value: 'miss: misuse of needed tools', highlight: true },
+          { label: 'Dual-LLM / quarantine', sub: 'privileged model never reads untrusted text', icon: ShieldCheck, size: 0.4, value: 'cost: complexity, limits tasks', highlight: true },
+        ]} />
       <p>
         In the <strong>dual-LLM pattern</strong>, a privileged model plans and calls tools but never sees untrusted
         content. A quarantined model, with no tools, processes that content. Its outputs are passed around as opaque
         references (“summary $1”), not as text the privileged model reads.
       </p>
+      <FlowDiagram caption="The component that reads hostile text can’t act; the one that acts never reads it"
+        steps={[
+          { label: 'Untrusted content', sub: 'email, page, document', icon: AlertTriangle },
+          { label: 'Quarantined model', sub: 'no tools', icon: Box },
+          { label: 'Opaque reference', sub: '“summary $1”', icon: Braces },
+          { label: 'Privileged model', sub: 'plans + calls tools', icon: Bot },
+        ]} />
       <p>
         It is like a mailroom that X-rays packages before they reach the executive. Not a silver bullet, but it shows
         the principle: separate the component that <em>reads</em> hostile text from the component that can{' '}
@@ -118,6 +129,14 @@ export default function AiSafetySecurityChapter() {
         classic bugs like{' '}<Term def="Cross-site scripting: injecting script into a web page that runs in other users’ browsers.">XSS</Term>{' '}
         and SQL injection, by proxy.
       </p>
+      <FlowDiagram caption="The same pipeline you would build for user input"
+        steps={[
+          { label: 'Model output', icon: Bot },
+          { label: 'Validate', sub: 'schema, enums', icon: FileCheck2 },
+          { label: 'Encode / parameterize', sub: 'sanitize HTML, bind SQL', icon: ShieldCheck },
+          { label: 'Sandbox code', sub: 'no network, limits', icon: Box },
+          { label: 'Browser · DB · shell', icon: Wrench },
+        ]} />
       <CodeBlock lang="ts" title="never trust generated content" code={`
 // ❌ XSS: the model can be steered into emitting <img onerror=...>
 el.innerHTML = markdownToHtml(modelOutput)
@@ -147,9 +166,21 @@ eval(modelOutput.code)
         policies, and rate limits for abusive accounts. Assume the system prompt will leak. Keep secrets and
         authorization decisions out of it, and enforce permissions in code.
       </p>
+      <FlowDiagram
+        steps={[
+          { label: 'Input moderation', sub: 'classifier on the request', icon: Scan },
+          { label: 'Aligned model', sub: 'refuses most harmful asks', icon: Bot },
+          { label: 'Output moderation', sub: 'classifier on the answer', icon: Scan },
+          { label: 'Abuse limits', sub: 'rate limits per account', icon: Users },
+        ]} />
 
       <H2 id="data">Data protection</H2>
       <p>An LLM can only leak what it can reach. Limit what reaches it.</p>
+      <SideBySide
+        panels={[
+          { title: 'Shared across tenants', icon: Users, tone: 'bad', points: ['- One semantic cache for everyone', '- Retrieval ignores the caller’s ACLs', '- A near-duplicate question returns another tenant’s answer'] },
+          { title: 'Scoped per tenant and user', icon: Lock, tone: 'good', points: ['+ Cache, memory, and tuning data keyed by tenant', '+ Retrieval filtered by the caller’s permissions', '+ Provenance tracked for ingested sources'] },
+        ]} />
       <ul>
         <li><strong>Permission-aware retrieval:</strong> filter RAG results by the requesting user’s access <em>before</em> they enter the prompt. See <a href="#/ai-rag">RAG Systems</a>.</li>
         <li><strong>Tenant isolation</strong> in caches, memories, and fine-tuning data. A semantic cache shared across tenants is a data leak waiting to happen.</li>
@@ -169,6 +200,13 @@ eval(modelOutput.code)
         per tool and per feature. Frameworks like the NIST AI Risk Management Framework help organize this as a
         continuous process.
       </p>
+      <FlowDiagram caption="Every incident becomes a new test in the suite"
+        steps={[
+          { label: 'Red-team suite', sub: 'injections, jailbreaks, exfiltration', icon: Swords },
+          { label: 'Release gate', icon: FlaskConical },
+          { label: 'Monitor', sub: 'tool calls, blocked actions', icon: Bell },
+          { label: 'Kill switch', sub: 'per tool, per feature', icon: Power },
+        ]} />
 
       <Callout kind="staff">
         <ul>

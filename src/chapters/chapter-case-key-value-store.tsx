@@ -1,7 +1,8 @@
 import {
-  ApiSpec, ArchitectureDiagram, Callout, CodeBlock, CompareTable, EstimationTable, FlowDiagram, H2, InterviewQuestion,
-  KeyTakeaways, References, Requirements, TLDR, Term,
+  ApiSpec, ArchitectureDiagram, Callout, CodeBlock, CompareTable, EstimationTable, FlowDiagram, H2,
+  InterviewQuestion, KeyTakeaways, MentalModel, References, Requirements, SideBySide, StatRow, Term, TLDR,
 } from '../components/ui'
+import { CircleDot, Clock, Combine, Copy, GitFork, Hash, Key } from 'lucide-react'
 import type { ArchEdge, ArchNode, Reference } from '../components/ui'
 import { KvDynamoClusterSim } from './demos/kv-dynamo-cluster-sim'
 import { KvMerkleDemo } from './demos/kv-merkle-demo'
@@ -48,6 +49,7 @@ export default function KeyValueStoreChapter() {
         'Failures are repaired in layers: hinted handoff, read repair, then Merkle-tree comparison.',
         'Concurrent writes need a conflict policy: last-write-wins, vector clocks, or CRDTs.',
       ]} />
+      <MentalModel id="kv-store" />
 
       <p>
         Designing a distributed key-value store is the interview version of reading the Dynamo paper. It is less
@@ -85,6 +87,11 @@ export default function KeyValueStoreChapter() {
           { label: 'Plan', math: 'max of both + failure headroom', result: '~32 nodes' },
         ]}
       />
+      <StatRow caption="Illustrative numbers" stats={[
+        { value: '10 TB', label: 'raw data', note: '30 TB with N = 3' },
+        { value: '1M/s', label: 'peak ops, 80% reads' },
+        { value: '~32', label: 'nodes, set by throughput' },
+      ]} />
       <p>
         Throughput, not storage, sets the node count here, because each write fans out to N replicas. Say this out
         loud: it is the kind of reasoning interviewers look for.
@@ -114,6 +121,12 @@ export default function KeyValueStoreChapter() {
 
       <H2 id="partitioning">5 · Deep dive: partitioning & replication</H2>
       <p>First decide where each key lives, and how many copies it has.</p>
+      <FlowDiagram caption="From key to its preference list" steps={[
+        { label: 'Key', sub: "'user:42'", icon: Key },
+        { label: 'Hash', sub: 'position on the ring', icon: Hash },
+        { label: 'First vnode clockwise', sub: 'the coordinator', icon: CircleDot },
+        { label: 'Next N distinct nodes', sub: 'rack/AZ-aware replicas', icon: Copy },
+      ]} />
       <ul>
         <li><strong>Consistent hashing</strong> places nodes and keys on a ring. A key belongs to the first node clockwise, and adding a node moves only about 1/n of the keys.</li>
         <li><strong>Virtual nodes</strong>: each physical node owns many small ranges. This evens out load, lets bigger machines take more ranges, and spreads a failed node's load across the cluster.</li>
@@ -169,15 +182,11 @@ export default function KeyValueStoreChapter() {
         how each node stores data on disk with an{' '}
         <Term def="Log-structured merge tree: writes go to memory and an append-only log, then flush to sorted immutable files that are merged in the background.">LSM tree</Term>.
       </p>
-      <CompareTable
-        columns={['Last-write-wins (timestamps)', 'Vector clocks / siblings', 'CRDTs']}
-        rows={[
-          { label: 'Mechanism', cells: ['Highest timestamp wins', 'Detect concurrency, return all siblings', 'Data types whose merge is mathematically defined'] },
-          { label: 'Data loss?', cells: ['Yes: concurrent writes silently dropped; clock skew makes it worse', 'No; the client merges', 'No; merges automatically'] },
-          { label: 'Complexity', cells: ['Lowest', 'Client-side merge logic', 'Limited to supported types (counters, sets, maps)'] },
-          { label: 'Seen in', cells: ['Cassandra', 'Dynamo paper, Riak', 'Riak data types, Redis Enterprise CRDBs'] },
-        ]}
-      />
+      <SideBySide caption="Who resolves a conflict: the clock, the client, or the data type" panels={[
+        { title: 'Last-write-wins', icon: Clock, tone: 'bad', points: ['Highest timestamp wins', '- Concurrent writes silently dropped', '- Clock skew makes it worse', '+ Lowest complexity'], verdict: 'Seen in Cassandra' },
+        { title: 'Vector clocks / siblings', icon: GitFork, points: ['Detect concurrency, return all siblings', '+ No data loss', '- Client must merge'], verdict: 'Dynamo paper, Riak' },
+        { title: 'CRDTs', icon: Combine, tone: 'good', points: ['Merge is mathematically defined', '+ No data loss, merges automatically', '- Only supported types: counters, sets, maps'], verdict: 'Riak data types, Redis Enterprise CRDBs' },
+      ]} />
       <CodeBlock lang="ts" title="write & read path on one node (LSM)" code={`
 put(key, value):
   commitLog.append(key, value)        // sequential disk write → durability

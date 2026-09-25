@@ -1,7 +1,8 @@
 import {
-  ApiSpec, ArchitectureDiagram, Callout, CodeBlock, CompareTable, EstimationTable, FlowDiagram, H2, InterviewQuestion,
-  KeyTakeaways, References, Requirements, TLDR, Term,
+  ApiSpec, ArchitectureDiagram, Callout, CodeBlock, CompareTable, EstimationTable, FlowDiagram, H2,
+  InterviewQuestion, KeyTakeaways, LayerStack, MentalModel, References, Requirements, StatRow, Term, TLDR,
 } from '../components/ui'
+import { Copy, Globe, Monitor, Server } from 'lucide-react'
 import type { ArchEdge, ArchNode, Reference } from '../components/ui'
 import { AutocompleteTrieExplorerDemo } from './demos/autocomplete-trie-explorer-demo'
 
@@ -48,6 +49,7 @@ export default function SearchAutocompleteChapter() {
         'Rank by a time-decayed popularity score, built from logged searches in a batch pipeline.',
         'Scale reads with client debounce, CDN caching of short prefixes, and read-only replicas.',
       ]} />
+      <MentalModel id="autocomplete" />
 
       <p>
         Autocomplete has a brutal latency budget. It must answer <strong>between keystrokes</strong>, so the answer
@@ -78,6 +80,12 @@ export default function SearchAutocompleteChapter() {
           { label: 'Index size', math: '100M queries × ~(20 B + top-k refs)', result: 'tens of GB' },
         ]}
       />
+      <StatRow stats={[
+        { value: '10B/day', label: 'raw keystroke requests' },
+        { value: '58K/s', label: 'after debounce', note: '≈ 150K/s at peak' },
+        { value: '6K/s', label: 'logged searches' },
+        { value: 'tens of GB', label: 'index size, fits in RAM' },
+      ]} />
       <p>
         The index fits in the memory of a few machines, and read QPS is high but cacheable. Reads are a caching and
         replication problem. Writes are a <strong>batch analytics</strong> problem.
@@ -165,12 +173,19 @@ function suggest(root: TrieNode, rawPrefix: string, k = 5): string[] {
         <Term def="Waiting briefly after each keystroke and only sending a request once typing pauses.">debounce</Term>{' '}
         is the cheapest win.
       </p>
-      <ul>
-        <li><strong>Client</strong>: debounce, cancel stale requests, cache per prefix, and prefetch the next likely prefix.</li>
-        <li><strong>Edge</strong>: short prefixes are the hottest and the same for everyone, so they belong on the CDN.</li>
-        <li><strong>Sharding</strong>: splitting by first letter is badly skewed (far more queries start with “s” than “x”). Split using ranges derived from the historical prefix distribution, or hash the prefix in the KV design.</li>
-        <li><strong>Replication</strong>: the index is read-only between builds, so add replicas freely. There are no consistency problems within a version.</li>
-      </ul>
+      <LayerStack legend="Each layer removes traffic before the next one sees it"
+        caption="Bar width shows how much of the original request volume still reaches that layer"
+        layers={[
+          { label: 'Client', sub: 'debounce, cancel stale, cache per prefix, prefetch', icon: Monitor, size: 1, value: 'cheapest win', highlight: true },
+          { label: 'Edge / CDN', sub: 'short prefixes: hottest, same for everyone', icon: Globe, size: 0.7 },
+          { label: 'Sharded index', sub: 'ranges from the prefix distribution', icon: Server, size: 0.45 },
+          { label: 'Read replicas', sub: 'read-only between builds', icon: Copy, size: 0.3, value: 'add freely' },
+        ]} />
+      <p>
+        Don't shard by first letter: far more queries start with “s” than “x”. Split using ranges derived from the
+        historical prefix distribution, or hash the prefix in the KV design. Because the index is read-only between
+        builds, replicas have no consistency problems within a version.
+      </p>
       <Callout kind="pitfall">
         Updating the trie synchronously on every search. It turns a read-optimized, lock-free structure into a hot
         write path and gains freshness nobody asked for. Rebuild offline and swap versions.

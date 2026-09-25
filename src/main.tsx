@@ -5,6 +5,7 @@ import './styles/tokens.css'
 import './components/ui/ui-kit.css'
 import './components/ui/system-design-kit.css'
 import './components/ui/episode-player.css'
+import './components/ui/visuals/visuals.css'
 import { AppShell } from './components/shell/app-shell'
 
 createRoot(document.getElementById('root')!).render(

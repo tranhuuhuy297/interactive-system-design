@@ -1,7 +1,8 @@
 import {
-  ArchitectureDiagram, Callout, CompareTable, EpisodePlayer, EstimationTable, H2, InterviewQuestion, KeyTakeaways,
-  References, TLDR, Term,
+  ArchitectureDiagram, Callout, CompareTable, EpisodePlayer, EstimationTable, H2, InterviewQuestion,
+  KeyTakeaways, MentalModel, References, SideBySide, StatRow, Term, TLDR, VisualTimeline,
 } from '../components/ui'
+import { Building2, Code, Database, Globe, Globe2, Hash, Server, Sparkles, Video } from 'lucide-react'
 import type { ArchEdge, ArchNode } from '../components/ui'
 import { IG_REFS } from './demos/episode-instagram-sources'
 import { EpisodeInstagramIdDemo } from './demos/episode-instagram-id-demo'
@@ -35,6 +36,8 @@ const TIMELINE = [
   { year: '2020–21', what: 'Reels and watch-time-driven encoding' },
 ]
 
+const TIMELINE_ICONS = [Database, Globe, Building2, Server, Sparkles, Code, Globe2, Video]
+
 export default function InstagramEpisode() {
   return (
     <>
@@ -45,6 +48,7 @@ export default function InstagramEpisode() {
         'Feeds are precomputed lists, later ranked by a model.',
         'Growth forced a live move into Facebook’s data centers, then multiple regions.',
       ]} />
+      <MentalModel id="ep-instagram" />
       <p>
         Instagram’s core loop is simple: post a photo, see friends’ photos. The engineering story is three growth
         walls in quick succession: <strong>media bytes</strong>, a <strong>database</strong> that outgrew one
@@ -62,12 +66,13 @@ export default function InstagramEpisode() {
       <p className="muted"><em>This episode is an independent reconstruction from public sources. It is not affiliated with or endorsed by Instagram or Meta; all trademarks belong to their owners.</em></p>
 
       <H2 id="timeline">Timeline at a glance</H2>
-      <CompareTable columns={['What changed']} rows={TIMELINE.map((t) => ({ label: t.year, cells: [t.what] }))} />
+      <VisualTimeline items={TIMELINE.map((t, i) => ({ when: t.year, title: t.what, icon: TIMELINE_ICONS[i] }))} />
 
       <H2 id="the-build">The build, stage by stage</H2>
       <EpisodePlayer stages={INSTAGRAM_STAGES} height={400} />
 
       <H2 id="numbers">The numbers that shape everything</H2>
+      <StatRow caption="Illustrative estimates from the assumptions below" stats={[{ value: '≈ 1.2K / s', label: 'post writes', note: 'estimate' }, { value: '≈ 50 : 1', label: 'feed reads per post write', note: 'estimate' }, { value: '≈ 200 TB / day', label: 'new media stored', note: 'estimate' }]} />
       <EstimationTable
         assumptions={['Illustrative: 500M daily active users', '100M new posts/day, ~2 MB stored per post across renditions', 'Each user opens the feed 10×/day']}
         rows={[
@@ -109,12 +114,16 @@ export default function InstagramEpisode() {
       </Callout>
 
       <H2 id="decisions">Key decisions and their alternatives</H2>
+      <p>The three decisions that let a small team scale:</p>
+      <SideBySide panels={[
+        { title: 'Many logical shards on few hosts', icon: Server, tone: 'good', points: ['+ Adding hosts moves whole shards', '+ Keys never change', '- Instead of: hashing by number of servers'], verdict: 'Database scaling' },
+        { title: 'Time | shard | sequence IDs, made in the DB', icon: Hash, tone: 'good', points: ['+ No extra service on the write path', '+ Time-sortable, fits 64 bits', '- Instead of: a ticket server or UUIDv4'], verdict: 'IDs' },
+        { title: 'Object storage + CDN + async workers', icon: Globe, tone: 'good', points: ['+ Bytes dominate traffic', '+ Resizing never blocks uploads', '- Instead of: serving media from app servers'], verdict: 'Media' },
+      ]} />
+      <p>Other decisions, in brief:</p>
       <CompareTable
         columns={['Chosen', 'Alternative', 'Why the choice fits']}
         rows={[
-          { label: 'Database scaling', cells: ['Many logical shards on few hosts', 'Hash by number of servers', 'Adding hosts moves whole shards; keys never change'] },
-          { label: 'IDs', cells: ['Time | shard | sequence, made in the DB', 'Central ticket server / UUIDv4', 'No extra service on the write path; time-sortable; 64-bit fits indexes'] },
-          { label: 'Media', cells: ['Object storage + CDN + async workers', 'Serve from app servers', 'Bytes dominate traffic; resizing must not block uploads'] },
           { label: 'Feed', cells: ['Hybrid fan-out + ranking', 'Pure pull at read time', 'Reads outnumber writes about 50:1; pull only for very large accounts'] },
           { label: 'Stories', cells: ['In-memory with TTLs', 'Rows + nightly cleanup jobs', 'Hot for hours then dead; let expiry do deletion'] },
         ]}

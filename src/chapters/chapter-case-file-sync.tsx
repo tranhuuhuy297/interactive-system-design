@@ -1,7 +1,8 @@
 import {
-  ApiSpec, ArchitectureDiagram, Callout, CodeBlock, CompareTable, EstimationTable, H2, InterviewQuestion,
-  KeyTakeaways, References, Requirements, TLDR, Term,
+  ApiSpec, ArchitectureDiagram, Callout, CodeBlock, CompareTable, EstimationTable, FlowDiagram, H2,
+  InterviewQuestion, KeyTakeaways, LayerStack, MentalModel, References, Requirements, StatRow, Term, TLDR,
 } from '../components/ui'
+import { BookOpen, Boxes, File, FolderTree, GitCompare, History, PenLine, RefreshCw, ScrollText } from 'lucide-react'
 import type { ArchEdge, ArchNode, Reference } from '../components/ui'
 import { FilesyncChunkingDemo } from './demos/filesync-chunking-demo'
 import { FilesyncConflictDemo } from './demos/filesync-conflict-demo'
@@ -51,6 +52,7 @@ export default function FileSyncChapter() {
         'Each namespace has an ordered change journal; devices sync by replaying it from their cursor.',
         'When two offline edits collide on a binary file, keep both copies rather than silently losing one.',
       ]} />
+      <MentalModel id="file-sync" />
 
       <p>“Design Google Drive / Dropbox” is really three separate problems:</p>
       <ul>
@@ -84,6 +86,11 @@ export default function FileSyncChapter() {
           { label: 'Metadata reads', math: 'journal polls, list calls', result: '≫ writes (read-heavy)' },
         ]}
       />
+      <StatRow caption="Illustrative numbers" stats={[
+        { value: '500 PB', label: 'logical storage', note: '≈ 250–400 PB after dedup' },
+        { value: '230/s', label: 'edits synced', note: '≈ 700/s at peak' },
+        { value: '70 MB/s', label: 'upload bandwidth with delta sync' },
+      ]} />
       <p>
         Storage cost dominates. Bandwidth stays modest <em>only if</em>{' '}
         <Term def="Uploading only the parts of a file that changed, instead of the whole file.">delta sync</Term>{' '}
@@ -146,6 +153,12 @@ export default function FileSyncChapter() {
         use{' '}
         <Term def="Proceed without locking, then check at commit time that nobody else changed the data; retry or report a conflict if they did.">optimistic concurrency</Term>.
       </p>
+      <FlowDiagram caption="Sync is replaying a log; conflicts surface at commit, never mid-upload" steps={[
+        { label: 'Edit', sub: 'based on parentRev', icon: PenLine },
+        { label: 'Compare-and-set', sub: 'rev ≠ parentRev → 409', icon: GitCompare },
+        { label: 'Append journal', sub: 'per-namespace seq', icon: BookOpen },
+        { label: 'Replay', sub: 'other devices, from their cursor', icon: RefreshCw },
+      ]} />
       <ul>
         <li>Each namespace (a user's root or a shared folder) has a <strong>totally ordered journal</strong> of changes. Clients hold a cursor, meaning “I've applied everything up to entry 18,442”.</li>
         <li>Commits use <strong>optimistic concurrency</strong>: <code>parentRev</code> must equal the current revision, otherwise the server returns <code>409</code>. No locks are held across a slow upload.</li>
@@ -178,6 +191,15 @@ COMMIT;`} />
 
       <H2 id="data-model">8 · Data model</H2>
       <p>Five small tables carry the whole design: namespaces, files, versions, the journal and the blocks.</p>
+      <LayerStack legend="Top to bottom: each row points to the one below it"
+        caption="The journal sits beside the stack and records every revision change per namespace"
+        layers={[
+          { label: 'Namespace', sub: 'a user root or a shared folder', icon: FolderTree, size: 0.5, value: 'nsId' },
+          { label: 'File entry', sub: 'path → current rev', icon: File, size: 0.65, value: 'nsId + path' },
+          { label: 'File version', sub: 'rev → ordered block list', icon: History, size: 0.8, value: 'per rev' },
+          { label: 'Block', sub: 'content-addressed, ref-counted, hot or cold tier', icon: Boxes, size: 1, value: 'sha256', highlight: true },
+          { label: 'Journal', sub: 'ordered change log per namespace', icon: ScrollText, size: 0.6, value: 'nsId + seq' },
+        ]} />
       <CodeBlock lang="ts" title="core tables" code={`
 type Namespace   = { nsId: string; ownerId: string; kind: 'user' | 'shared' }
 type FileEntry   = { nsId: string; path: string; rev: number; deleted: boolean }

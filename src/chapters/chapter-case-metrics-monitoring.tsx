@@ -1,8 +1,9 @@
 import {
-  ApiSpec, ArchitectureDiagram, Callout, CodeBlock, CompareTable, EstimationTable, H2, InterviewQuestion,
-  KeyTakeaways, Requirements, References, TLDR, Term,
+  ApiSpec, ArchitectureDiagram, Callout, CodeBlock, EstimationTable, H2, InterviewQuestion,
+  KeyTakeaways, MentalModel, References, Requirements, SideBySide, StatRow, Term, TLDR,
 } from '../components/ui'
 import type { ArchEdge, ArchNode, Reference } from '../components/ui'
+import { ArrowDownToLine, ArrowUpFromLine } from 'lucide-react'
 import { MetricsAlertEvaluatorDemo } from './demos/metrics-alert-evaluator-demo'
 import { MetricsDownsamplingDemo } from './demos/metrics-downsampling-demo'
 
@@ -54,6 +55,7 @@ export default function MetricsMonitoringChapter() {
         'The hard part: cardinality. One careless label can multiply the number of series a million times.',
         'Staff insight: page on SLO burn rate, not on causes, and monitor the monitoring from outside.',
       ]} />
+      <MentalModel id="metrics-monitoring" />
       <p>
         A metrics platform is a write-heavy{' '}
         <Term def="Time-series database: storage optimised for timestamped numeric samples, queried by time range.">TSDB</Term>{' '}
@@ -85,6 +87,14 @@ export default function MetricsMonitoringChapter() {
           { label: 'Raw 15-day hot tier', math: '118 GB × 15 × RF 2', result: '≈ 3.5 TB' },
         ]}
       />
+
+      <StatRow caption="Compression is the biggest lever: roughly 12× fewer bytes than raw samples"
+        stats={[
+          { value: '1M/s', label: 'samples ingested' },
+          { value: '≈ 1.4 TB', label: 'per day, raw' },
+          { value: '≈ 118 GB', label: 'per day, compressed' },
+          { value: '≈ 3.5 TB', label: '15-day hot tier', note: 'replication factor 2' },
+        ]} />
 
       <H2 id="api">3 · API</H2>
       <p>Three calls cover the system: write samples, query a range, and manage alert rules.</p>
@@ -120,16 +130,10 @@ http_requests_total{service="checkout", method="POST", status="500", region="eu-
         because one team's bad deploy shouldn't page everyone else.
       </Callout>
       <p>The other data-model choice is how samples arrive: collectors pull them, or services push them.</p>
-      <CompareTable
-        columns={['Pull (scrape)', 'Push']}
-        rows={[
-          { label: 'Health signal', cells: ['A failed scrape = the target is down', 'Silence is ambiguous'] },
-          { label: 'Short-lived jobs', cells: ['Missed; needs a push gateway', 'Natural fit'] },
-          { label: 'Network', cells: ['Collector must reach the targets', 'Works through NAT and firewalls'] },
-          { label: 'Backpressure', cells: ['Collector controls its rate', 'Must rate-limit clients'] },
-          { label: 'Typical', cells: ['Prometheus in Kubernetes', 'OTLP agents, serverless, IoT'] },
-        ]}
-      />
+      <SideBySide caption="Pull gives you a free health signal; push reaches places a collector can't" panels={[
+        { title: 'Pull (scrape)', icon: ArrowDownToLine, points: ['+ A failed scrape means the target is down', '+ Collector controls its own rate', '- Misses short-lived jobs (needs a push gateway)', '- Collector must reach every target'], verdict: 'Typical: Prometheus in Kubernetes' },
+        { title: 'Push', icon: ArrowUpFromLine, points: ['+ Natural fit for short-lived jobs', '+ Works through NAT and firewalls', '- Silence is ambiguous', '- Must rate-limit clients'], verdict: 'Typical: OTLP agents, serverless, IoT' },
+      ]} />
 
       <H2 id="storage">6 · Deep dive: storage engine & downsampling</H2>
       <p>

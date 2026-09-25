@@ -1,0 +1,185 @@
+import {
+  AlertTriangle, Archive, Bot, CheckCheck, CircleDollarSign, Copy, Cpu, Database, FileCheck2, FileSearch, FileText, Filter,
+  GitPullRequest, GraduationCap, Keyboard, KeyRound, Layers, ListFilter, Lock, MemoryStick, MessageSquare, MessageSquareCode,
+  Minimize2, Monitor, Network, Plug, Quote, Receipt, Repeat, RotateCcw, Router, Scale, Scissors, Search, ServerCog,
+  ShieldCheck, SlidersHorizontal, Sparkles, Split, Tag, TextCursorInput, Users, Wallet, Wrench, Zap, Gauge,
+} from 'lucide-react'
+import type { MentalModelData } from './mental-model-types'
+
+export const MENTAL_MODELS_AI_SYSTEMS: MentalModelData[] = [
+  {
+    id: 'ai-inference',
+    idea: 'Prefill reads the prompt at once; decode streams memory for every token.',
+    picture: [
+      { icon: FileText, label: 'Prompt in' },
+      { icon: Cpu, label: 'Prefill: compute-bound' },
+      { icon: MemoryStick, label: 'Decode: memory-bound' },
+      { icon: MessageSquare, label: 'Tokens stream out' },
+    ],
+    analogy: 'reading a whole letter at a glance, then writing the reply one word at a time.',
+    hook: 'Prefill burns FLOPs; decode burns bandwidth.',
+  },
+  {
+    id: 'ai-kv-cache',
+    idea: 'Store each token’s attention notes once; memory, not compute, then limits how many users fit.',
+    picture: [
+      { icon: FileText, label: 'Tokens so far' },
+      { icon: Archive, label: 'Keep K/V notes' },
+      { icon: Layers, label: 'Paged blocks, shared prefixes' },
+      { icon: Minimize2, label: 'Quantize to fit more' },
+    ],
+    analogy: 'notes you take once so you never re-read the whole book.',
+    hook: 'Budget GPUs in KV tokens, not requests.',
+  },
+  {
+    id: 'ai-batching',
+    idea: 'Re-form the batch every step, cap work per step, and let a cheap model draft.',
+    picture: [
+      { icon: Users, label: 'Queue of requests' },
+      { icon: Repeat, label: 'Re-batch each step' },
+      { icon: Scissors, label: 'Chunk long prompts' },
+      { icon: Sparkles, label: 'Draft, then verify' },
+    ],
+    analogy: 'a junior writer drafts a sentence and a senior editor approves it in one read.',
+    hook: 'Slots never idle, steps never stall, drafts are free until rejected.',
+  },
+  {
+    id: 'ai-parallelism',
+    idea: 'Split a model across GPUs so the chattiest split rides the fastest link.',
+    picture: [
+      { icon: Cpu, label: 'Tensor parallel inside a node' },
+      { icon: Network, label: 'Pipeline across nodes' },
+      { icon: Copy, label: 'Replicas for throughput' },
+      { icon: Gauge, label: 'Scale on queue time' },
+    ],
+    analogy: 'a hospital (MoE): every specialist must be on staff, but each patient sees only two.',
+    hook: 'TP for latency, replicas for throughput, MoE pays memory for everything.',
+  },
+  {
+    id: 'ai-serving',
+    idea: 'Pick an engine by replaying your traffic, then route easy requests to cheaper models.',
+    picture: [
+      { icon: ServerCog, label: 'Engine: vLLM, SGLang…' },
+      { icon: Layers, label: 'Multi-LoRA shares a base' },
+      { icon: Split, label: 'Route or cascade' },
+      { icon: CircleDollarSign, label: 'Cost per 1M tokens' },
+    ],
+    analogy: 'LoRA adapters are clip-on lenses for one camera body.',
+    hook: 'Keep engines swappable; the cheapest token comes from the smallest adequate model.',
+  },
+  {
+    id: 'ai-prompting',
+    idea: 'A prompt is a versioned API contract: typed at the boundary, authorized in code.',
+    picture: [
+      { icon: Archive, label: 'Versioned prompt' },
+      { icon: FileCheck2, label: 'Schema-constrained output' },
+      { icon: KeyRound, label: 'Authorize tool calls in code' },
+      { icon: RotateCcw, label: 'Bounded repair, then fallback' },
+    ],
+    analogy: 'autocomplete that greys out the keys you are not allowed to press.',
+    hook: 'Shape is guaranteed, truth is not; the model requests, code decides.',
+  },
+  {
+    id: 'ai-rag',
+    idea: 'Search your data first, then hand the model only the few best passages.',
+    picture: [
+      { icon: Search, label: 'Hybrid search' },
+      { icon: Filter, label: 'Permission filter' },
+      { icon: ListFilter, label: 'Rerank to ~5' },
+      { icon: Quote, label: 'Answer with citations' },
+    ],
+    analogy: 'an open-book exam: the model is only as good as the pages you hand it.',
+    hook: 'Bad answers are usually bad retrieval. Measure recall first.',
+  },
+  {
+    id: 'ai-fine-tuning',
+    idea: 'Climb prompt, then RAG, then fine-tune, only when evals prove the lower rung is exhausted.',
+    picture: [
+      { icon: MessageSquareCode, label: 'Prompt' },
+      { icon: FileSearch, label: 'RAG for knowledge' },
+      { icon: SlidersHorizontal, label: 'Fine-tune for behavior' },
+      { icon: GraduationCap, label: 'Distill to a small model' },
+    ],
+    analogy: 'training an employee’s habits, not having them memorize a changing handbook.',
+    hook: 'Fine-tuning changes how it behaves; RAG changes what it knows.',
+  },
+  {
+    id: 'ai-evals',
+    idea: 'The eval suite is the spec: cheap checks on everything, judges where code can’t.',
+    picture: [
+      { icon: Database, label: 'Golden set' },
+      { icon: CheckCheck, label: 'Deterministic checks' },
+      { icon: Scale, label: 'Calibrated judges' },
+      { icon: ShieldCheck, label: 'CI gate + canary' },
+    ],
+    hook: 'No evals, no changes: measure every prompt and model swap.',
+  },
+  {
+    id: 'ai-agents',
+    idea: 'A model proposes actions in a loop; the runtime decides what actually runs.',
+    picture: [
+      { icon: FileText, label: 'Build context' },
+      { icon: Bot, label: 'Model proposes a tool call' },
+      { icon: ShieldCheck, label: 'Validate, budget, approve' },
+      { icon: Wrench, label: 'Execute and observe' },
+    ],
+    analogy: 'a chef improvising, when a recipe (a workflow) would usually do.',
+    hook: 'Start with a workflow; earn autonomy with evals and budgets.',
+  },
+  {
+    id: 'ai-production',
+    idea: 'Route every LLM call through one gateway that owns quotas, caching, fallbacks, and logs.',
+    picture: [
+      { icon: Monitor, label: 'Product code' },
+      { icon: Router, label: 'LLM gateway' },
+      { icon: Zap, label: 'Stream, cancel, cache' },
+      { icon: Wallet, label: 'Tokens budgeted and attributed' },
+    ],
+    hook: 'Budget in tokens, fail over before the first token, cache with care.',
+  },
+  {
+    id: 'ai-safety',
+    idea: 'Models can’t tell instructions from data, so real controls must live in code.',
+    picture: [
+      { icon: AlertTriangle, label: 'Untrusted text in' },
+      { icon: Bot, label: 'Model may be tricked' },
+      { icon: Lock, label: 'Least-privilege tools' },
+      { icon: ShieldCheck, label: 'Encode and approve outputs' },
+    ],
+    analogy: 'a mailroom that X-rays packages before they reach the executive.',
+    hook: 'Assume it will be tricked. Break the trifecta: data, untrusted input, exfiltration.',
+  },
+  {
+    id: 'ai-case-rag',
+    idea: 'Company search that never shows a document the asker can’t open.',
+    picture: [
+      { icon: Plug, label: 'Connectors sync' },
+      { icon: Lock, label: 'ACLs on every chunk' },
+      { icon: Filter, label: 'Filter inside the search' },
+      { icon: Quote, label: 'Cited answer' },
+    ],
+    hook: 'Permissions in the index, deletes in the fast lane, a citation per claim.',
+  },
+  {
+    id: 'ai-case-coding',
+    idea: 'Two products: sub-second completions from local context, and sandboxed agents for bigger edits.',
+    picture: [
+      { icon: Keyboard, label: 'Typing pause' },
+      { icon: TextCursorInput, label: 'Pack context near the cursor' },
+      { icon: Zap, label: 'Small model, sticky replica' },
+      { icon: GitPullRequest, label: 'Agent diff, human approves' },
+    ],
+    hook: 'Beat the next keystroke; never run agent code outside a sandbox.',
+  },
+  {
+    id: 'ai-case-gateway',
+    idea: 'One API over every model: aliases, token quotas, safe failover, and exact billing.',
+    picture: [
+      { icon: Tag, label: 'Alias, not model name' },
+      { icon: Lock, label: 'Reserve tokens' },
+      { icon: Split, label: 'Route or fail over' },
+      { icon: Receipt, label: 'Bill actual usage once' },
+    ],
+    hook: 'Retry before the first token; bill once per request id.',
+  },
+]

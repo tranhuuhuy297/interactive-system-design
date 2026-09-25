@@ -1,9 +1,11 @@
 import { Fragment } from 'react'
-import { ArrowRight } from 'lucide-react'
+import { ArrowRight, type LucideIcon } from 'lucide-react'
 
 interface FlowStep {
   label: string
   sub?: string
+  /** Optional icon shown above the label, for faster visual recall. */
+  icon?: LucideIcon
 }
 
 /** Horizontal pipeline of steps with an animated pulse travelling along the arrows. */
@@ -19,6 +21,7 @@ export function FlowDiagram({ steps, caption }: { steps: FlowStep[]; caption?: s
               </span>
             )}
             <div className="flow__node" style={{ ['--i' as string]: i }}>
+              {s.icon && <s.icon size={18} className="flow__icon" aria-hidden />}
               <strong>{s.label}</strong>
               {s.sub && <small>{s.sub}</small>}
             </div>

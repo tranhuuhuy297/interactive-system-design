@@ -1,6 +1,8 @@
 import {
-  Callout, CodeBlock, CompareTable, FlowDiagram, H2, InterviewQuestion, KeyTakeaways, References, Term, TLDR,
+  Callout, CodeBlock, CompareTable, FlowDiagram, H2, InterviewQuestion, KeyTakeaways, LayerStack, MentalModel, References, SideBySide,
+  StatRow, Term, TLDR,
 } from '../components/ui'
+import { Bot, Clock, Coins, Cpu, FileText, Hourglass, MessageSquare } from 'lucide-react'
 import type { Reference } from '../components/ui'
 import { AiInferRooflineDemo } from './demos/ai-infer-roofline-demo'
 
@@ -24,6 +26,7 @@ export default function AiInferenceFundamentalsChapter() {
         'Batching raises total throughput cheaply, until a knee where every user gets slower.',
         'Set targets on time-to-first-token and time-per-token, then maximize throughput within them.',
       ]} />
+      <MentalModel id="ai-inference" />
       <p>
         Every LLM request runs in two very different phases. Almost every serving decision follows from that split.
       </p>
@@ -46,11 +49,11 @@ export default function AiInferenceFundamentalsChapter() {
         notes the model keeps so it never re-reads the whole conversation.
       </p>
       <FlowDiagram steps={[
-        { label: 'Tokenize', sub: 'text → token ids' },
-        { label: 'Prefill', sub: 'all prompt tokens in parallel · compute-bound' },
-        { label: 'First token', sub: 'TTFT ends here' },
-        { label: 'Decode loop', sub: '1 token/step · memory-bound' },
-        { label: 'Stream out', sub: 'SSE / gRPC chunks' },
+        { label: 'Tokenize', sub: 'text → token ids', icon: FileText },
+        { label: 'Prefill', sub: 'all prompt tokens in parallel · compute-bound', icon: Cpu },
+        { label: 'First token', sub: 'TTFT ends here', icon: Clock },
+        { label: 'Decode loop', sub: '1 token/step · memory-bound', icon: Hourglass },
+        { label: 'Stream out', sub: 'SSE / gRPC chunks', icon: MessageSquare },
       ]} caption="Prefill turns the prompt into a KV cache; decode extends it one token per step" />
       <CompareTable
         columns={['Prefill', 'Decode']}
@@ -65,6 +68,13 @@ export default function AiInferenceFundamentalsChapter() {
 
       <H2 id="metrics">The metrics that matter</H2>
       <p>You can’t tune what you don’t measure. These five numbers describe how an LLM endpoint feels and what it costs.</p>
+      <FlowDiagram caption="One request on a timeline: TTFT covers everything before the first token, TPOT is the gap between later tokens"
+        steps={[
+          { label: 'Wait in queue', sub: 'part of TTFT', icon: Hourglass },
+          { label: 'Prefill', sub: 'part of TTFT', icon: Cpu },
+          { label: 'Token 1', sub: 'TTFT ends', icon: Clock },
+          { label: 'Token 2 … n', sub: 'one TPOT apart', icon: MessageSquare },
+        ]} />
       <ul>
         <li><strong>TTFT</strong> (time to first token): queueing + prefill + first decode step. It dominates how fast chat <em>feels</em>.</li>
         <li><strong>TPOT</strong> (time per output token), also measured as <strong>ITL</strong> (inter-token latency, the gap between streamed tokens). It sets reading speed. Humans read roughly 4–8 tokens/s. Past that point, faster decode stops improving how the product feels.</li>
@@ -85,6 +95,13 @@ export default function AiInferenceFundamentalsChapter() {
         sit idle, waiting on{' '}<Term def="High-bandwidth memory: the GPU’s main memory, where weights and the KV cache live.">HBM</Term>.
         That gives a simple lower bound:
       </p>
+      <StatRow caption="Numbers from the worked example below (8B model, BF16 weights, one H100, batch 1)"
+        stats={[
+          { value: '~2 FLOPs', label: 'per 2 bytes read', note: 'decode at batch 1' },
+          { value: '~300', label: 'FLOPs the H100 can do per byte read', note: 'so compute waits on memory' },
+          { value: '≈ 4.8 ms', label: 'per token', note: '16 GB ÷ 3.35 TB/s' },
+          { value: '≈ 200', label: 'tokens/s ceiling per user' },
+        ]} />
       <CodeBlock lang="ts" title="decode step: back-of-the-envelope" code={`
 // bytes streamed per decode step
 bytes = params × bytesPerWeight          // weights, read once per step
@@ -121,16 +138,14 @@ aggregateTokensPerSec ≈ batch / stepTime
         (8B,{' '}<Term def="A 16-bit number format common for model weights: 2 bytes per parameter.">BF16</Term>, one H100, 4K context),
         the bound moves like this:
       </p>
-      <CompareTable
-        columns={['Step time', 'Per-user tok/s', 'Aggregate tok/s']}
-        caption="Roofline lower bounds from the demo model; real systems land below these."
-        rows={[
-          { label: 'Batch 1', cells: ['≈ 4.9 ms', '≈ 200', '≈ 200'] },
-          { label: 'Batch 8', cells: ['≈ 6.1 ms', '≈ 165', '≈ 1,300'] },
-          { label: 'Batch 64', cells: ['≈ 15 ms', '≈ 67', '≈ 4,300'] },
-          { label: 'Batch 256', cells: ['≈ 46 ms (KV no longer fits)', '≈ 22', '≈ 5,600'] },
-        ]}
-      />
+      <LayerStack legend="Bar = aggregate tokens/s · right = step time and per-user speed"
+        caption="Roofline lower bounds from the demo model; real systems land below these. Throughput flattens while every user slows down."
+        layers={[
+          { label: 'Batch 1', sub: '≈ 200 aggregate tok/s', size: 200 / 5600, value: '≈ 4.9 ms · ≈ 200 tok/s each' },
+          { label: 'Batch 8', sub: '≈ 1,300 aggregate tok/s', size: 1300 / 5600, value: '≈ 6.1 ms · ≈ 165 tok/s each' },
+          { label: 'Batch 64', sub: '≈ 4,300 aggregate tok/s', size: 4300 / 5600, value: '≈ 15 ms · ≈ 67 tok/s each', highlight: true },
+          { label: 'Batch 256', sub: '≈ 5,600 aggregate tok/s · KV no longer fits', size: 1, value: '≈ 46 ms · ≈ 22 tok/s each' },
+        ]} />
       <p>
         Two lessons follow. First, there is a <strong>knee</strong>. Past it, extra batch adds little throughput but
         keeps hurting every user’s TPOT.
@@ -143,15 +158,12 @@ aggregateTokensPerSec ≈ batch / stepTime
 
       <H2 id="slos">Designing SLOs for LLM endpoints</H2>
       <p>Different traffic needs different targets. Chat cares about the first token; offline jobs care about cost.</p>
-      <CompareTable
-        columns={['Interactive chat', 'Agent / tool loop', 'Offline batch']}
-        rows={[
-          { label: 'Primary SLO', cells: ['p95 TTFT (e.g. < 1 s)', 'End-to-end per call', 'Cost per 1M tokens'] },
-          { label: 'Secondary', cells: ['p95 TPOT ≈ reading speed', 'TTFT (many sequential calls)', 'Job completion time'] },
-          { label: 'Batching', cells: ['Moderate, capped by TPOT', 'Moderate', 'As large as memory allows'] },
-          { label: 'Good lever', cells: ['Prefix caching, chunked prefill', 'Prefix caching of shared context', 'Big batches, cheaper GPUs, spot capacity'] },
-        ]}
-      />
+      <SideBySide caption="Same fleet, three SLO classes"
+        panels={[
+          { title: 'Interactive chat', icon: MessageSquare, points: ['Primary: p95 TTFT (e.g. < 1 s)', 'Secondary: p95 TPOT ≈ reading speed', 'Batching: moderate, capped by TPOT'], verdict: 'Lever: prefix caching, chunked prefill' },
+          { title: 'Agent / tool loop', icon: Bot, points: ['Primary: end-to-end per call', 'Secondary: TTFT (many sequential calls)', 'Batching: moderate'], verdict: 'Lever: prefix caching of shared context' },
+          { title: 'Offline batch', icon: Coins, points: ['Primary: cost per 1M tokens', 'Secondary: job completion time', 'Batching: as large as memory allows'], verdict: 'Lever: big batches, cheaper GPUs, spot capacity' },
+        ]} />
       <p>
         Separate SLO classes let one fleet serve both kinds of traffic. Interactive requests get priority and tight
         batch caps. Batch jobs soak up leftover capacity. This is the same idea as the priority tiers in the{' '}

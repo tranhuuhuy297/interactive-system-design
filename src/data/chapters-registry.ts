@@ -1,7 +1,7 @@
 import type { ComponentType } from 'react'
 import type { LucideIcon } from 'lucide-react'
 import {
-  Code, Cpu, FileSearch, FlaskConical, Library, MemoryStick, MessageSquareCode, Router, ShieldAlert, SlidersHorizontal, Workflow,
+  LayoutGrid, Code, Cpu, FileSearch, FlaskConical, Library, MemoryStick, MessageSquareCode, Router, ShieldAlert, SlidersHorizontal, Workflow,
   Info, Camera, Car, Clapperboard, Gamepad2, House, Music, ShoppingCart, Sparkles, Wallet,
   Activity, Archive, BarChart3, Bot, BedDouble, Bell, Binary, Boxes, Brain, Calculator, Compass, CreditCard, Database,
   FolderSync, Gauge, GitMerge, Globe, Link2, ListOrdered, Map, MapPin, MessageSquare, MessagesSquare,
@@ -272,6 +272,10 @@ export const CHAPTERS: Chapter[] = [
     load: () => import('../chapters/chapter-ai-case-llm-gateway') },
 
   // ── Interview
+  { id: 'cheat-sheet', title: 'Cheat Sheet: Every Mental Model', group: 'Interview', minutes: 15, icon: LayoutGrid,
+    blurb: 'One picture per chapter, with a self-test mode for last-minute review.',
+    keywords: ['cheat sheet', 'mental model', 'summary', 'review', 'revision', 'flashcards'],
+    load: () => import('../chapters/chapter-cheat-sheet') },
   { id: 'staff-signals', title: 'Staff-Level Signals', group: 'Interview', minutes: 15, icon: Brain,
     blurb: 'What interviewers write down when they level you up — or down.',
     keywords: ['staff', 'senior', 'leveling', 'signals', 'rubric', 'trade-offs'],

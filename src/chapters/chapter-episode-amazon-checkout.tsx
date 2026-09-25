@@ -1,7 +1,11 @@
 import {
-  References, TLDR, Term,
-  ArchitectureDiagram, Callout, CodeBlock, CompareTable, EpisodePlayer, EstimationTable, H2, InterviewQuestion, KeyTakeaways,
+  ArchitectureDiagram, Callout, CodeBlock, CompareTable, EpisodePlayer, EstimationTable, H2, InterviewQuestion,
+  KeyTakeaways, MentalModel, References, SideBySide, StatRow, Term, TLDR, VisualTimeline,
 } from '../components/ui'
+import {
+  Blocks, Boxes, CreditCard, Lock, Rocket, Server, ShoppingCart, Sparkles, Truck, Workflow, Zap,
+  type LucideIcon,
+} from 'lucide-react'
 import type { ArchEdge, ArchNode, Reference } from '../components/ui'
 import { EpisodeAmazonInventoryDemo } from './demos/episode-amazon-inventory-demo'
 import { AMAZON_SRC } from './demos/episode-amazon-sources'
@@ -29,9 +33,12 @@ const ORDER_EDGES: ArchEdge[] = [
 const REFS: Reference[] = Object.values(AMAZON_SRC)
 
 // Timeline rows derive from the stage data so the two never drift apart.
+const STAGE_ICONS: Record<string, LucideIcon> = {
+  v0: Server, v1: Zap, v2: Sparkles, v3: Blocks, v4: ShoppingCart, v5: Lock, v6: Workflow, v7: CreditCard, v8: Boxes, v9: Rocket, v10: Truck,
+}
 const TIMELINE = AMAZON_STAGES.map((s) => {
   const [version, name] = s.title.split(' · ')
-  return { label: version, cells: [s.era ?? '', name ?? s.title] }
+  return { when: s.era ?? '', title: name ?? s.title, note: typeof s.summary === 'string' ? s.summary : undefined, icon: STAGE_ICONS[version] }
 })
 
 export default function AmazonCheckoutEpisode() {
@@ -44,6 +51,7 @@ export default function AmazonCheckoutEpisode() {
         'Flash sales are a hot-key problem; admission control beats adding shards.',
         'Cells, shuffle sharding, and pre-scaling keep big days boring.',
       ]} />
+      <MentalModel id="ep-amazon" />
       <p>
         An online store looks like a simple database app until real traffic arrives. Browsing becomes a caching
         problem. The cart becomes an availability problem. Inventory becomes a race. The order becomes a transaction
@@ -63,12 +71,13 @@ export default function AmazonCheckoutEpisode() {
 
       <H2 id="timeline">Timeline at a glance</H2>
       <p>Years mark publicly documented milestones. “Design step” marks a step in our reconstruction that has no public date.</p>
-      <CompareTable columns={['When', 'What changed']} rows={TIMELINE} />
+      <VisualTimeline items={TIMELINE} />
 
       <H2 id="the-build">The build, stage by stage</H2>
       <EpisodePlayer stages={AMAZON_STAGES} height={400} />
 
       <H2 id="numbers">The numbers that shape everything</H2>
+      <StatRow caption="Illustrative figures from the assumptions below, not Amazon data" stats={[{ value: '≈ 2.8K / s', label: 'checkouts in the peak hour', note: 'illustrative' }, { value: '≈ 140K / s', label: 'catalog reads', note: 'illustrative' }, { value: '≈ 17K / s', label: 'writes on one hot item', note: 'illustrative' }]} />
       <EstimationTable
         assumptions={[
           'Peak hour: 10M checkouts (illustrative, not an Amazon figure)', '~50 page views per checkout (assumption)',
@@ -133,13 +142,17 @@ VALUES (:hold, :sku, :order, now() + interval '10 minutes');
 UPDATE inventory SET available = available + 1 WHERE sku = :sku;  -- per expired hold`} />
 
       <H2 id="decisions">Key decisions and their alternatives</H2>
+      <p>The three consistency choices at the heart of the store:</p>
+      <SideBySide panels={[
+        { title: 'Always-writable cart, merge on read', icon: ShoppingCart, tone: 'good', points: ['+ Losing an add-to-cart costs more than a returning item', '- Instead of: a strongly consistent SQL row'], verdict: 'Cart' },
+        { title: 'Conditional decrement + expiring holds', icon: Lock, tone: 'good', points: ['+ No oversell', '+ No stock locked by abandoned carts', '- Instead of: decrement at payment only'], verdict: 'Inventory' },
+        { title: 'Saga with compensations', icon: Workflow, tone: 'good', points: ['+ Steps span teams and payment providers', '- Instead of: distributed two-phase commit'], verdict: 'Order' },
+      ]} />
+      <p>Other decisions, in brief:</p>
       <CompareTable
         columns={['Chosen', 'Alternative', 'Why the choice fits']}
         rows={[
           { label: 'Catalog', cells: ['Cached, slightly stale', 'Read from the source DB', 'Reads dwarf writes; staleness is re-checked at checkout'] },
-          { label: 'Cart', cells: ['Always-writable store, merge on read', 'Strongly consistent SQL row', 'Losing an add-to-cart costs more than a returning item'] },
-          { label: 'Inventory', cells: ['Conditional decrement + expiring holds', 'Decrement at payment only', 'No oversell, and no stock locked by abandoned carts'] },
-          { label: 'Order', cells: ['Saga with compensations', 'Distributed two-phase commit', 'Steps span teams and payment providers; 2PC blocks on failure'] },
           { label: 'Blast radius', cells: ['Cells + shuffle sharding', 'One shared fleet', 'A bad deploy or noisy customer hits a small slice'] },
           { label: 'Peak traffic', cells: ['Pre-scale + shed + queue', 'Reactive autoscaling', 'Planned spikes arrive faster than autoscaling reacts'] },
         ]}

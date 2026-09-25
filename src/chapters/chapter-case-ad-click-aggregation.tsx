@@ -1,8 +1,10 @@
 import {
   ApiSpec, ArchitectureDiagram, Callout, CodeBlock, CompareTable, EstimationTable, FlowDiagram, H2,
-  InterviewQuestion, KeyTakeaways, Requirements, Tabs, References, TLDR, Term,
+  InterviewQuestion, KeyTakeaways, MentalModel, References, Requirements, SideBySide, StatRow, Tabs, Term,
+  TLDR,
 } from '../components/ui'
 import type { ArchEdge, ArchNode, Reference } from '../components/ui'
+import { Copy, DatabaseZap, RotateCcw } from 'lucide-react'
 import { AdclickWindowingDemo } from './demos/adclick-windowing-demo'
 
 const NODES: ArchNode[] = [
@@ -48,6 +50,7 @@ export default function AdClickAggregationChapter() {
         'The hard part: late clicks, duplicates and crash replays must never change a billed number.',
         'Staff insight: fast numbers for dashboards, exact batch recounts for invoices, and label which is which.',
       ]} />
+      <MentalModel id="ad-click" />
       <p>
         Counting clicks sounds trivial until the counts become <strong>invoices</strong>. This prompt is a streaming
         systems interview in disguise.
@@ -80,8 +83,12 @@ export default function AdClickAggregationChapter() {
           { label: 'Minute aggregates', math: '2M ads × 1,440 min (upper bound)', result: '≤ 2.9B rows/day' },
         ]}
       />
-      <p>In practice only a fraction of ads get clicks in any given minute, so real aggregate rows are far fewer.</p>
-      <p>Kafka with a few dozen partitions and a modest Flink cluster covers the ingest rate.</p>
+      <StatRow caption="Kafka with a few dozen partitions and a modest Flink cluster covers this ingest rate"
+        stats={[
+          { value: '≈ 58K/s', label: 'peak click ingest' },
+          { value: '≈ 100 GB', label: 'raw clicks per day' },
+          { value: '≤ 2.9B', label: 'minute rows per day', note: 'upper bound; only a fraction of ads get clicks each minute' },
+        ]} />
 
       <H2 id="api">3 · API</H2>
       <p>Two read endpoints cover the product: a time series per ad and a top-N list.</p>
@@ -125,12 +132,18 @@ export default function AdClickAggregationChapter() {
       />
 
       <H2 id="exactly-once">6 · Deep dive: exactly-once counts</H2>
-      <p>Billing cannot tolerate a click counted twice. Double counting comes from three places. Handle each explicitly:</p>
-      <ul>
-        <li><strong>Duplicate clicks</strong> (client retries, redirect replays): dedupe on <code>click_id</code> in keyed state with a TTL of a few minutes, longer than the watermark lag.</li>
-        <li><strong>Processor crash and replay</strong>: Flink{' '}<Term def="A periodic consistent snapshot of the job's state and input positions, used to recover after a crash.">checkpoints</Term>{' '}store Kafka offsets and window state together. After a restore, both rewind consistently.</li>
-        <li><strong>Sink duplicates</strong>: either use a transactional sink (two-phase commit tied to checkpoints) or, simpler, an <strong><Term def="A write that inserts or overwrites a row by key, so repeating it leaves the same result.">idempotent upsert</Term></strong> keyed by <code>(ad_id, window_start)</code> so re-emitting overwrites instead of adding.</li>
-      </ul>
+      <p>
+        Billing cannot tolerate a click counted twice. Double counting comes from three places, and each needs its own
+        fix. Crash recovery relies on Flink{' '}
+        <Term def="A periodic consistent snapshot of the job's state and input positions, used to recover after a crash.">checkpoints</Term>;
+        the sink relies on an{' '}
+        <Term def="A write that inserts or overwrites a row by key, so repeating it leaves the same result.">idempotent upsert</Term>.
+      </p>
+      <SideBySide caption="Exactly-once effect = dedupe + checkpointed state + idempotent sink" panels={[
+        { title: 'Duplicate clicks', icon: Copy, points: ['- Client retries, redirect replays', '+ Dedupe on click_id in keyed state', '+ TTL of a few minutes, longer than the watermark lag'], verdict: 'Fix: dedupe on click_id' },
+        { title: 'Crash and replay', icon: RotateCcw, points: ['- Processor restarts mid-window', '+ Checkpoints store Kafka offsets and window state together', '+ After a restore, both rewind consistently'], verdict: 'Fix: checkpointed state' },
+        { title: 'Sink duplicates', icon: DatabaseZap, points: ['- Results emitted again after replay', '+ Transactional sink (two-phase commit on checkpoint)', '+ Or upsert keyed by (ad_id, window_start)'], verdict: 'Fix: re-emit overwrites, never adds' },
+      ]} />
       <CodeBlock lang="ts" title="aggregate row (idempotent by construction)" code={`
 // PRIMARY KEY (ad_id, window_start, dims_hash)
 type AdMinute = {

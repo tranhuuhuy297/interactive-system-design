@@ -1,7 +1,8 @@
 import {
-  ApiSpec, ArchitectureDiagram, Callout, CodeBlock, CompareTable, EstimationTable, H2, InterviewQuestion,
-  KeyTakeaways, References, Requirements, TLDR, Term,
+  ApiSpec, ArchitectureDiagram, Callout, CodeBlock, CompareTable, EstimationTable, FlowDiagram, H2,
+  InterviewQuestion, KeyTakeaways, MentalModel, References, Requirements, StatRow, Term, TLDR,
 } from '../components/ui'
+import { Cog, FilePlus, KeyRound, PlayCircle, ShieldCheck, Upload, UploadCloud } from 'lucide-react'
 import type { ArchEdge, ArchNode, Reference } from '../components/ui'
 import { VideoAbrSim } from './demos/video-abr-sim'
 import { VideoTranscodeDag } from './demos/video-transcode-dag'
@@ -52,6 +53,7 @@ export default function VideoStreamingChapter() {
         'Transcoding is a graph of small parallel tasks producing several resolutions and codecs.',
         'Players switch quality per segment (adaptive bitrate), served from CDN edges.',
       ]} />
+      <MentalModel id="video-streaming" />
 
       <p>
         Video platforms are really <strong>two systems</strong>. The upload side is a batch pipeline that turns one
@@ -84,6 +86,12 @@ export default function VideoStreamingChapter() {
           { label: 'Upload rate', math: '500K ÷ 86,400', result: '≈ 6 uploads/s' },
         ]}
       />
+      <StatRow caption="Illustrative numbers: egress is the one that matters" stats={[
+        { value: '250M', label: 'views per day' },
+        { value: '56 PB', label: 'egress per day', note: '≈ 5 Tbps average' },
+        { value: '150 TB', label: 'raw uploads per day' },
+        { value: '6/s', label: 'uploads' },
+      ]} />
       <Callout kind="staff">
         Egress dwarfs everything else. At an illustrative $0.01/GB that is on the order of <strong>$500K per day</strong>,
         which is why large platforms negotiate CDN contracts, peer with ISPs, and place their own cache appliances
@@ -116,6 +124,13 @@ export default function VideoStreamingChapter() {
 
       <H2 id="upload">5 · Deep dive: uploads that survive bad networks</H2>
       <p>Uploads are large and networks are flaky. The goal is that a dropped connection costs one small part, not the whole file.</p>
+      <FlowDiagram caption="A dropped connection costs one part, not the whole file" steps={[
+        { label: 'Create video', sub: 'returns uploadId', icon: FilePlus },
+        { label: 'Pre-signed URLs', sub: 'bytes skip app servers', icon: KeyRound },
+        { label: 'Parallel parts', sub: '5–100 MB, retry failed only', icon: UploadCloud },
+        { label: 'Complete', sub: 'verify per-part checksums', icon: ShieldCheck },
+        { label: 'Processing', sub: 'state tracked in metadata', icon: Cog },
+      ]} />
       <ul>
         <li><strong>Direct-to-storage</strong> with pre-signed URLs. App servers never stream bytes, so they stay small and stateless.</li>
         <li><strong>Multipart and resumable</strong>: split into 5–100 MB parts, upload them in parallel, retry only failed parts, and resume after an app restart using the upload ID.</li>
@@ -167,6 +182,11 @@ export default function VideoStreamingChapter() {
 
       <H2 id="data-model">8 · Data model</H2>
       <p>The metadata record tracks each video's processing state and available renditions.</p>
+      <FlowDiagram caption="Happy path of the state field; FAILED or BLOCKED can end any step" steps={[
+        { label: 'UPLOADING', sub: 'parts arriving', icon: Upload },
+        { label: 'PROCESSING', sub: 'transcode + package', icon: Cog },
+        { label: 'READY', sub: 'manifest published', icon: PlayCircle },
+      ]} />
       <CodeBlock lang="ts" title="video metadata" code={`
 type Video = {
   videoId: string                    // partition key

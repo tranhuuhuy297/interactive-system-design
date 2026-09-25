@@ -1,6 +1,7 @@
 import {
-  Callout, CodeBlock, CompareTable, EstimationTable, H2, InterviewQuestion, KeyTakeaways, References, TLDR, Term,
+  Callout, CodeBlock, EstimationTable, FlowDiagram, H2, InterviewQuestion, KeyTakeaways, LayerStack, MentalModel, References, StatRow, TLDR, Term,
 } from '../components/ui'
+import { CalendarDays, Gauge, Server, TrendingUp, Users } from 'lucide-react'
 import type { Reference } from '../components/ui'
 import { EstimationCapacityCalculator } from './demos/estimation-capacity-calculator'
 import { EstimationLatencyVisualizer } from './demos/estimation-latency-visualizer'
@@ -28,17 +29,20 @@ export default function EstimationChapter() {
         'Availability multiplies along a request path, so many dependencies drag it down fast.',
         'Show your arithmetic out loud, and use the result to rule options in or out.',
       ]} />
+      <MentalModel id="estimation" />
       <p>A few rounded numbers said out loud do more for your credibility than any diagram.</p>
 
       <H2 id="powers-of-two">Powers of two and the units that matter</H2>
       <p>Storage and memory sizes come in powers of two. For estimation, treat each step of 2¹⁰ as “×1,000”.</p>
-      <CompareTable columns={['Exact', '≈ Decimal', 'Unit']} rows={[
-        { label: '2¹⁰', cells: ['1,024', '1 thousand', 'KB'] },
-        { label: '2²⁰', cells: ['1,048,576', '1 million', 'MB'] },
-        { label: '2³⁰', cells: ['~1.07 billion', '1 billion', 'GB'] },
-        { label: '2⁴⁰', cells: ['~1.1 trillion', '1 trillion', 'TB'] },
-        { label: '2⁵⁰', cells: ['~1.13 quadrillion', '1 quadrillion', 'PB'] },
-      ]} caption="In interviews, round 2¹⁰ to 1,000. The 2–13% error never changes a design decision." />
+      <LayerStack legend="Each step up is ×1,024 — call it ×1,000"
+        caption="In interviews, round 2¹⁰ to 1,000. The 2–13% error never changes a design decision."
+        layers={[
+          { label: 'KB', sub: '2¹⁰ = 1,024 bytes', size: 0.2, value: '≈ 1 thousand' },
+          { label: 'MB', sub: '2²⁰ = 1,048,576 bytes', size: 0.4, value: '≈ 1 million' },
+          { label: 'GB', sub: '2³⁰ ≈ 1.07 billion bytes', size: 0.6, value: '≈ 1 billion', highlight: true },
+          { label: 'TB', sub: '2⁴⁰ ≈ 1.1 trillion bytes', size: 0.8, value: '≈ 1 trillion' },
+          { label: 'PB', sub: '2⁵⁰ ≈ 1.13 quadrillion bytes', size: 1, value: '≈ 1 quadrillion' },
+        ]} />
       <p>Handy constants to memorize:</p>
       <ul>
         <li><strong>Seconds per day ≈ 86,400 ≈ 10⁵.</strong> So 1M requests/day ≈ 12 <Term def="Queries (requests) per second: the standard unit of load on a service.">QPS</Term>, and 1B/day ≈ 12K QPS.</li>
@@ -75,7 +79,14 @@ export default function EstimationChapter() {
       </Callout>
 
       <H2 id="formulas">The core formulas</H2>
-      <p>Six formulas cover almost every estimate you will be asked for. Each one is simple multiplication.</p>
+      <p>Six formulas cover almost every estimate you will be asked for. Each one is simple multiplication. The load chain is the one you will use most:</p>
+      <FlowDiagram caption="From users to machines: every load estimate walks this chain" steps={[
+        { label: 'DAU', sub: '× actions per user', icon: Users },
+        { label: 'Requests / day', sub: '÷ 86,400 (≈ 10⁵)', icon: CalendarDays },
+        { label: 'Avg QPS', sub: '× peak factor 2–5×', icon: Gauge },
+        { label: 'Peak QPS', sub: '÷ QPS per server', icon: TrendingUp },
+        { label: 'Servers', sub: '+ headroom for N+1', icon: Server },
+      ]} />
       <CodeBlock lang="text" title="estimation cheat sheet" code={`
 QPS (avg)      = daily requests / 86,400
 Peak QPS       = avg QPS × peak factor (often 2–5×)
@@ -104,6 +115,12 @@ Servers        = peak QPS / sustainable QPS per server (+ headroom for N+1 / AZ 
           { label: 'Egress (avg)', math: '290K/s × ~200 KB (feed-sized image)', result: '≈ 58 GB/s' },
         ]}
       />
+      <StatRow caption="The four numbers that decide this design" stats={[
+        { value: '≈ 580/s', label: 'upload QPS' },
+        { value: '≈ 290K/s', label: 'view QPS', note: '500× the uploads' },
+        { value: '≈ 137 PB', label: 'storage per year', note: 'with 3 replicas' },
+        { value: '≈ 58 GB/s', label: 'average egress' },
+      ]} />
       <p>
         Two conclusions fall out immediately. First, views dwarf uploads, so this is a <strong>CDN problem</strong>.
         The ~58 GB/s of <Term def="Data leaving your servers toward users. Cloud providers charge for it, so it is often the biggest bill.">egress</Term> must

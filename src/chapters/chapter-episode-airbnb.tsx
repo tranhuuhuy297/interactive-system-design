@@ -1,7 +1,11 @@
 import {
-  References, TLDR, Term,
-  ArchitectureDiagram, Callout, CodeBlock, CompareTable, EpisodePlayer, EstimationTable, H2, InterviewQuestion, KeyTakeaways,
+  ArchitectureDiagram, Callout, CodeBlock, CompareTable, EpisodePlayer, EstimationTable, H2, InterviewQuestion,
+  KeyTakeaways, MentalModel, References, SideBySide, StatRow, Term, TLDR, VisualTimeline,
 } from '../components/ui'
+import {
+  Blocks, Brain, Calendar, CircleDollarSign, FlaskConical, Lock, Search, Server, ShieldAlert, Wallet, Workflow,
+  type LucideIcon,
+} from 'lucide-react'
 import type { ArchEdge, ArchNode, Reference } from '../components/ui'
 import { EpisodeAirbnbAvailabilityDemo } from './demos/episode-airbnb-availability-demo'
 import { AIRBNB_SRC } from './demos/episode-airbnb-sources'
@@ -27,6 +31,14 @@ const FLOW_EDGES: ArchEdge[] = [
 // Every source used anywhere in the episode, including per-stage deep dives.
 const REFS: Reference[] = Object.values(AIRBNB_SRC)
 
+const STAGE_ICONS: Record<string, LucideIcon> = {
+  v0: Server, v1: ShieldAlert, v2: FlaskConical, v3: Workflow, v4: Search, v5: Calendar, v6: Lock, v7: Blocks, v8: CircleDollarSign, v9: Brain, v10: Wallet,
+}
+const TIMELINE = AIRBNB_STAGES.map((s) => {
+  const [version, name] = s.title.split(' · ')
+  return { when: s.era ?? '', title: name ?? s.title, note: typeof s.summary === 'string' ? s.summary : undefined, icon: STAGE_ICONS[version] }
+})
+
 export default function AirbnbEpisode() {
   return (
     <>
@@ -37,6 +49,7 @@ export default function AirbnbEpisode() {
         'Correctness sits in the database: constraints stop double bookings, and idempotency keys stop double charges.',
         'Along the way Airbnb built tools the industry now uses, such as Airflow, and moved from a Rails monolith to services.',
       ]} />
+      <MentalModel id="ep-airbnb" />
       <p>
         Airbnb is a two-sided marketplace where the product is <strong>time</strong>. Search must filter millions of
         listings by calendar. Booking must make double-booking impossible. And money must reach guests and hosts at
@@ -53,16 +66,13 @@ export default function AirbnbEpisode() {
       <p className="muted"><em>This episode is an independent reconstruction from public sources. It is not affiliated with or endorsed by Airbnb; all trademarks belong to their owners.</em></p>
 
       <H2 id="timeline">Timeline at a glance</H2>
-      <ol>
-        {AIRBNB_STAGES.map((s) => (
-          <li key={s.title}><strong>{s.era}</strong> · {s.title.replace(/^v\d+ · /, '')}: {s.summary}</li>
-        ))}
-      </ol>
+      <VisualTimeline items={TIMELINE} />
 
       <H2 id="the-build">The build, stage by stage</H2>
       <EpisodePlayer stages={AIRBNB_STAGES} height={420} />
 
       <H2 id="numbers">The numbers that shape everything</H2>
+      <StatRow caption="Illustrative estimates from the assumptions below" stats={[{ value: '≈ 320 MB', label: 'every calendar as bits', note: 'estimate' }, { value: '~50 : 1', label: 'searches per booking', note: 'illustrative' }, { value: '≈ 10–25 / s', label: 'bookings on average', note: 'illustrative' }]} />
       <EstimationTable
         assumptions={['Illustrative: 7M active listings', '~50 searches per booking (browsing is cheap, booking is rare)', '365 nights of calendar per listing']}
         rows={[
@@ -114,14 +124,18 @@ const ddl = \`
 // which the booking service turns into "those nights were just taken".`} />
 
       <H2 id="decisions">Key decisions and their alternatives</H2>
+      <p>The three decisions that make “sell time” safe:</p>
+      <SideBySide panels={[
+        { title: 'Nights bitmap inside the index', icon: Calendar, tone: 'good', points: ['+ Constant-cost check', '+ The calendar fits in memory', '- Instead of: a join against bookings at query time'], verdict: 'Availability in search' },
+        { title: 'DB constraint + short holds', icon: Lock, tone: 'good', points: ['+ Races are impossible, not just unlikely', '- Instead of: check-then-insert in app code'], verdict: 'Double-booking guard' },
+        { title: 'Idempotency keys on every call', icon: Wallet, tone: 'good', points: ['+ A retry returns the first result, never a second charge', '- Instead of: blind retries after timeouts'], verdict: 'Payments' },
+      ]} />
+      <p>Other decisions, in brief:</p>
       <CompareTable
         columns={['Chosen', 'Alternative', 'Why the choice fits']}
         rows={[
           { label: 'Search serving', cells: ['Sharded index, built offline', 'SQL on the primary database', 'Search load stays off bookings; instant rollback'] },
-          { label: 'Availability in search', cells: ['Nights bitmap in the index', 'Join against bookings at query time', 'Constant-cost check; the calendar fits in memory'] },
           { label: 'Index freshness', cells: ['CDC from the bookings DB', 'App code calls reindex', 'No code path can forget; replayable'] },
-          { label: 'Double-booking guard', cells: ['DB constraint + short holds', 'Check-then-insert in app code', 'Races are impossible, not just unlikely'] },
-          { label: 'Payments', cells: ['Idempotency keys on every call', 'Blind retries after timeouts', 'A retry returns the first result, never a second charge'] },
           { label: 'Architecture', cells: ['Incremental move to services', 'Big-bang rewrite', 'Keeps shipping; each path moves when proven'] },
         ]}
       />

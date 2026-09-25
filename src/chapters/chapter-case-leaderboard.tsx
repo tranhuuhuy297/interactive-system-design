@@ -1,8 +1,9 @@
 import {
-  ApiSpec, ArchitectureDiagram, Callout, CodeBlock, CompareTable, EstimationTable, H2, InterviewQuestion,
-  KeyTakeaways, Requirements, References, TLDR, Term,
+  ApiSpec, ArchitectureDiagram, Callout, CodeBlock, CompareTable, EstimationTable, FlowDiagram, H2,
+  InterviewQuestion, KeyTakeaways, MentalModel, References, Requirements, StatRow, Term, TLDR,
 } from '../components/ui'
 import type { ArchEdge, ArchNode, Reference } from '../components/ui'
+import { CalendarPlus, Database, ListOrdered, Sigma } from 'lucide-react'
 import { LboardShardingDemo } from './demos/lboard-sharding-demo'
 import { LboardSortedSetDemo } from './demos/lboard-sorted-set-demo'
 
@@ -46,6 +47,7 @@ export default function LeaderboardChapter() {
         'The hard part: rank queries once the set no longer fits on one node.',
         'Staff insight: exact ranks for the top few thousand, percentiles for everyone else.',
       ]} />
+      <MentalModel id="leaderboard" />
       <p>
         A leaderboard is the rare prompt where one data structure <strong>is</strong> most of the answer. That
         structure is the{' '}
@@ -76,7 +78,13 @@ export default function LeaderboardChapter() {
           { label: 'Memory', math: '25M × ~100 B (member, score, skiplist + hash overhead)', result: '≈ 2.5 GB' },
         ]}
       />
-      <p>A single Redis primary handles tens of thousands of simple operations per second. It also holds 2.5 GB of memory comfortably.</p>
+      <StatRow caption="A single Redis primary handles tens of thousands of simple operations per second and holds 2.5 GB comfortably"
+        stats={[
+          { value: '≈ 3K/s', label: 'peak score writes' },
+          { value: '25M', label: 'members in the set' },
+          { value: '≈ 2.5 GB', label: 'memory' },
+          { value: '1 node', label: 'is enough', note: 'plus replicas' },
+        ]} />
       <p><strong>Don't shard until the numbers force you to.</strong> Say that, then show you know how to shard anyway.</p>
 
       <H2 id="api">3 · API</H2>
@@ -151,6 +159,13 @@ EXPIREAT lb:2026-09 <end of Oct>          # old boards age out`} />
 // match_results(match_id, user_id, points, created_at, PRIMARY KEY (match_id, user_id))
 // Redis rebuild: for each month, SUM(points) GROUP BY user_id → ZADD in batches
 // Monthly board key: lb:{yyyy-mm} — reset is just "start writing a new key"`} />
+
+      <FlowDiagram caption="Rebuild path: Redis can always be recomputed from the durable history" steps={[
+        { label: 'match_results', sub: 'durable history', icon: Database },
+        { label: 'SUM(points)', sub: 'GROUP BY user, per month', icon: Sigma },
+        { label: 'ZADD in batches', sub: 'into lb:{yyyy-mm}', icon: ListOrdered },
+        { label: 'New month', sub: 'start a new key', icon: CalendarPlus },
+      ]} />
 
       <H2 id="staff">8 · Staff-level extensions</H2>
       <Callout kind="staff">

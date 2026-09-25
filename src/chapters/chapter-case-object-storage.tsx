@@ -1,8 +1,10 @@
 import {
-  ApiSpec, ArchitectureDiagram, Callout, CodeBlock, CompareTable, EstimationTable, H2, InterviewQuestion,
-  KeyTakeaways, Requirements, References, TLDR, Term,
+  ApiSpec, ArchitectureDiagram, Callout, CodeBlock, CompareTable, EstimationTable, FlowDiagram, H2,
+  InterviewQuestion, KeyTakeaways, LayerStack, MentalModel, References, Requirements, SideBySide, StatRow,
+  Term, TLDR,
 } from '../components/ui'
 import type { ArchEdge, ArchNode, Reference } from '../components/ui'
+import { ArrowDownAZ, FileCheck, Flame, HardDrive, Hash, ScanSearch, ShieldCheck, Snowflake, Upload } from 'lucide-react'
 import { ObjstoreErasureCodingDemo } from './demos/objstore-erasure-coding-demo'
 import { ObjstoreMultipartUploadDemo } from './demos/objstore-multipart-upload-demo'
 
@@ -50,6 +52,7 @@ export default function ObjectStorageChapter() {
         'The hard part: durability at low cost. Erasure coding halves storage versus 3× replication but makes repair heavy.',
         'Staff insight: the metadata write is the commit point, which gives read-after-write consistency without distributed transactions.',
       ]} />
+      <MentalModel id="object-storage" />
       <p>
         Object storage looks like a giant key-value store for blobs. At the API level it is:{' '}
         <code>PUT bucket/key</code>, <code>GET bucket/key</code>. The interesting engineering is underneath.
@@ -89,7 +92,13 @@ export default function ObjectStorageChapter() {
           { label: 'Daily disk failures', math: '7,500 disks × 2% AFR / 365', result: '≈ 0.4/day' },
         ]}
       />
-      <p>Two conclusions follow from the table.</p>
+      <StatRow caption="Two conclusions follow from these numbers"
+        stats={[
+          { value: '≈ 100B', label: 'objects' },
+          { value: '≈ 100 TB', label: 'of metadata' },
+          { value: '300 → 150 PB', label: 'raw: 3× replication vs EC 8+4' },
+          { value: '≈ 0.4/day', label: 'disk failures, every day' },
+        ]} />
       <p>
         First, metadata is a <strong>100 TB sharded database</strong> problem in its own right, not a side table.
       </p>
@@ -171,6 +180,12 @@ export default function ObjectStorageChapter() {
         <Term def="A background job that rewrites mostly-dead files into new ones and frees the space.">compactor</Term>{' '}
         later rewrites files whose live ratio has fallen below a threshold.
       </p>
+      <FlowDiagram caption="Checksums end to end: silent bit rot is detected and repaired rather than served" steps={[
+        { label: 'Client hash', sub: 'Content-MD5 / checksum header', icon: Upload },
+        { label: 'Verified at API', sub: 'before any write', icon: ShieldCheck },
+        { label: 'Stored per fragment', sub: 'crc32c in the header', icon: FileCheck },
+        { label: 'Re-verified', sub: 'on every read and by the scrubber', icon: ScanSearch },
+      ]} />
       <CodeBlock lang="ts" title="fragment record in an append-only data file" code={`
 type FragmentHeader = {
   objectId: string      // immutable ID, never the user-visible key
@@ -181,7 +196,6 @@ type FragmentHeader = {
 // data file: [header][bytes][header][bytes]...  sealed when it reaches ~4 GB
 // index:     objectId#fragmentIndex -> { fileId, offset }`} />
       <ul>
-        <li><strong>Checksums end to end</strong>: client-supplied hash → verified at the API → stored per fragment → re-verified on read. Silent bit rot is detected and repaired rather than served.</li>
         <li><strong><Term def="Periodically reading all stored data and verifying checksums, to find silent corruption early.">Scrubbing</Term></strong> re-reads cold data on a schedule, because a latent sector error is only found when someone reads the sector.</li>
         <li><strong><Term def="Garbage collection: deleting fragments that no metadata row points to any more.">GC</Term> is dangerous</strong>: only delete fragments that no metadata version references, after a grace period. A bug here is a data-loss incident.</li>
       </ul>
@@ -211,17 +225,14 @@ type ObjectVersion = {
   placement: { scheme: 'rs-8-4' | 'rep-3'; nodes: string[] }
 }`} />
       <p>
-        Hash-partitioning by full key spreads load but breaks prefix LIST, which must then{' '}
+        The partitioning choice decides which query gets expensive. Hash partitioning breaks prefix LIST, which must
+        then{' '}
         <Term def="Send the query to every shard, then merge the partial results.">scatter-gather</Term>.
       </p>
-      <p>
-        Range partitioning by <code>(bucket, key)</code> keeps LIST cheap. But it creates hot shards for sequential
-        key names (timestamps, auto-increment IDs).
-      </p>
-      <p>
-        Common answers are range partitioning with <strong>automatic splitting</strong> of hot ranges, plus guidance
-        or hashing of key prefixes for write-heavy buckets.
-      </p>
+      <SideBySide caption="Metadata partitioning: GET likes hashing, LIST likes ranges" panels={[
+        { title: 'Hash by full key', icon: Hash, points: ['+ Spreads load evenly', '- Prefix LIST becomes scatter-gather'] },
+        { title: 'Range by (bucket, key)', icon: ArrowDownAZ, tone: 'good', points: ['+ LIST prefix = one range scan', '- Hot shards for sequential names (timestamps, auto-increment IDs)', '+ Fix: split hot ranges automatically'], verdict: 'Common answer, plus hashed prefixes for write-heavy buckets' },
+      ]} />
       <p>
         Strong read-after-write comes from making the metadata store{' '}
         <Term def="Every read sees the latest completed write, as if there were a single copy.">linearizable</Term>{' '}
@@ -229,6 +240,13 @@ type ObjectVersion = {
       </p>
 
       <H2 id="staff">9 · Going beyond: staff-level extensions</H2>
+      <LayerStack legend="Storage tiers: lower tiers are cheaper per GB and slower to read"
+        caption="A lifecycle engine moves objects down the tiers; moving means re-encoding, a large background I/O cost"
+        layers={[
+          { label: 'Hot', sub: 'replicated flash', icon: Flame, size: 0.4, value: 'fastest, priciest' },
+          { label: 'Warm', sub: 'erasure coded on HDD', icon: HardDrive, size: 0.7, highlight: true },
+          { label: 'Cold', sub: 'denser EC or archival media', icon: Snowflake, size: 1, value: 'cheapest per GB' },
+        ]} />
       <Callout kind="staff">
         <ul>
           <li><strong>Tiering</strong>: hot objects in replicated flash, warm in EC on HDD, cold in denser EC or archival media. A lifecycle engine moves them, and moving means re-encoding, a large background I/O cost.</li>

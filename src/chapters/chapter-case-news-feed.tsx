@@ -1,7 +1,8 @@
 import {
-  ApiSpec, ArchitectureDiagram, Callout, CodeBlock, CompareTable, EstimationTable, FlowDiagram, H2, InterviewQuestion,
-  KeyTakeaways, References, Requirements, TLDR, Term,
+  ApiSpec, ArchitectureDiagram, Callout, CodeBlock, CompareTable, EstimationTable, FlowDiagram, H2,
+  InterviewQuestion, KeyTakeaways, LayerStack, MentalModel, References, Requirements, StatRow, Term, TLDR,
 } from '../components/ui'
+import { FileText, Users, Zap } from 'lucide-react'
 import type { ArchEdge, ArchNode, Reference } from '../components/ui'
 import { FeedFanoutSimulatorDemo } from './demos/feed-fanout-simulator-demo'
 
@@ -54,6 +55,7 @@ export default function NewsFeedChapter() {
         'The standard answer is a hybrid: push for normal authors, pull for celebrities.',
         'Store only post IDs in feeds, and page with cursors, not offsets.',
       ]} />
+      <MentalModel id="news-feed" />
 
       <p>
         A news feed looks like a simple list query until you do the arithmetic. There are a few hundred million
@@ -89,6 +91,12 @@ export default function NewsFeedChapter() {
           { label: 'Feed cache size', math: '300M × 500 × 16 B', result: '≈ 2.4 TB' },
         ]}
       />
+      <StatRow stats={[
+        { value: '1.7K/s', label: 'post writes' },
+        { value: '35K/s', label: 'feed reads', note: '≈ 100K/s at peak' },
+        { value: '350K/s', label: 'fan-out inserts', note: '≈ 200× the post rate' },
+        { value: '2.4 TB', label: 'feed cache (IDs only)' },
+      ]} />
       <p>
         The key number is fan-out inserts: about <strong>200× the post rate</strong>. That{' '}
         <Term def="When one logical write turns into many physical writes. Here, one post becomes one insert per follower.">write amplification</Term>{' '}
@@ -181,6 +189,13 @@ async function loadFeed(userId: string, cursor?: Cursor, limit = 20) {
         <Term def="A Redis data type that keeps members ordered by a numeric score, with fast range queries.">sorted set</Term>{' '}
         per user for the feed.
       </p>
+      <LayerStack legend="Hot at the top: a feed read touches the cache first, then hydrates from below"
+        caption="The feed cache stores only post IDs, which is why it fits in memory"
+        layers={[
+          { label: 'Feed cache', sub: 'Redis ZSET per user, newest 500 IDs', icon: Zap, size: 0.55, value: '≈ 2.4 TB', highlight: true },
+          { label: 'Social graph', sub: 'followers / following, partition = userId', icon: Users, size: 0.78, value: 'both directions' },
+          { label: 'Post store', sub: 'sharded by postId, full post bodies', icon: FileText, size: 1, value: 'source of truth' },
+        ]} />
       <CodeBlock lang="ts" title="storage layout" code={`
 // Post store (sharded by postId; Snowflake IDs sort by time)
 type Post = { postId: bigint; authorId: string; text: string; mediaIds: string[]; createdAt: number; deleted: boolean }

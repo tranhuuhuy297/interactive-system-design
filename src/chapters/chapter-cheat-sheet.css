@@ -1,0 +1,11 @@
+@layer components {
+  .cs__bar { display: flex; flex-wrap: wrap; gap: var(--space-3); align-items: center; justify-content: space-between; }
+  .cs__group h3 { display: flex; align-items: center; gap: 8px; margin-top: var(--space-10) !important; }
+  .cs__group h3::before { content: ""; width: 8px; height: 8px; border-radius: 50%; background: var(--hue); }
+  .cs__grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(320px, 1fr)); gap: var(--space-4); margin-top: var(--space-4); }
+  .cs__card { display: flex; flex-direction: column; gap: var(--space-2); }
+  .cs__title { font-size: var(--text-sm); font-weight: 600; color: var(--text) !important; text-decoration: none !important; }
+  .cs__title:hover { color: var(--accent) !important; }
+  .cs__card.is-hidden .mm__idea, .cs__card.is-hidden .mm__hook, .cs__card.is-hidden .cs__title { filter: blur(6px); user-select: none; }
+  .cs__reveal { align-self: flex-start; }
+}

@@ -1,6 +1,8 @@
 import {
-  ArchitectureDiagram, Callout, CodeBlock, CompareTable, EstimationTable, H2, InterviewQuestion, KeyTakeaways, References, Term, TLDR,
+  ArchitectureDiagram, Callout, Chips, CodeBlock, CompareTable, EstimationTable, FlowDiagram, H2, InterviewQuestion,
+  KeyTakeaways, MentalModel, References, SideBySide, Term, TLDR,
 } from '../components/ui'
+import { Calculator, CircleDollarSign, Gauge, Laptop, Layers, PercentCircle, Server, ServerCog, TrendingUp } from 'lucide-react'
 import type { ArchEdge, ArchNode, Reference } from '../components/ui'
 import { AiServeCascadeDemo } from './demos/ai-serve-cascade-demo'
 
@@ -42,6 +44,7 @@ export default function AiServingStacksRoutingChapter() {
         'Cost per 1M tokens = GPU price ÷ (tokens/s at SLO × utilization).',
         'Keep an OpenAI-compatible internal API so engines stay swappable.',
       ]} />
+      <MentalModel id="ai-serving" />
       <p>
         Nobody writes an LLM server from scratch anymore. The real decisions are which engine to run, how many models
         and adapters to host, and which model each request should go to.
@@ -56,6 +59,12 @@ export default function AiServingStacksRoutingChapter() {
         A serving engine runs the model loop: batching, KV memory, kernels, and an HTTP API. Most teams choose one of
         these.
       </p>
+      <SideBySide caption="Three kinds of tool; the table below compares them in detail"
+        panels={[
+          { title: 'LLM engines', icon: ServerCog, picture: <Chips items={['vLLM', 'SGLang', 'TensorRT-LLM']} />, points: ['Batching, KV memory, kernels', 'Where most serving decisions live'] },
+          { title: 'Server layers', icon: Server, picture: <Chips items={['Triton', 'TGI']} />, points: ['Wrap an engine with an API, metrics, tracing', 'TGI is now in maintenance mode'] },
+          { title: 'Local runners', icon: Laptop, picture: <Chips items={['llama.cpp']} />, points: ['CPU, Apple silicon, quantized GGUF', '- Not for high-concurrency data centers'] },
+        ]} />
       <CompareTable
         columns={['Strengths', 'Watch out for']}
         caption="Fast-moving space: this reflects the projects’ own docs as of 2026. Check current docs before choosing."
@@ -84,8 +93,16 @@ export default function AiServingStacksRoutingChapter() {
         adapter per request, and it batches requests for <em>different</em> adapters in the same forward pass. S-LoRA
         and Punica showed how, with custom kernels and adapter paging. Mainstream engines now support it.
       </p>
+      <SideBySide caption="Hundreds of fine-tunes, one resident base model"
+        panels={[
+          { title: 'One deployment per fine-tune', icon: Server, tone: 'bad',
+            picture: <Chips items={['Base + A', 'Base + B', 'Base + C', '…']} />,
+            points: ['- Full weights copied per customer', '- Most deployments sit idle'] },
+          { title: 'Multi-LoRA pool', icon: Layers, tone: 'good',
+            picture: <Chips items={['Requests A, B, C', '→', 'One batch', '→', 'Shared base', '+', 'adapter per request']} />,
+            points: ['+ Base weights stay resident', '+ Different adapters batched together', '+ Cold adapters paged from CPU memory'] },
+        ]} />
       <ul>
-        <li><strong>Economics:</strong> hundreds of fine-tunes share one GPU pool instead of hundreds of idle deployments.</li>
         <li><strong>Limits:</strong> adapters must share the base model, and very high adapter churn adds loading latency. Keep hot adapters resident and page cold ones from CPU memory.</li>
       </ul>
 
@@ -124,6 +141,13 @@ export default function AiServingStacksRoutingChapter() {
           { label: 'At 40% average utilization', math: '$0.67 ÷ 0.4', result: '≈ $1.67' },
         ]}
       />
+      <FlowDiagram caption="The whole formula as a pipeline: utilization is usually the biggest hidden multiplier"
+        steps={[
+          { label: 'GPU price', sub: '$ per hour × GPUs', icon: CircleDollarSign },
+          { label: '÷ tokens/s at SLO', sub: 'goodput, not peak', icon: Gauge },
+          { label: '÷ utilization', sub: 'idle hours still cost', icon: PercentCircle },
+          { label: '= $ per 1M tokens', sub: 'the number finance wants', icon: Calculator },
+        ]} />
       <CodeBlock lang="ts" title="the formula" code={`
 costPer1MTokens = (gpuHourlyPrice × gpusPerReplica)
                 / (tokensPerSecondAtSLO × 3600 × averageUtilization)
@@ -141,6 +165,13 @@ costPer1MTokens = (gpuHourlyPrice × gpusPerReplica)
       <p>
         Plan in four steps. Everything starts from demand in <em>tokens</em>, not requests.
       </p>
+      <FlowDiagram
+        steps={[
+          { label: 'Peak token demand', sub: 'requests/s × tokens', icon: TrendingUp },
+          { label: 'Goodput per replica', sub: 'benchmarked at your SLOs', icon: Gauge },
+          { label: 'Replicas needed', sub: 'demand ÷ goodput + headroom', icon: Server },
+          { label: 'Price it', sub: 'then move traffic to smaller models', icon: CircleDollarSign },
+        ]} />
       <ol>
         <li>Peak token demand = peak requests/s × (average prompt tokens for prefill, average output tokens for decode).</li>
         <li>Benchmark one replica’s{' '}<Term def="Throughput that still meets your latency targets.">goodput</Term>{' '}at your SLOs, with a realistic length mix.</li>
