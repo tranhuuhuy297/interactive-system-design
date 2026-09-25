@@ -1,4 +1,4 @@
-import { Callout, CompareTable, H2, KeyTakeaways, References } from '../components/ui'
+import { Callout, CompareTable, H2, KeyTakeaways, References, TLDR } from '../components/ui'
 import { INTERVIEW_FURTHER_READING } from '../data/interview-further-reading'
 import { QUESTION_BANK, Q_CATEGORIES } from '../data/question-bank-data'
 import { QbankExplorer } from './demos/qbank-explorer'
@@ -7,11 +7,19 @@ export default function QuestionBankChapter() {
   const staffCount = QUESTION_BANK.filter((q) => q.level === 'staff').length
   return (
     <>
+      <TLDR items={[
+        'Answer each card out loud before you flip it.',
+        'Mark “Got it” only if you also covered the staff points.',
+        'Structure: direct answer, mechanism, failure mode, trade-off, operability.',
+        'Come back tomorrow and filter by “Review”.',
+      ]} />
       <p>
-        {QUESTION_BANK.length} questions across {Q_CATEGORIES.length} categories: the concept checks, follow-ups and
-        trade-off probes that come up in system design loops. {staffCount} are tagged <strong>staff</strong>. On those,
-        a correct mechanism is not enough; the interviewer is listening for failure modes, operability and the
-        conditions under which you would choose differently.
+        {QUESTION_BANK.length} questions across {Q_CATEGORIES.length} categories: the concept checks, follow-ups, and
+        trade-off probes that come up in system design loops.
+      </p>
+      <p>
+        {staffCount} are tagged <strong>staff</strong>. On those, a correct mechanism is not enough. The interviewer is
+        listening for failure modes, operability, and when you would choose differently.
       </p>
       <Callout kind="tip" title="How to drill">
         Answer out loud <em>before</em> flipping the card. Mark “Got it” only if you covered the staff points too.
@@ -19,6 +27,7 @@ export default function QuestionBankChapter() {
       </Callout>
 
       <H2 id="drill">Drill</H2>
+      <p>Filter by category or difficulty, then work through the cards. Switch to list mode to read full answers.</p>
       <QbankExplorer />
 
       <H2 id="answer-shape">The shape of a staff answer</H2>

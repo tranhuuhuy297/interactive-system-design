@@ -1,5 +1,5 @@
 import {
-  Callout, CodeBlock, CompareTable, H2, InterviewQuestion, KeyTakeaways, References, Requirements,
+  Callout, CodeBlock, CompareTable, H2, InterviewQuestion, KeyTakeaways, References, Requirements, TLDR, Term,
 } from '../components/ui'
 import type { Reference } from '../components/ui'
 import { UidSnowflakeBuilderDemo } from './demos/uid-snowflake-builder-demo'
@@ -21,9 +21,18 @@ export default function UniqueIdGenerationChapter() {
       <p>
         On one database, <code>AUTO_INCREMENT</code> solves ID generation for free. Once you shard, or write in
         several regions, you need IDs that are unique <strong>without asking a central authority on every
-        write</strong>. The right answer depends on three things the interviewer might not say out loud: must IDs
-        <strong> sort by time</strong>, must they fit in <strong>64 bits</strong>, and may they be
-        <strong> guessable</strong>?
+        write</strong>.
+      </p>
+      <TLDR items={[
+        'First ask: must IDs sort by time, fit in 64 bits, and be hard to guess?',
+        'Snowflake packs a timestamp, a worker number, and a counter into 64 bits, with no coordination per ID.',
+        'Clocks are the real risk: a clock jumping backwards can create duplicate IDs.',
+        'UUIDv7 is a time-ordered UUID that keeps database indexes efficient and needs no extra service.',
+      ]} />
+      <p>
+        The right answer depends on three things the interviewer might not say out loud. Must IDs{' '}
+        <strong>sort by time</strong>? Must they fit in <strong>64 bits</strong>? May they be{' '}
+        <strong>guessable</strong>?
       </p>
 
       <H2 id="requirements">Pin down the requirements</H2>
@@ -39,6 +48,7 @@ export default function UniqueIdGenerationChapter() {
       </Callout>
 
       <H2 id="options">The option space</H2>
+      <p>Six common designs, from simplest to most scalable. Each trades size, ordering, and coordination differently.</p>
       <CompareTable
         columns={['Size', 'Sortable', 'Coordination', 'Watch out for']}
         rows={[
@@ -53,10 +63,14 @@ export default function UniqueIdGenerationChapter() {
 
       <H2 id="snowflake">Snowflake: spending 63 bits</H2>
       <p>
-        Twitter's Snowflake layout packs a millisecond timestamp, a worker ID and a per-millisecond sequence into a
-        signed 64-bit integer. The classic split is <strong>41 / 10 / 12</strong>: about 69 years of timestamps from a custom
-        epoch, 1,024 workers (often split into 5 datacenter bits and 5 machine bits), and 4,096 IDs per
-        millisecond per worker. Every allocation is a trade-off between lifetime, fleet size and burst throughput.
+        Twitter's Snowflake layout packs a millisecond timestamp, a worker ID, and a per-millisecond sequence into a
+        signed 64-bit integer.
+      </p>
+      <p>
+        The classic split is <strong>41 / 10 / 12</strong> bits. That gives about 69 years of timestamps from a custom{' '}
+        <Term def="The zero point for timestamps. Starting it at your launch date instead of 1970 saves bits.">epoch</Term>,
+        1,024 workers (often 5 datacenter bits plus 5 machine bits), and 4,096 IDs per millisecond per worker. Every
+        split trades lifetime against fleet size and burst throughput.
       </p>
       <UidSnowflakeBuilderDemo />
       <CodeBlock lang="ts" title="snowflake.ts — core loop" code={`
@@ -78,6 +92,11 @@ export function nextId(workerId: bigint): bigint {
 }`} />
 
       <H2 id="clocks">Clocks: the real failure mode</H2>
+      <p>
+        Snowflake trusts each machine’s clock. Clocks are corrected by{' '}
+        <Term def="Network Time Protocol: the service that keeps server clocks in sync, sometimes by jumping them.">NTP</Term>{' '}
+        and can jump, so this is where things go wrong.
+      </p>
       <ul>
         <li><strong>Clock moving backwards</strong> (an NTP step or a VM migration) can reissue old timestamps, which means duplicate IDs. Refuse to issue until time catches up, or, if the jump is small, keep using the last timestamp and increment the sequence.</li>
         <li><strong>Skew between nodes</strong> only affects ordering, not uniqueness, because worker IDs differ. IDs are sortable to within the skew, which is what “k-sorted” means.</li>
@@ -87,15 +106,22 @@ export function nextId(workerId: bigint): bigint {
 
       <H2 id="uuids">UUIDs and index locality</H2>
       <p>
-        UUIDv4 is 122 random bits: no coordination and effectively no collisions, but <strong>terrible for
-        clustered B-tree indexes</strong> such as InnoDB primary keys or Postgres btree indexes. UUIDv7 (RFC 9562, 2024) keeps the
-        128-bit format but puts a 48-bit Unix-ms timestamp first, so new keys append at the right edge of the index.
+        UUIDv4 is 122 random bits. It needs no coordination and effectively never collides. But it is{' '}
+        <strong>terrible for <Term def="An index that keeps rows physically sorted by key, so random keys cause scattered page splits.">clustered B-tree indexes</Term></strong>{' '}
+        such as InnoDB primary keys or Postgres btree indexes.
+      </p>
+      <p>
+        UUIDv7 (RFC 9562, 2024) keeps the 128-bit format but puts a 48-bit Unix-ms timestamp first. New keys then
+        append at the right edge of the index.
       </p>
       <p>
         Within one millisecond, plain v7 is random, so two IDs from the same ms can sort either way. RFC 9562 allows
-        using some of the random bits as a counter (or sub-millisecond precision) when a generator needs strict
-        monotonicity. Support is increasingly native. PostgreSQL 18, for example, ships a built-in <code>uuidv7()</code>,
-        so you often need no library at all.
+        using some random bits as a counter (or sub-millisecond precision) when a generator needs strict
+        ordering.
+      </p>
+      <p>
+        Support is increasingly native. PostgreSQL 18, for example, ships a built-in <code>uuidv7()</code>, so you
+        often need no library at all.
       </p>
       <UidUuidLocalityDemo />
       <Callout kind="warn">
@@ -104,6 +130,7 @@ export function nextId(workerId: bigint): bigint {
       </Callout>
 
       <H2 id="staff">Staff-level lens</H2>
+      <p>The generator is the easy part. The hard parts are the systems that consume and store the IDs.</p>
       <Callout kind="staff">
         <ul>
           <li><strong>Decide by consumer, not generator.</strong> JavaScript clients lose precision above 2⁵³, so serialize 64-bit IDs as strings in JSON APIs. That is a real bug in many Snowflake rollouts.</li>

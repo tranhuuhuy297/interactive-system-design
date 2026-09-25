@@ -1,4 +1,4 @@
-import { Callout, CompareTable, H2, KeyTakeaways, References } from '../components/ui'
+import { Callout, CompareTable, H2, KeyTakeaways, References, TLDR } from '../components/ui'
 import { INTERVIEW_FURTHER_READING } from '../data/interview-further-reading'
 import { MOCK_PROMPTS } from '../data/mock-prompts-data'
 import { MockSimulator } from './demos/mock-simulator'
@@ -7,11 +7,21 @@ import { MOCK_PHASES } from './demos/mock-phases'
 export default function MockInterviewChapter() {
   return (
     <>
+      <TLDR items={[
+        'Pick a prompt, and the 45-minute clock starts. Talk out loud the whole time.',
+        'The coach tells you which phase you should be in. Watch your time.',
+        'Hit “Curveball” to practice adapting, then score yourself honestly.',
+        'On curveballs: redo the affected numbers, name what breaks, make the smallest change.',
+      ]} />
       <p>
-        Reading about system design is not the same as doing it out loud against a clock. This simulator gives you
-        one of {MOCK_PROMPTS.length} classic prompts, runs a 45-minute clock with a phase coach, lets the
-        “interviewer” throw curveballs, and saves a self-score so you can see your trend over weeks of practice.
+        Reading about system design is not the same as doing it out loud against a clock. This simulator:
       </p>
+      <ul>
+        <li>gives you one of {MOCK_PROMPTS.length} classic prompts;</li>
+        <li>runs a 45-minute clock with a phase coach;</li>
+        <li>lets the “interviewer” throw curveballs;</li>
+        <li>saves a self-score so you can see your trend over weeks of practice.</li>
+      </ul>
       <Callout kind="tip" title="How to get real value from it">
         Talk out loud the whole time, as if someone were listening. Better still, record yourself or practice with a
         friend playing interviewer. Use the scratchpad the way you would use the interview whiteboard. Only open the
@@ -19,12 +29,13 @@ export default function MockInterviewChapter() {
       </Callout>
 
       <H2 id="simulator">Run a mock</H2>
+      <p>Choose a prompt or draw one at random. The clock starts right away, so have your scratchpad ready.</p>
       <MockSimulator />
 
       <H2 id="time-budget">The 45-minute budget</H2>
       <p>
-        Most loops give you 45–60 minutes, with 5 minutes of introductions and 5 minutes for your questions at the
-        end. That leaves about 35–45 minutes of design. The coach uses this split:
+        Most loops give you 45–60 minutes. About 5 go to introductions and 5 to your questions at the end. That leaves
+        about 35–45 minutes of design. The coach uses this split:
       </p>
       <CompareTable
         columns={['Minutes', 'Goal', 'Common failure']}

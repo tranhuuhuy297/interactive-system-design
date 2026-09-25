@@ -1,6 +1,6 @@
 import {
   ApiSpec, ArchitectureDiagram, Callout, CodeBlock, CompareTable, EstimationTable, H2, InterviewQuestion,
-  KeyTakeaways, References, Requirements,
+  KeyTakeaways, References, Requirements, Term, TLDR,
 } from '../components/ui'
 import type { ArchEdge, ArchNode, Reference } from '../components/ui'
 import { AiCaseGwRoutingDemo } from './demos/ai-case-gw-routing-demo'
@@ -45,12 +45,25 @@ const REFS: Reference[] = [
 export default function LlmGatewayChapter() {
   return (
     <>
+      <TLDR items={[
+        'One internal API in front of every model provider. Keys, quotas, routing, and logs live there.',
+        'Apps ask for an alias like “smart”, not a model name. Swapping models is a config change.',
+        'Retry or fail over only before the first token streams.',
+        'Quotas count tokens: reserve at admission, then reconcile with actual usage.',
+        'Bill from provider-reported usage, keyed by request id, so retries never double-charge.',
+      ]} />
       <p>
-        Once a company has more than a handful of teams calling LLMs, the same problems show up everywhere. Provider
-        keys get pasted into repos, one team’s batch job exhausts the org-wide rate limit, nobody knows who spent
-        $80K last month, and a provider outage takes down every AI feature at once. An <strong>LLM gateway</strong>
-        solves these in one place. The interview is about routing and failover under rate limits, token-based
-        quotas, and billing correctness with streaming.
+        Once a company has more than a handful of teams calling LLMs, the same problems show up everywhere:
+      </p>
+      <ul>
+        <li>provider keys get pasted into repos;</li>
+        <li>one team’s batch job exhausts the org-wide rate limit;</li>
+        <li>nobody knows who spent $80K last month;</li>
+        <li>a provider outage takes down every AI feature at once.</li>
+      </ul>
+      <p>
+        An <strong>LLM gateway</strong> solves these in one place. The interview is about routing and failover under
+        rate limits, token-based quotas, and billing correctness with streaming.
       </p>
 
       <H2 id="requirements">1 · Clarify requirements</H2>
@@ -71,8 +84,9 @@ export default function LlmGatewayChapter() {
         ]}
       />
       <p>
-        QPS is modest; <strong>long-lived streaming connections</strong> and <strong>payload logs</strong> are what
-        size the fleet and the storage bill. The gateway must be fully async, non-buffering I/O.
+        QPS is modest. <strong>Long-lived streaming connections</strong> and <strong>payload logs</strong> size the
+        fleet and the storage bill. So the gateway must use fully async,{' '}
+        <Term def="Passing bytes through as they arrive instead of collecting the whole response first.">non-buffering</Term>{' '}I/O.
       </p>
 
       <H2 id="api">3 · API</H2>
@@ -93,19 +107,27 @@ export default function LlmGatewayChapter() {
         ]} />
 
       <H2 id="routing">5 · Deep dive: routing, retries, and failover</H2>
+      <p>
+        The gateway’s main job is to stay up when providers don’t. Break a provider in the simulator and compare the
+        routing policies.
+      </p>
       <AiCaseGwRoutingDemo />
       <ul>
-        <li><strong>Aliases, not model names.</strong> Apps ask for a capability tier; the router maps it to concrete deployments. Swapping a model then means changing config, not redeploying 300 apps.</li>
+        <li><strong>Aliases, not model names.</strong> Apps ask for a capability tier; the router maps it to concrete{' '}<Term def="A specific model running at a specific provider or self-hosted endpoint.">deployments</Term>. Swapping a model then means changing config, not redeploying 300 apps.</li>
         <li><strong>Retry only when it is safe.</strong> Retry or fail over <em>before the first token is sent</em>. After streaming starts, a silent retry would duplicate or splice output, so surface the error instead.</li>
-        <li><strong>Respect 429s.</strong> Honor <code>Retry-After</code>, use backoff with jitter, and shift traffic rather than hammering a provider that is shedding load.</li>
-        <li><strong>Circuit breakers per deployment.</strong> Stop sending to a deployment that keeps failing and probe it periodically. This matters most for <em>timeouts</em>, where every failed attempt burns seconds.</li>
+        <li><strong>Respect 429s.</strong> Honor <code>Retry-After</code>, use{' '}<Term def="Waiting longer after each failure, with a random offset so clients don’t retry in lockstep.">backoff with jitter</Term>, and shift traffic rather than hammering a provider that is shedding load.</li>
+        <li><strong><Term def="A switch that stops traffic to a failing dependency for a while, then lets a few test requests through.">Circuit breakers</Term> per deployment.</strong> Stop sending to a deployment that keeps failing and probe it periodically. This matters most for <em>timeouts</em>, where every failed attempt burns seconds.</li>
       </ul>
 
       <H2 id="quotas">6 · Deep dive: token-based quotas</H2>
       <p>
         Requests per second is the wrong unit: one request can be 100 tokens or 100K. Providers limit tokens per
-        minute, so the gateway should too. The catch is that output length is unknown until the stream ends. The
-        answer is <strong>reserve, then reconcile</strong>:
+        minute, so the gateway should too.
+      </p>
+      <p>
+        The catch: output length is unknown until the stream ends. The answer is <strong>reserve, then
+        reconcile</strong>, like a hotel holding a deposit on your card and settling at checkout. The budget itself is a{' '}
+        <Term def="A counter that refills at a fixed rate; each request takes some capacity out, and requests wait or fail when it is empty.">token bucket</Term>:
       </p>
       <CodeBlock lang="ts" title="reserve-then-reconcile token budget" code={`
 async function admit(team: string, req: ChatRequest) {
@@ -131,6 +153,7 @@ async function settle(team: string, reserved: number, usage: Usage) {
       />
 
       <H2 id="caching">7 · Deep dive: caching and logging</H2>
+      <p>The gateway sees every prompt, which makes it the natural place for caching and the riskiest place for logs.</p>
       <CompareTable
         columns={['Exact-match cache', 'Semantic cache']}
         rows={[
@@ -141,11 +164,12 @@ async function settle(team: string, reserved: number, usage: Usage) {
         ]}
       />
       <ul>
-        <li><strong>Logs are sensitive data.</strong> Prompts contain customer data. Redact PII before storage, allow per-team payload logging opt-out, set short retention, and restrict access. Always keep usage metadata, even when payloads are dropped.</li>
+        <li><strong>Logs are sensitive data.</strong> Prompts contain customer data. Redact{' '}<Term def="Personally identifiable information: names, emails, phone numbers, and similar.">PII</Term>{' '}before storage, allow per-team payload logging opt-out, set short retention, and restrict access. Always keep usage metadata, even when payloads are dropped.</li>
         <li><strong>Bill from provider-reported usage.</strong> Use the usage block in the final response or stream event, not your own estimate. Keep a request id end to end so retries never create a second charge.</li>
       </ul>
 
       <H2 id="data-model">8 · Data model</H2>
+      <p>Two records do most of the work: the routing config per alias, and one usage record per request.</p>
       <CodeBlock lang="ts" title="route config and usage record" code={`
 type Route = {
   alias: 'fast' | 'smart' | 'cheap-batch'

@@ -1,5 +1,5 @@
 import {
-  Callout, CodeBlock, CompareTable, EstimationTable, H2, InterviewQuestion, KeyTakeaways, References,
+  Callout, CodeBlock, CompareTable, EstimationTable, H2, InterviewQuestion, KeyTakeaways, References, TLDR, Term,
 } from '../components/ui'
 import type { Reference } from '../components/ui'
 import { EstimationCapacityCalculator } from './demos/estimation-capacity-calculator'
@@ -18,13 +18,20 @@ export default function EstimationChapter() {
   return (
     <>
       <p>
-        Estimation is not about getting the exact number. It is about getting the <strong>order of magnitude</strong>{' '}
-        right fast enough to make design decisions: does this fit on one machine? In memory? Does it need sharding?
-        Is bandwidth or storage the real cost? A few rounded numbers said out loud do more for your credibility
-        than any diagram.
+        Estimation is not about the exact number. It is about getting the <strong>order of magnitude</strong> (the
+        right power of ten) fast enough to make decisions. Does this fit on one machine? In memory? Does it need
+        sharding? Is bandwidth or storage the real cost?
       </p>
+      <TLDR items={[
+        'Round hard: a day is about 10⁵ seconds, so 1M requests/day is about 12 per second.',
+        'Memorize a few latency ratios. They explain why we cache, batch, and avoid cross-region calls.',
+        'Availability multiplies along a request path, so many dependencies drag it down fast.',
+        'Show your arithmetic out loud, and use the result to rule options in or out.',
+      ]} />
+      <p>A few rounded numbers said out loud do more for your credibility than any diagram.</p>
 
       <H2 id="powers-of-two">Powers of two and the units that matter</H2>
+      <p>Storage and memory sizes come in powers of two. For estimation, treat each step of 2¹⁰ as “×1,000”.</p>
       <CompareTable columns={['Exact', '≈ Decimal', 'Unit']} rows={[
         { label: '2¹⁰', cells: ['1,024', '1 thousand', 'KB'] },
         { label: '2²⁰', cells: ['1,048,576', '1 million', 'MB'] },
@@ -34,15 +41,19 @@ export default function EstimationChapter() {
       ]} caption="In interviews, round 2¹⁰ to 1,000. The 2–13% error never changes a design decision." />
       <p>Handy constants to memorize:</p>
       <ul>
-        <li><strong>Seconds per day ≈ 86,400 ≈ 10⁵.</strong> So 1M requests/day ≈ 12 QPS, and 1B/day ≈ 12K QPS.</li>
+        <li><strong>Seconds per day ≈ 86,400 ≈ 10⁵.</strong> So 1M requests/day ≈ 12 <Term def="Queries (requests) per second: the standard unit of load on a service.">QPS</Term>, and 1B/day ≈ 12K QPS.</li>
         <li><strong>A char is 1 byte</strong> (ASCII), a UUID 16 bytes binary (36 as text), a timestamp 8 bytes, a typical row with metadata a few hundred bytes.</li>
-        <li><strong>A modern server</strong> has tens to hundreds of GB of RAM, around 10–25 Gbps networking, and NVMe drives with GB/s throughput.</li>
+        <li><strong>A modern server</strong> has tens to hundreds of GB of RAM, around 10–25 Gbps networking, and <Term def="Fast solid-state drives attached over PCIe. They read and write gigabytes per second.">NVMe</Term> drives with GB/s throughput.</li>
       </ul>
 
       <H2 id="latency">Latency numbers every engineer should know</H2>
       <p>
-        First circulated by Peter Norvig and popularized by Jeff Dean’s talks, then updated by many since (see References), these numbers explain most design choices:
-        why we cache, why we batch, and why we avoid cross-region round trips on the hot path.
+        These numbers explain most design choices: why we cache, why we batch, and why we avoid cross-region round
+        trips on the <Term def="The code path that runs on every user request, where every millisecond counts.">hot path</Term>.
+      </p>
+      <p>
+        Peter Norvig first circulated them, Jeff Dean’s talks popularized them, and many people have updated them
+        since (see References).
       </p>
       <EstimationLatencyVisualizer />
       <Callout kind="tip">
@@ -53,8 +64,8 @@ export default function EstimationChapter() {
 
       <H2 id="availability">Availability and the nines</H2>
       <p>
-        Availability targets translate directly into allowed downtime. Remember that a request path with many
-        dependencies is only as available as the <em>product</em> of its parts:
+        Availability targets (“the nines”: 99.9%, 99.99%…) translate directly into allowed downtime. A request path
+        with many dependencies is only as available as the <em>product</em> of its parts:
       </p>
       <EstimationNinesCalculator />
       <Callout kind="pitfall">
@@ -64,6 +75,7 @@ export default function EstimationChapter() {
       </Callout>
 
       <H2 id="formulas">The core formulas</H2>
+      <p>Six formulas cover almost every estimate you will be asked for. Each one is simple multiplication.</p>
       <CodeBlock lang="text" title="estimation cheat sheet" code={`
 QPS (avg)      = daily requests / 86,400
 Peak QPS       = avg QPS × peak factor (often 2–5×)
@@ -73,9 +85,14 @@ Cache size     = hot fraction (e.g. 20%) × daily reads × payload
 Servers        = peak QPS / sustainable QPS per server (+ headroom for N+1 / AZ loss)`} />
 
       <H2 id="calculator">Try it: the capacity calculator</H2>
+      <p>Move the sliders and watch how each assumption flows through to servers, storage, and bandwidth.</p>
       <EstimationCapacityCalculator />
 
       <H2 id="worked-example">Worked example: a photo-sharing app</H2>
+      <p>
+        Here is the full method on one prompt. <Term def="Daily active users: distinct people who use the product on a given day.">DAU</Term> is
+        the starting point for almost every estimate.
+      </p>
       <EstimationTable
         assumptions={['500M DAU, 10% upload one photo per day', 'Average photo after compression: 2 MB, plus ~3 thumbnails ≈ 0.5 MB total', 'Each user views ~50 photos per day', 'Keep everything for 10 years, 3 replicas (or erasure coding at ~1.5×)']}
         rows={[
@@ -88,12 +105,14 @@ Servers        = peak QPS / sustainable QPS per server (+ headroom for N+1 / AZ 
         ]}
       />
       <p>
-        Two conclusions fall out immediately. Views dwarf uploads, so this is a <strong>CDN problem</strong>{' '}
-        first, and the ~58 GB/s of egress must come from the edge. And replicating 137 PB three times is
-        painful, so <strong>erasure coding and cold tiers</strong> for old photos are worth raising.
+        Two conclusions fall out immediately. First, views dwarf uploads, so this is a <strong>CDN problem</strong>.
+        The ~58 GB/s of <Term def="Data leaving your servers toward users. Cloud providers charge for it, so it is often the biggest bill.">egress</Term> must
+        come from the edge. Second, keeping 137 PB in three copies is painful, so raise{' '}
+        <strong><Term def="Storing data as fragments plus parity pieces, so it survives failures with about 1.5× overhead instead of 3×.">erasure coding</Term> and cold tiers</strong> for old photos.
       </p>
 
       <H2 id="staff">Estimation at staff level</H2>
+      <p>The arithmetic is the same at every level. What changes is what you do with the result.</p>
       <Callout kind="staff">
         <p>Senior candidates compute numbers. Staff candidates <strong>use</strong> numbers to kill options and to talk about money:</p>
         <ul>

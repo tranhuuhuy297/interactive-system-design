@@ -1,6 +1,6 @@
 import {
   ApiSpec, ArchitectureDiagram, Callout, CodeBlock, CompareTable, EstimationTable, H2, InterviewQuestion,
-  KeyTakeaways, Requirements, References,
+  KeyTakeaways, Requirements, References, TLDR, Term,
 } from '../components/ui'
 import type { ArchEdge, ArchNode, Reference } from '../components/ui'
 import { LboardShardingDemo } from './demos/lboard-sharding-demo'
@@ -40,13 +40,25 @@ const REFS: Reference[] = [
 export default function LeaderboardChapter() {
   return (
     <>
+      <TLDR items={[
+        'Core problem: millions of players want their exact rank, updated within a second of each match.',
+        'Key decision: a Redis sorted set answers top-K, "my rank" and "players around me" in O(log N).',
+        'The hard part: rank queries once the set no longer fits on one node.',
+        'Staff insight: exact ranks for the top few thousand, percentiles for everyone else.',
+      ]} />
       <p>
-        A leaderboard is the rare prompt where one data structure <strong>is</strong> most of the answer. The
-        interview tests whether you know <em>why</em> a sorted set fits, where it stops scaling, and what happens to
-        rank queries once you are forced to shard.
+        A leaderboard is the rare prompt where one data structure <strong>is</strong> most of the answer. That
+        structure is the{' '}
+        <Term def="A collection where every member has a numeric score and is kept ordered by it. Redis calls it a ZSET.">sorted set</Term>.
+      </p>
+      <p>
+        The interview tests three things. Do you know <em>why</em> a sorted set fits? Where does it stop scaling? And
+        what happens to rank queries once you are forced to{' '}
+        <Term def="Split data across several machines, each holding one slice (a shard).">shard</Term>?
       </p>
 
       <H2 id="requirements">1 · Clarify requirements</H2>
+      <p>First, pin down which queries players make and how fresh ranks must be. Those two answers drive every later choice.</p>
       <Requirements
         functional={['Show the global top 10', "Show a player's own rank and the players around them", 'Scores update in real time after each match', 'Monthly leaderboard that resets']}
         nonFunctional={['Rank visible within ~1 s of a match ending', 'Handles tournament-end spikes', 'Scores are tamper-proof']}
@@ -54,6 +66,7 @@ export default function LeaderboardChapter() {
       />
 
       <H2 id="estimation">2 · Back-of-the-envelope</H2>
+      <p>Next, size the write rate and memory. This tells us whether one machine is enough.</p>
       <EstimationTable
         assumptions={['25M monthly players, 5M daily active (illustrative)', '10 matches per DAU per day', 'Peak = 5× average']}
         rows={[
@@ -63,9 +76,11 @@ export default function LeaderboardChapter() {
           { label: 'Memory', math: '25M × ~100 B (member, score, skiplist + hash overhead)', result: '≈ 2.5 GB' },
         ]}
       />
-      <p>A single Redis primary handles tens of thousands of simple operations per second and 2.5 GB of memory comfortably. <strong>Don't shard until the numbers force you to.</strong> Say that, then show you know how to shard anyway.</p>
+      <p>A single Redis primary handles tens of thousands of simple operations per second. It also holds 2.5 GB of memory comfortably.</p>
+      <p><strong>Don't shard until the numbers force you to.</strong> Say that, then show you know how to shard anyway.</p>
 
       <H2 id="api">3 · API</H2>
+      <p>The API is small: one internal write and two public reads. Note that only the game server may write scores.</p>
       <ApiSpec endpoints={[
         { method: 'POST', path: '/internal/v1/scores', desc: 'Called by the game server only, never the client. Idempotent per matchId.', body: '{ matchId, userId, points }' },
         { method: 'GET', path: '/v1/leaderboard/top?limit=10', desc: 'Top N with profile data.', returns: '[{ rank, userId, name, score }]' },
@@ -73,6 +88,7 @@ export default function LeaderboardChapter() {
       ]} />
 
       <H2 id="high-level">4 · High-level design</H2>
+      <p>Now connect the pieces. Match results flow through a queue into Redis, and reads go straight to Redis.</p>
       <ArchitectureDiagram nodes={NODES} edges={EDGES} height={380}
         caption="Redis serves reads. Match history is the durable source of truth."
         flows={[
@@ -82,10 +98,17 @@ export default function LeaderboardChapter() {
 
       <H2 id="sorted-set">5 · Deep dive: why a sorted set</H2>
       <p>
-        A relational <code>ORDER BY score DESC</code> handles top-10 fine with an index. The trouble is
-        <strong> “what is my rank?”</strong>: <code>SELECT COUNT(*) WHERE score &gt; mine</code> is O(N) per request and
-        does not survive millions of players checking their rank after every match. A skiplist keeps span counts,
-        which makes rank O(log N).
+        Here we decide the core data structure. A relational <code>ORDER BY score DESC</code> handles top-10 fine
+        with an index.
+      </p>
+      <p>
+        The trouble is <strong>“what is my rank?”</strong>. <code>SELECT COUNT(*) WHERE score &gt; mine</code> is O(N)
+        per request. It does not survive millions of players checking their rank after every match.
+      </p>
+      <p>
+        A <Term def="A layered linked list with express lanes, so search, insert and delete take O(log N) on average.">skiplist</Term>{' '}
+        keeps <Term def="Each link stores how many elements it skips. Adding the spans along a search path gives an element's rank.">span counts</Term>,
+        which makes rank O(log N). Try the commands below.
       </p>
       <LboardSortedSetDemo />
       <CodeBlock lang="bash" title="the whole data path" code={`
@@ -101,6 +124,10 @@ EXPIREAT lb:2026-09 <end of Oct>          # old boards age out`} />
       </Callout>
 
       <H2 id="sharding">6 · Deep dive: when one node is not enough</H2>
+      <p>
+        Suppose the set outgrows one node. We must choose how to split players across shards, and each choice makes
+        a different query expensive. Compare them in the demo.
+      </p>
       <LboardShardingDemo />
       <CompareTable
         columns={['Hash by user', 'Range by score', 'Approximate (buckets)']}
@@ -113,11 +140,13 @@ EXPIREAT lb:2026-09 <end of Oct>          # old boards age out`} />
         ]}
       />
       <p>
-        At very large N, most players don't need an exact rank. <strong>Exact top-K + approximate percentile for
-        everyone else</strong> is often the pragmatic, cheap answer. Offer it as a product trade-off.
+        At very large N, most players don't need an exact rank. <strong>Exact top-K + approximate{' '}
+        <Term def="The share of players you beat, e.g. 'top 3%', estimated from a histogram of scores.">percentile</Term>{' '}
+        for everyone else</strong> is often the pragmatic, cheap answer. Offer it as a product trade-off.
       </p>
 
       <H2 id="data-model">7 · Data model & durability</H2>
+      <p>Redis is the fast index, not the truth. A durable table of match results lets us rebuild it at any time.</p>
       <CodeBlock lang="ts" title="durable record (source of truth)" code={`
 // match_results(match_id, user_id, points, created_at, PRIMARY KEY (match_id, user_id))
 // Redis rebuild: for each month, SUM(points) GROUP BY user_id → ZADD in batches

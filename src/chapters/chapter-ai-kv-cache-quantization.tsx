@@ -1,5 +1,5 @@
 import {
-  Callout, CodeBlock, CompareTable, FlowDiagram, H2, InterviewQuestion, KeyTakeaways, References,
+  Callout, CodeBlock, CompareTable, FlowDiagram, H2, InterviewQuestion, KeyTakeaways, References, Term, TLDR,
 } from '../components/ui'
 import type { Reference } from '../components/ui'
 import { AiKvPagingDemo } from './demos/ai-kv-paging-demo'
@@ -19,14 +19,26 @@ const REFS: Reference[] = [
 export default function AiKvCacheQuantizationChapter() {
   return (
     <>
+      <TLDR items={[
+        'The KV cache stores attention state for every token so far. It is the biggest moving part of GPU memory.',
+        'Its size grows with context length × concurrent users. Weights stay fixed.',
+        'GQA/MQA models share KV heads and need up to 8× less cache.',
+        'Paged allocation and prefix caching fit more users and skip repeated work.',
+        'Quantizing weights and KV cuts bytes per step, but gate it on your own evals.',
+      ]} />
       <p>
         During decode, attention needs the key and value vectors of <em>every</em> earlier token. Recomputing them each
-        step would be quadratic work, so servers keep them in GPU memory as the <strong>KV cache</strong>. It is the
-        largest dynamic memory consumer in LLM serving. How many users fit on a GPU, how long a context you can offer,
-        and how fast decode runs all come down to how you size, share, allocate, and compress it.
+        step would be quadratic work. So servers keep them in GPU memory as the <strong>KV cache</strong>, like notes
+        you take once so you never re-read the whole book.
+      </p>
+      <p>
+        The KV cache is the largest dynamic memory consumer in LLM serving. It decides how many users fit on a GPU,
+        how long a context you can offer, and how fast decode runs. This chapter is about how to size, share, allocate,
+        and compress it.
       </p>
 
       <H2 id="formula">The KV cache formula</H2>
+      <p>Start with the arithmetic. One formula tells you how much memory each token of context costs.</p>
       <CodeBlock lang="ts" title="KV bytes per token" code={`
 kvBytesPerToken = 2              // one K and one V vector
                 × layers
@@ -40,18 +52,25 @@ totalKV = kvBytesPerToken × contextTokens × concurrentSequences
 // 2 × 80 × 8 × 128 × 2 = 327,680 B ≈ 320 KiB per token
 // one 32K-token conversation ≈ 10 GiB of KV cache`} />
       <p>
-        The KV cache grows linearly with <strong>context × concurrency</strong>, while the weights stay fixed. That is why
-        a GPU that holds a model comfortably can still run out of memory with a handful of long conversations. The{' '}
+        The KV cache grows linearly with <strong>context × concurrency</strong>, while the weights stay fixed. So a GPU
+        that holds a model comfortably can still run out of memory with a handful of long conversations. The{' '}
         <a href="#/llm-serving">LLM inference platform</a> case study has a full GPU memory calculator. This chapter
         covers the techniques that bend the curve.
       </p>
 
       <H2 id="attention-variants">MHA vs MQA vs GQA</H2>
       <p>
-        Multi-head attention (MHA) keeps separate K/V for every head. Multi-query attention (MQA) shares one K/V head
-        across all query heads. Grouped-query attention (GQA) sits between them: query heads are split into groups
-        that share K/V. The GQA paper reports quality close to MHA at speed comparable to MQA, which is why most recent
-        open models use it.
+        The model’s attention design sets how much KV each token needs. An{' '}
+        <Term def="A parallel slice of the attention computation. Models run many heads side by side.">attention head</Term>{' '}
+        is one of many parallel attention computations.
+      </p>
+      <ul>
+        <li><strong>Multi-head attention (MHA)</strong> keeps separate K/V for every head.</li>
+        <li><strong>Multi-query attention (MQA)</strong> shares one K/V head across all query heads.</li>
+        <li><strong>Grouped-query attention (GQA)</strong> sits between them: query heads split into groups that share K/V.</li>
+      </ul>
+      <p>
+        The GQA paper reports quality close to MHA at speed comparable to MQA. That is why most recent open models use it.
       </p>
       <CompareTable
         columns={['KV heads', 'KV per token', '32K context, 1 sequence']}
@@ -70,9 +89,12 @@ totalKV = kvBytesPerToken × contextTokens × concurrentSequences
       <H2 id="paging">PagedAttention: allocate KV like virtual memory</H2>
       <p>
         Early servers reserved one contiguous slab per request, sized for the <em>maximum</em> possible length. Most
-        requests finish far shorter, so most of each slab sat empty, and fewer requests fit at once. PagedAttention
+        requests finish far shorter. So most of each slab sat empty, and fewer requests fit at once.
+      </p>
+      <p>
+        <Term def="vLLM’s technique of storing the KV cache in small fixed-size blocks, tracked by a per-sequence table, like OS virtual memory pages.">PagedAttention</Term>{' '}
         splits the cache into fixed-size blocks and keeps a per-sequence block table, just like OS page tables. Waste
-        drops to the unfilled tail of the last block, and blocks can be shared between sequences.
+        drops to the unfilled tail of the last block, and sequences can share blocks.
       </p>
       <AiKvPagingDemo />
       <FlowDiagram steps={[
@@ -84,9 +106,15 @@ totalKV = kvBytesPerToken × contextTokens × concurrentSequences
 
       <H2 id="prefix-caching">Prefix and prompt caching</H2>
       <p>
-        Many requests start the same way: a long system prompt, a tool schema, few-shot examples, a shared document.
-        Once the KV cache is paged, identical prefixes can map to the <strong>same physical blocks</strong>, so their
-        prefill is skipped entirely. vLLM hashes blocks by content (automatic prefix caching). SGLang keeps a radix tree
+        Many requests start the same way: a long system prompt, a tool schema,{' '}
+        <Term def="Worked examples placed in the prompt to show the model the expected format.">few-shot examples</Term>,
+        a shared document. Once the KV cache is paged, identical prefixes can map to the <strong>same physical
+        blocks</strong>. Their{' '}<Term def="The first pass over the prompt that builds its KV cache; compute-heavy.">prefill</Term>{' '}
+        is skipped entirely.
+      </p>
+      <p>
+        vLLM hashes blocks by content (automatic prefix caching). SGLang keeps a{' '}
+        <Term def="A tree that stores strings by shared prefixes, so common beginnings are stored once.">radix tree</Term>{' '}
         of cached prefixes (RadixAttention) and schedules requests to maximize reuse.
       </p>
       <ul>
@@ -96,6 +124,7 @@ totalKV = kvBytesPerToken × contextTokens × concurrentSequences
       </ul>
 
       <H2 id="offload">When the cache doesn’t fit: evict, offload, recompute</H2>
+      <p>Sooner or later memory runs out. You have four ways to respond, and each moves the pain somewhere else.</p>
       <CompareTable
         columns={['How it works', 'Cost']}
         rows={[
@@ -108,8 +137,10 @@ totalKV = kvBytesPerToken × contextTokens × concurrentSequences
 
       <H2 id="quantization">Quantization: fewer bytes per weight and per KV value</H2>
       <p>
-        Decode is bandwidth-bound (<a href="#/ai-inference">see fundamentals</a>), so every byte removed from the per-step
-        stream turns directly into speed and capacity. Quantization comes in three flavors that are often mixed:
+        Decode is bandwidth-bound (<a href="#/ai-inference">see fundamentals</a>). Every byte removed from the per-step
+        stream turns directly into speed and capacity.{' '}
+        <Term def="Storing numbers in fewer bits (e.g. 8 or 4 instead of 16), trading a little accuracy for memory and speed.">Quantization</Term>{' '}
+        comes in three flavors that are often mixed:
       </p>
       <CompareTable
         columns={['What shrinks', '70B weights', 'Typical quality impact*']}
@@ -122,7 +153,7 @@ totalKV = kvBytesPerToken × contextTokens × concurrentSequences
         ]}
       />
       <ul>
-        <li><strong>Outliers</strong> are the core difficulty: a few activation channels have huge magnitudes. LLM.int8() handles them in higher precision. AWQ protects the weights that matter most to activations. GPTQ uses second-order information to minimize layer-wise error.</li>
+        <li><strong>Outliers</strong> are the core difficulty: a few{' '}<Term def="The intermediate values flowing between layers while the model runs, as opposed to the stored weights.">activation</Term>{' '}channels have huge magnitudes. LLM.int8() handles them in higher precision. AWQ protects the weights that matter most to activations. GPTQ uses second-order information to minimize layer-wise error.</li>
         <li><strong>Weight-only 4-bit</strong> helps the memory-bound decode phase most. Compute-bound prefill gains less unless kernels also run low-precision math.</li>
         <li><strong>Evaluate, don’t assume:</strong> quantization errors hide in long-tail tasks (math, code, non-English). Gate rollouts on task evals, not perplexity alone.</li>
       </ul>

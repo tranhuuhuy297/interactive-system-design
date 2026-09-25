@@ -1,15 +1,25 @@
-import { Callout, CompareTable, H2, InterviewQuestion, KeyTakeaways, References } from '../components/ui'
+import { Callout, CompareTable, H2, InterviewQuestion, KeyTakeaways, References, Term, TLDR } from '../components/ui'
 import { INTERVIEW_FURTHER_READING } from '../data/interview-further-reading'
 import { StaffAnswerUpgrader } from './demos/staff-answer-upgrader'
 
 export default function StaffSignalsChapter() {
   return (
     <>
+      <TLDR items={[
+        'Two candidates can draw the same boxes and get different levels. How you got there decides it.',
+        'Staff signals: you drive the scope, name what breaks first, and tie trade-offs to requirements.',
+        'Add numbers, failure modes, operability, and cost to the same core design.',
+        'Raise the hard part before the interviewer does.',
+        'For “what if 10×?”, redo the numbers, find the first bottleneck, and apply the cheapest fix.',
+      ]} />
       <p>
-        At senior level and above, the system design round is the main leveling signal. Two candidates can draw nearly
-        the same boxes and get different offers. The difference is in <strong>how they got there</strong>: who drove
-        the scope, how they reasoned about failure, and whether their trade-offs were tied to requirements or recited
-        from a blog post.
+        At senior level and above, the system design round is the main{' '}
+        <Term def="The signal interviewers use to decide which level (senior, staff, principal) to offer.">leveling</Term>{' '}
+        signal. Two candidates can draw nearly the same boxes and get different offers.
+      </p>
+      <p>
+        The difference is <strong>how they got there</strong>: who drove the scope, how they reasoned about failure,
+        and whether their trade-offs came from requirements or from a blog post.
       </p>
 
       <H2 id="levels">Senior vs staff vs principal</H2>
@@ -50,6 +60,7 @@ export default function StaffSignalsChapter() {
       </ul>
 
       <H2 id="phrases">Phrases that signal depth</H2>
+      <p>The same idea, said two ways. The right column adds a number, a reason, or a failure mode.</p>
       <CompareTable
         columns={['Instead of…', 'Say…']}
         rows={[
@@ -62,6 +73,10 @@ export default function StaffSignalsChapter() {
       />
 
       <H2 id="mistakes">Common down-level mistakes</H2>
+      <p>
+        A{' '}<Term def="Being offered a lower level than the one you interviewed for.">down-level</Term>{' '}
+        usually comes from a pattern, not one slip. These are the most common:
+      </p>
       <ul>
         <li><strong>Drawing before scoping.</strong> Boxes in minute one means you are solving an unknown problem.</li>
         <li><strong>Buzzword stacking.</strong> Kafka, Kubernetes and microservices with no reason tied to a requirement.</li>

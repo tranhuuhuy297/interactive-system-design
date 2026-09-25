@@ -1,6 +1,6 @@
 import {
   ApiSpec, ArchitectureDiagram, Callout, CodeBlock, CompareTable, EstimationTable, H2, InterviewQuestion,
-  KeyTakeaways, Requirements, References,
+  KeyTakeaways, Requirements, References, TLDR, Term,
 } from '../components/ui'
 import type { ArchEdge, ArchNode, Reference } from '../components/ui'
 import { MapsRoutingVisualizerDemo } from './demos/maps-routing-visualizer-demo'
@@ -53,14 +53,22 @@ const REFS: Reference[] = [
 export default function GoogleMapsChapter() {
   return (
     <>
-      <p>
-        “Design Google Maps” is really three systems glued together. There is a <strong>static content system</strong>
-        (map tiles, CDN-shaped), a <strong>graph compute system</strong> (routing over hundreds of millions of road
-        segments), and a <strong>streaming system</strong> (billions of GPS fixes becoming live traffic). Strong
-        candidates name the three up front and let the interviewer pick which to go deep on.
-      </p>
+      <TLDR items={[
+        'Core problem: draw the map instantly, route A → B in under a second, and keep ETAs honest with live traffic.',
+        'Key decision: split it into three planes: static tiles on a CDN, routing compute, and a location → traffic stream.',
+        'The hard part: fast routing on a continental graph whose edge weights change every minute.',
+        'Staff insight: preprocess the graph once per map version, then re-weight it in seconds when traffic changes.',
+      ]} />
+      <p>“Design Google Maps” is really three systems glued together:</p>
+      <ul>
+        <li>A <strong>static content system</strong>: map tiles, shaped for a CDN.</li>
+        <li>A <strong>graph compute system</strong>: routing over hundreds of millions of road segments.</li>
+        <li>A <strong>streaming system</strong>: billions of GPS fixes becoming live traffic.</li>
+      </ul>
+      <p>Strong candidates name the three up front and let the interviewer pick which to go deep on.</p>
 
       <H2 id="requirements">1 · Clarify requirements</H2>
+      <p>First, agree on which features matter and which plane the interviewer wants to explore.</p>
       <Requirements
         functional={['Render the map at any zoom', 'Route A → B (driving) with ETA', 'Live traffic affects routes and ETAs', 'Reroute during navigation', 'Ingest user location (opt-in)']}
         nonFunctional={['Tile loads feel instant (CDN-served)', 'Route response p99 < 1 s', 'ETA accuracy within a few % on typical trips', 'Handle rush-hour peaks', 'Privacy: location data minimized and anonymized']}
@@ -72,6 +80,7 @@ export default function GoogleMapsChapter() {
       </Callout>
 
       <H2 id="estimation">2 · Back-of-the-envelope</H2>
+      <p>Next, size each plane separately. Their numbers look nothing alike.</p>
       <EstimationTable
         assumptions={['1B daily users (illustrative)', 'Avg 5 min of active navigation per user per day', 'GPS fix every 1 s, uploaded in 15 s batches', '1 route request per user per day']}
         rows={[
@@ -85,11 +94,15 @@ export default function GoogleMapsChapter() {
       />
       <p>
         The naive tile number is the point. Nobody stores 150 PB of mostly ocean, so dedupe identical tiles and
-        render sparse deep zooms lazily. The location stream is a <strong>write-heavy firehose</strong>: batch it on
-        the device and never make the upload path synchronous with processing.
+        render sparse deep zooms lazily.
+      </p>
+      <p>
+        The location stream is a <strong>write-heavy firehose</strong>. Batch it on the device, and never make the
+        upload path wait for processing.
       </p>
 
       <H2 id="api">3 · API</H2>
+      <p>Each plane gets its own endpoints: tiles, routes, location uploads, and in-trip updates.</p>
       <ApiSpec endpoints={[
         { method: 'GET', path: '/tiles/{ver}/{z}/{x}/{y}.pbf', desc: 'Vector tile, served by the CDN. The version in the path makes it immutable.', returns: 'protobuf tile' },
         { method: 'POST', path: '/v1/routes', desc: 'Compute routes with traffic-aware ETA.', body: '{ origin, destination, departAt?, avoid? }', returns: '{ routes: [{ polyline, etaSec, distanceM, steps }] }' },
@@ -98,6 +111,7 @@ export default function GoogleMapsChapter() {
       ]} />
 
       <H2 id="high-level">4 · High-level design</H2>
+      <p>Now connect the pieces. Trace each plane's request path through the diagram.</p>
       <ArchitectureDiagram nodes={NODES} edges={EDGES} height={420}
         caption="Three planes: static tiles via CDN, routing compute, and the location → traffic stream"
         flows={[
@@ -108,11 +122,16 @@ export default function GoogleMapsChapter() {
 
       <H2 id="tiles">5 · Deep dive: the tile pyramid</H2>
       <p>
-        The world is a square in Web Mercator. Zoom 0 is one tile, and each level splits every tile into four, so zoom
-        <em> z</em> has 4<sup>z</sup> tiles addressed by <code>z/x/y</code>. The client only fetches the handful of
-        tiles in the viewport, which is why the map feels instant.
+        Here we decide how the map image is cut up and served. The world is a square in{' '}
+        <Term def="The map projection used by most web maps. It stretches the globe into a square so it can be tiled.">Web Mercator</Term>.
+      </p>
+      <p>
+        Zoom 0 is one tile, and each level splits every tile into four. So zoom <em>z</em> has 4<sup>z</sup> tiles,
+        addressed by <code>z/x/y</code>. The client only fetches the handful of tiles in the viewport, which is why
+        the map feels instant.
       </p>
       <MapsTilePyramidDemo />
+      <p>The next choice is what a tile contains: a finished picture, or raw geometry the phone draws itself.</p>
       <CompareTable
         columns={['Raster tiles', 'Vector tiles']}
         rows={[
@@ -126,9 +145,16 @@ export default function GoogleMapsChapter() {
 
       <H2 id="routing">6 · Deep dive: routing on a road graph</H2>
       <p>
-        Roads form a directed weighted graph: intersections are nodes, road segments are edges, and the weight is
-        travel time. Textbook Dijkstra is correct but explores outward in every direction. On a continental graph it
-        would touch millions of nodes per query.
+        Here we decide the routing algorithm. Roads form a directed weighted graph: intersections are nodes, road
+        segments are edges, and the weight is travel time.
+      </p>
+      <p>
+        Textbook{' '}
+        <Term def="The classic shortest-path algorithm: always expand the closest unexplored node next.">Dijkstra</Term>{' '}
+        is correct but explores outward in every direction. On a continental graph it would touch millions of nodes
+        per query.{' '}
+        <Term def="Dijkstra plus a heuristic, e.g. straight-line distance to the goal, that steers the search toward the destination.">A*</Term>{' '}
+        steers the search toward the goal. Race them below.
       </p>
       <MapsRoutingVisualizerDemo />
       <CompareTable
@@ -140,6 +166,11 @@ export default function GoogleMapsChapter() {
           { label: 'Contraction hierarchies', cells: ['Hundreds, not millions', 'Hours to build shortcuts', 'Hard: weights change, so use customizable variants (CCH/CRP)'] },
         ]}
       />
+      <p>
+        The big win comes from{' '}
+        <Term def="Precomputed shortcut edges that skip over unimportant nodes, so long queries visit only a few hundred nodes.">contraction hierarchies</Term>{' '}
+        and similar layered schemes. The sketch below shows the idea.
+      </p>
       <CodeBlock lang="ts" title="hierarchical routing idea" code={`
 // Split the graph into routing tiles at several levels:
 //   L0: every local street, small tiles
@@ -158,9 +189,10 @@ function route(origin: Node, dest: Node) {
       </Callout>
 
       <H2 id="eta">7 · Deep dive: ETA and live traffic</H2>
+      <p>A route is only as good as its travel-time estimate. ETA blends four ingredients:</p>
       <ul>
         <li><strong>Historical profiles</strong>: expected speed per segment per 15-minute slot of the week. This is the baseline for any departure time.</li>
-        <li><strong>Live probes</strong>: map-matched GPS traces give current segment speeds, trusted more where probe density is high.</li>
+        <li><strong>Live probes</strong>:{' '}<Term def="Snapping a noisy sequence of GPS points onto the road segments the device most likely drove along.">map-matched</Term>{' '}GPS traces give current segment speeds, trusted more where probe density is high.</li>
         <li><strong>Blend</strong>: weight live vs historical by freshness and sample count, then sum segment times along the path. A learned model corrects systematic error such as turns, lights and merges. Google has published work on graph neural networks for this.</li>
         <li><strong>Prediction</strong>: for a 40-minute trip, the segment you reach at minute 35 should use the <em>predicted</em> speed for then, not the speed now.</li>
       </ul>
@@ -174,6 +206,7 @@ function segmentSpeed(seg: SegmentId, at: Date): number {
 }`} />
 
       <H2 id="ingestion">8 · Deep dive: location ingestion and rerouting</H2>
+      <p>Last, how phones send locations, and when a driver gets a new route. Start with upload frequency.</p>
       <CompareTable
         columns={['Send every fix', 'Batch on device (chosen)']}
         rows={[
@@ -184,12 +217,18 @@ function segmentSpeed(seg: SegmentId, at: Date): number {
       />
       <p>
         <strong>Rerouting</strong> happens in two places. The client detects <em>deviation</em> locally, since it
-        knows the route polyline, and requests a new route immediately. The server detects <em>better
-        alternatives</em> when traffic changes along the remaining path. It only offers them if the saving beats a
-        threshold, such as 3 minutes or 10%, so the route doesn't flap between two near-equal options.
+        knows the route{' '}
+        <Term def="The route's shape, stored as an ordered list of latitude/longitude points.">polyline</Term>, and
+        requests a new route immediately.
+      </p>
+      <p>
+        The server detects <em>better alternatives</em> when traffic changes along the remaining path. It only offers
+        them if the saving beats a threshold, such as 3 minutes or 10%. That stops the route flapping between two
+        near-equal options.
       </p>
 
       <H2 id="data-model">9 · Data model</H2>
+      <p>Three records carry the system: road segments, live speeds, and raw location fixes.</p>
       <CodeBlock lang="ts" title="core records" code={`
 type RoadSegment = {
   id: bigint; fromNode: bigint; toNode: bigint
@@ -216,8 +255,9 @@ type LocationFix = { sessionId: string; ts: number; lat: number; lng: number; sp
         q="Why not just run Dijkstra on the whole road graph for each request?"
         senior={<p>It's too slow on a graph with hundreds of millions of edges. A* with a distance heuristic explores far fewer nodes, and you can split the graph by region.</p>}
         staff={<>
-          <p>Dijkstra settles every node closer than the destination. For a cross-country trip that is a large fraction of the continent, per request, at 60K QPS. A* helps a lot but a straight-line heuristic is weak on real road networks, where the highway is not in the straight-line direction.</p>
-          <p>The production answer is <strong>preprocessing</strong>: contraction hierarchies or multi-level partitions reduce queries to hundreds of node visits. The catch is live traffic, since shortcuts precompute weights. So I'd pick a <strong>customizable</strong> variant, with a slow metric-independent preprocessing step once per map version and a fast customization step, seconds per region, whenever speeds change. That keeps queries fast and weights fresh.</p>
+          <p>Dijkstra settles every node closer than the destination. For a cross-country trip that is a large fraction of the continent, per request, at 60K QPS. A* helps a lot, but a straight-line heuristic is weak on real road networks, where the highway is not in the straight-line direction.</p>
+          <p>The production answer is <strong>preprocessing</strong>: contraction hierarchies or multi-level partitions reduce queries to hundreds of node visits. The catch is live traffic, since shortcuts precompute weights.</p>
+          <p>So I'd pick a <strong>customizable</strong> variant, with a slow metric-independent preprocessing step once per map version and a fast customization step, seconds per region, whenever speeds change. That keeps queries fast and weights fresh.</p>
         </>}
         followUps={['How do you handle a road closure reported 30 seconds ago?', 'How do you route across two shards (regions)?', 'How would you add turn restrictions and U-turn penalties?']}
       />
@@ -226,7 +266,8 @@ type LocationFix = { sessionId: string; ts: number; lat: number; lng: number; sp
         senior={<p>Phones send locations to a service that writes to Kafka. A stream processor computes average speeds per road and stores them in a cache that routing reads.</p>}
         staff={<>
           <p>The hard step is <strong>map matching</strong>: GPS is noisy and urban canyons bounce signals, so a raw fix can land on a parallel street. An HMM (or similar) over the sequence of fixes picks the most likely path through the road graph. Only then do you get per-segment speeds.</p>
-          <p>Then comes <strong>trust</strong>: weight by sample count and freshness, fall back to historical profiles when probes are sparse, and drop outliers such as a parked phone or a bus. Partition Kafka by region so matching has geographic locality. I'd also design for privacy from the start: aggregate per segment and minute, never persist raw per-user traces beyond a short window.</p>
+          <p>Then comes <strong>trust</strong>: weight by sample count and freshness, fall back to historical profiles when probes are sparse, and drop outliers such as a parked phone or a bus.</p>
+          <p>Partition Kafka by region so matching has geographic locality. I'd also design for privacy from the start: aggregate per segment and minute, never persist raw per-user traces beyond a short window.</p>
         </>}
         followUps={['A stadium empties and 50K phones report 0 km/h on one road. Is that a jam?', 'How fresh must live speeds be to be useful?']}
       />

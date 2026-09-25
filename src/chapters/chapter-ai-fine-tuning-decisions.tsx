@@ -1,5 +1,5 @@
 import {
-  Callout, CodeBlock, CompareTable, FlowDiagram, H2, InterviewQuestion, KeyTakeaways, References,
+  Callout, CodeBlock, CompareTable, FlowDiagram, H2, InterviewQuestion, KeyTakeaways, References, Term, TLDR,
 } from '../components/ui'
 import type { Reference } from '../components/ui'
 import { AiFtDecisionWizardDemo } from './demos/ai-ft-decision-wizard-demo'
@@ -17,14 +17,25 @@ const REFS: Reference[] = [
 export default function FineTuningDecisionsChapter() {
   return (
     <>
+      <TLDR items={[
+        'Try prompting first, then RAG, then fine-tuning. Climb only when evals show the lower rung is exhausted.',
+        'Fine-tuning changes how a model behaves. RAG changes what it knows.',
+        'LoRA trains a tiny add-on instead of the whole model. QLoRA fits big models on one GPU.',
+        'Distillation copies a big model’s skill into a cheap small one for narrow, high-volume tasks.',
+        'A tuned model is a maintained asset: retrain and re-evaluate on every base upgrade.',
+      ]} />
       <p>
-        “Should we fine-tune?” is one of the most common and most over-answered questions in LLM engineering. Fine-tuning
-        changes <strong>how</strong> a model behaves far more reliably than <strong>what</strong> it knows. The staff-level
-        skill is picking the cheapest intervention that closes the measured gap, and knowing what you sign up to maintain
-        afterwards.
+        “Should we fine-tune?” is one of the most common and most over-answered questions in LLM engineering.{' '}
+        <Term def="Continuing to train a pretrained model on your own examples so its weights change.">Fine-tuning</Term>{' '}
+        changes <strong>how</strong> a model behaves far more reliably than <strong>what</strong> it knows.
+      </p>
+      <p>
+        The staff-level skill is picking the cheapest intervention that closes the measured gap. It also means knowing
+        what you sign up to maintain afterwards.
       </p>
 
       <H2 id="ladder">The ladder of interventions</H2>
+      <p>Each rung costs more to build and maintain than the one before. Climb only when you must.</p>
       <FlowDiagram steps={[
         { label: 'Prompting', sub: 'instructions, examples, schema' },
         { label: 'RAG', sub: 'knowledge at query time' },
@@ -33,6 +44,7 @@ export default function FineTuningDecisionsChapter() {
       ]} caption="Climb only when the rung below is measured and exhausted. Cost and maintenance grow at every step." />
 
       <H2 id="good-bad">What fine-tuning is good (and bad) at</H2>
+      <p>Fine-tuning is like training an employee’s habits. It works for style and routine, not for memorizing a changing handbook.</p>
       <CompareTable
         columns={['Good fit', 'Poor fit']}
         rows={[
@@ -46,11 +58,21 @@ export default function FineTuningDecisionsChapter() {
 
       <H2 id="lora">Full fine-tuning vs LoRA vs QLoRA</H2>
       <p>
-        Full fine-tuning updates every weight, so optimizer state alone dwarfs the model. <strong>LoRA</strong> freezes the base
-        and learns a low-rank update for selected matrices, <code>W′ = W + B·A</code>, with rank <code>r</code> of 8–64. That is a
-        tiny fraction of the parameters. The update can be merged into <code>W</code> for serving, or kept as a separate adapter.
-        <strong> QLoRA</strong> goes further: it keeps the frozen base in 4-bit precision while training the adapters, putting
-        large models within reach of a single GPU.
+        Full fine-tuning updates every weight. Its{' '}
+        <Term def="Extra per-parameter values the training algorithm (e.g. Adam) keeps, often several times the model’s size.">optimizer state</Term>{' '}
+        alone dwarfs the model.
+      </p>
+      <p>
+        <strong>LoRA</strong> freezes the base and learns a{' '}
+        <Term def="A matrix expressed as the product of two thin matrices, so it has far fewer numbers to learn.">low-rank</Term>{' '}
+        update for selected matrices: <code>W′ = W + B·A</code>, with{' '}
+        <Term def="The inner dimension of the two thin matrices; smaller rank means fewer trainable parameters.">rank</Term>{' '}
+        <code>r</code> of 8–64. That is a tiny fraction of the parameters. You can merge the update into <code>W</code>{' '}
+        for serving, or keep it as a separate{' '}<Term def="The small file of LoRA weights that sits on top of a shared base model.">adapter</Term>.
+      </p>
+      <p>
+        <strong>QLoRA</strong> goes further. It keeps the frozen base in 4-bit precision while training the adapters.
+        That puts large models within reach of a single GPU. Use the calculator to see the parameter counts.
       </p>
       <AiFtLoraCalculatorDemo />
       <CodeBlock lang="ts" title="LoRA, conceptually" code={`
@@ -61,13 +83,21 @@ function loraForward(x: Vec, W: Mat, A: Mat, B: Mat, alpha: number, r: number): 
 
       <H2 id="distillation">Distillation: big-model quality at small-model prices</H2>
       <p>
-        When a frontier model already solves the task, generate outputs for a broad, realistic input set. Filter or
-        human-review them, then fine-tune a smaller model on those pairs. Classic distillation matches the teacher’s full
-        probability distribution; with API-only teachers you usually train on sampled outputs. Watch the provider’s terms of
-        use regarding training on model outputs, and evaluate the student on held-out data, not the teacher’s examples.
+        When a{' '}<Term def="One of the most capable, usually largest, models available.">frontier model</Term>{' '}
+        already solves the task, use it as a teacher. Generate outputs for a broad, realistic input set. Filter or
+        human-review them. Then fine-tune a smaller student model on those pairs.
+      </p>
+      <p>
+        Classic distillation matches the teacher’s full probability distribution. With API-only teachers you usually
+        train on sampled outputs. Check the provider’s terms of use on training with model outputs. Evaluate the student
+        on held-out data, not on the teacher’s examples.
       </p>
 
       <H2 id="preferences">Preference tuning: RLHF and DPO</H2>
+      <p>
+        Sometimes you can’t write the perfect answer, but you can tell which of two answers is better. Preference
+        tuning learns from those judgments.
+      </p>
       <CompareTable
         columns={['Supervised fine-tuning (SFT)', 'RLHF', 'DPO']}
         rows={[
@@ -79,6 +109,7 @@ function loraForward(x: Vec, W: Mat, A: Mat, B: Mat, alpha: number, r: number): 
       />
 
       <H2 id="data">Data and evaluation make or break it</H2>
+      <p>The model learns exactly what the data shows, including its mistakes. Most fine-tuning failures are data failures.</p>
       <ul>
         <li><strong>Quality over quantity.</strong> A few hundred clean, consistent examples often beat thousands of noisy ones. Inconsistent labels teach inconsistency.</li>
         <li><strong>Hold out an eval set</strong> before training and deduplicate it against training data to avoid contamination.</li>
@@ -87,6 +118,7 @@ function loraForward(x: Vec, W: Mat, A: Mat, B: Mat, alpha: number, r: number): 
       </ul>
 
       <H2 id="serving">Serving and maintenance implications</H2>
+      <p>Training is the easy part. Serving and re-training the model for years is the real cost.</p>
       <ul>
         <li><strong>Merged vs adapter:</strong> merging gives zero serving overhead; keeping adapters lets one base model serve many tenants or tasks (multi-LoRA). See <a href="#/ai-serving">Serving Stacks &amp; Model Routing</a> and the <a href="#/llm-serving">LLM Inference Platform</a> case study.</li>
         <li><strong>Base model upgrades</strong> invalidate adapters. You retrain and re-evaluate on each new base, so budget for it.</li>

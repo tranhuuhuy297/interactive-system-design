@@ -1,6 +1,6 @@
 import {
   ApiSpec, ArchitectureDiagram, Callout, CodeBlock, CompareTable, EstimationTable, H2, InterviewQuestion,
-  KeyTakeaways, References, Requirements,
+  KeyTakeaways, References, Requirements, Term, TLDR,
 } from '../components/ui'
 import type { ArchEdge, ArchNode, Reference } from '../components/ui'
 import { AiCaseCodeLatencyDemo } from './demos/ai-case-code-latency-demo'
@@ -47,12 +47,23 @@ const REFS: Reference[] = [
 export default function CodingAssistantChapter() {
   return (
     <>
+      <TLDR items={[
+        'Two products in one: instant inline completions, and slower chat/agent edits.',
+        'Completions must beat the typing pause. p90 latency beats average quality.',
+        'Prefill dominates cost. Keep each session on one replica so the file prefix stays cached.',
+        'Quality comes from context: pack the most useful code into a small token budget.',
+        'Agents run code only in a sandbox, and humans approve every diff.',
+      ]} />
       <p>
-        An AI coding assistant is really <strong>two products with opposite latency budgets</strong>. Inline
-        completions must appear in the fraction of a second a developer pauses, or they are useless. Chat and
-        agentic edits can take seconds or minutes, but they must be correct, safe to execute, and reviewable. A
-        strong answer separates the two paths early and then goes deep on context assembly, which decides quality
-        on both.
+        An AI coding assistant is really <strong>two products with opposite latency budgets</strong>.
+      </p>
+      <ul>
+        <li><strong>Inline completions</strong> must appear in the fraction of a second a developer pauses, or they are useless.</li>
+        <li><strong>Chat and agentic edits</strong> can take seconds or minutes, but they must be correct, safe to execute, and reviewable.</li>
+      </ul>
+      <p>
+        A strong answer separates the two paths early. Then it goes deep on context assembly, which decides quality on
+        both.
       </p>
 
       <H2 id="requirements">1 · Clarify requirements</H2>
@@ -79,9 +90,11 @@ export default function CodingAssistantChapter() {
         ]}
       />
       <p>
-        Hundreds of billions of prompt tokens per day make <strong>prefill the dominant cost</strong>. Reusing the
-        already-processed file prefix between keystrokes (a KV/prefix cache on a sticky replica) is the single
-        biggest efficiency lever.
+        Hundreds of billions of prompt tokens per day make{' '}
+        <strong><Term def="The model’s first pass over the prompt; its cost grows with prompt length.">prefill</Term>{' '}the dominant cost</strong>.
+        The biggest efficiency lever is reusing the already-processed file prefix between keystrokes. That needs a{' '}
+        <Term def="Stored attention state for a prompt prefix, so a repeated prefix doesn’t need to be processed again.">KV/prefix cache</Term>{' '}
+        on a{' '}<Term def="A server that the same user’s requests keep going to, so its caches stay warm.">sticky replica</Term>.
       </p>
 
       <H2 id="api">3 · API</H2>
@@ -102,16 +115,23 @@ export default function CodingAssistantChapter() {
         ]} />
 
       <H2 id="latency">5 · Deep dive: the completion latency budget</H2>
+      <p>
+        A suggestion is only useful if it lands before the next keystroke. Toggle the optimizations and watch which
+        ones get the total under the deadline.
+      </p>
       <AiCaseCodeLatencyDemo />
       <ul>
-        <li><strong>Fill-in-the-middle.</strong> The model sees code before <em>and after</em> the cursor, so suggestions close brackets and match the next line instead of rewriting it.</li>
+        <li><strong><Term def="FIM: the model is given the code before and after the cursor and generates the part in between.">Fill-in-the-middle</Term>.</strong> The model sees code before <em>and after</em> the cursor, so suggestions close brackets and match the next line instead of rewriting it.</li>
         <li><strong>Small model, sticky sessions.</strong> A few-billion-parameter model decodes several times faster than a large one. Routing a session to the same replica lets the unchanged file prefix stay cached.</li>
-        <li><strong>Cancel aggressively.</strong> Most requests are obsolete before they finish. Cancelling them in the plugin <em>and</em> on the server frees GPU time for the request that matters.</li>
+        <li><strong>Cancel aggressively.</strong> Most requests are obsolete before they finish; the plugin already{' '}<Term def="Waiting for a short pause in typing before sending a request.">debounces</Term>, but typing resumes constantly. Cancelling them in the plugin <em>and</em> on the server frees GPU time for the request that matters.</li>
         <li><strong>Stream the first line.</strong> Show a single-line suggestion as soon as it is decoded; keep generating a multi-line block only if the user keeps waiting.</li>
       </ul>
 
       <H2 id="context">6 · Deep dive: context assembly</H2>
-      <p>Quality depends less on the model than on what goes into its limited prompt. Rank context sources and pack them into a token budget:</p>
+      <p>
+        Quality depends less on the model than on what goes into its limited prompt. Rank context sources and pack them
+        into a{' '}<Term def="The maximum number of prompt tokens you allow per request, set by latency and cost.">token budget</Term>:
+      </p>
       <CompareTable
         columns={['Source', 'Cost to fetch', 'Value']}
         rows={[
@@ -144,6 +164,7 @@ function buildPrompt(ctx: Context, budget = 2048) {
       </Callout>
 
       <H2 id="agents">7 · Deep dive: agentic edits and the sandbox</H2>
+      <p>Agents that edit code and run tests are powerful and risky. The design goal is useful autonomy with a small blast radius.</p>
       <ul>
         <li><strong>Loop with limits.</strong> Plan, search the repo, edit, build and run tests, read failures, repeat. Cap the steps, tokens, and wall time, and stop with a report instead of flailing.</li>
         <li><strong>Execute only in a sandbox.</strong> Use an ephemeral VM or container with no production credentials, CPU and memory limits, and network egress off or allow-listed. The developer’s laptop is not the sandbox.</li>
@@ -152,6 +173,10 @@ function buildPrompt(ctx: Context, budget = 2048) {
       </ul>
 
       <H2 id="evaluation">8 · Evaluation and telemetry</H2>
+      <p>
+        Benchmarks tell you if a model <em>can</em> code. Telemetry tells you if developers <em>keep</em> its code. You
+        need both, in layers.
+      </p>
       <CompareTable
         columns={['Offline', 'Online']}
         rows={[
@@ -162,6 +187,7 @@ function buildPrompt(ctx: Context, budget = 2048) {
       />
 
       <H2 id="data-model">9 · Data model</H2>
+      <p>Telemetry records outcomes, not code, so quality can be measured without storing customer source.</p>
       <CodeBlock lang="ts" title="completion event (telemetry)" code={`
 type CompletionEvent = {
   completionId: string

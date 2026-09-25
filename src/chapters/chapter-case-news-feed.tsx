@@ -1,6 +1,6 @@
 import {
   ApiSpec, ArchitectureDiagram, Callout, CodeBlock, CompareTable, EstimationTable, FlowDiagram, H2, InterviewQuestion,
-  KeyTakeaways, References, Requirements,
+  KeyTakeaways, References, Requirements, TLDR, Term,
 } from '../components/ui'
 import type { ArchEdge, ArchNode, Reference } from '../components/ui'
 import { FeedFanoutSimulatorDemo } from './demos/feed-fanout-simulator-demo'
@@ -17,21 +17,21 @@ const REFS: Reference[] = [
 ]
 
 const NODES: ArchNode[] = [
-  { id: 'client', label: 'Client', sub: 'app / web', kind: 'client', x: 7, y: 50 },
-  { id: 'gw', label: 'API gateway', sub: 'auth · rate limit', kind: 'lb', x: 22, y: 50 },
-  { id: 'post', label: 'Post service', kind: 'service', x: 40, y: 20,
+  { id: 'client', label: 'Client', sub: 'app / web', kind: 'client', x: 10, y: 50 },
+  { id: 'gw', label: 'API gateway', sub: 'auth · rate limit', kind: 'lb', x: 28, y: 50 },
+  { id: 'post', label: 'Post service', kind: 'service', x: 46, y: 20,
     detail: 'Validates and stores the post, uploads media references, then publishes a PostCreated event. It never fans out inline, so publish latency is independent of follower count.' },
-  { id: 'feed', label: 'Feed service', sub: 'read path', kind: 'service', x: 40, y: 80,
+  { id: 'feed', label: 'Feed service', sub: 'read path', kind: 'service', x: 46, y: 80,
     detail: 'Reads the precomputed ID list from the feed cache, merges in posts from followed celebrities (pull), filters deleted and blocked items, then hydrates IDs into full posts.' },
-  { id: 'kafka', label: 'Event bus', sub: 'Kafka', kind: 'queue', x: 58, y: 20,
+  { id: 'kafka', label: 'Event bus', sub: 'Kafka', kind: 'queue', x: 64, y: 20,
     detail: 'Decouples publishing from fan-out. Partition by author ID so a single author\'s posts stay ordered.' },
-  { id: 'fanout', label: 'Fan-out workers', kind: 'worker', x: 76, y: 20,
+  { id: 'fanout', label: 'Fan-out workers', kind: 'worker', x: 82, y: 20,
     detail: 'Looks up followers in pages of about 5K, skips inactive users and authors above the celebrity threshold, and batches ZADDs into each follower\'s feed key.' },
   { id: 'graph', label: 'Social graph', sub: 'followers / following', kind: 'db', x: 93, y: 38,
     detail: 'Adjacency lists stored in both directions, e.g. a wide-column store keyed by user ID, with a cache in front for hot accounts.' },
   { id: 'fcache', label: 'Feed cache', sub: 'Redis sorted sets', kind: 'cache', x: 76, y: 62,
     detail: 'One capped sorted set per user holding (postId, score). Only IDs are stored, never full posts, so the cache stays small and edits and deletes need no fan-out.' },
-  { id: 'pcache', label: 'Post cache', sub: 'hydration', kind: 'cache', x: 58, y: 88,
+  { id: 'pcache', label: 'Post cache', sub: 'hydration', kind: 'cache', x: 64, y: 88,
     detail: 'postId → post body, author and counters. Hot posts are read millions of times, so this cache absorbs most of the hydration load.' },
   { id: 'store', label: 'Post store', sub: 'Cassandra / MySQL shards', kind: 'db', x: 93, y: 80,
     detail: 'Source of truth for posts, sharded by postId (e.g. Snowflake IDs, which are time-sortable).' },
@@ -47,14 +47,25 @@ const EDGES: ArchEdge[] = [
 export default function NewsFeedChapter() {
   return (
     <>
+      <TLDR items={[
+        'Show each user a feed of recent posts from the accounts they follow, fast.',
+        'The core choice: copy each post into followers’ feeds at write time (push), or assemble the feed at read time (pull).',
+        'Push makes reads cheap but breaks for celebrities with millions of followers.',
+        'The standard answer is a hybrid: push for normal authors, pull for celebrities.',
+        'Store only post IDs in feeds, and page with cursors, not offsets.',
+      ]} />
+
       <p>
-        A news feed looks like a simple list query until you do the arithmetic: a few hundred million readers, each
-        following hundreds of accounts, some of which have tens of millions of followers. The whole problem reduces to
-        one question: <strong>do you do the work when a post is written, or when a feed is read?</strong> Every good
-        answer is some mix of both.
+        A news feed looks like a simple list query until you do the arithmetic. There are a few hundred million
+        readers. Each follows hundreds of accounts, and some accounts have tens of millions of followers.
+      </p>
+      <p>
+        The whole problem reduces to one question: <strong>do you do the work when a post is written, or when a feed
+        is read?</strong> Every good answer is some mix of both.
       </p>
 
       <H2 id="requirements">1 · Clarify requirements</H2>
+      <p>Start by fixing the scope and the scale. The follower distribution matters as much as the user count.</p>
       <Requirements
         functional={['Publish a post (text + media)', 'View a home feed of posts from followed accounts', 'Follow / unfollow', 'Paginate backwards through the feed']}
         nonFunctional={['300M DAU, ~10 feed loads per user per day', 'Feed load p99 < 200 ms', 'New posts visible to followers within seconds (eventual)', 'Highly available reads; feed is never empty on error']}
@@ -67,6 +78,7 @@ export default function NewsFeedChapter() {
       </Callout>
 
       <H2 id="estimation">2 · Back-of-the-envelope</H2>
+      <p>Now estimate the load. The number to watch is how many feed inserts each post creates.</p>
       <EstimationTable
         assumptions={['300M DAU; 0.5 posts per user per day; 10 feed loads per user per day', 'Average 200 followers per author (heavily skewed)', 'Feed cache keeps ~500 entries × 16 B per user']}
         rows={[
@@ -78,12 +90,17 @@ export default function NewsFeedChapter() {
         ]}
       />
       <p>
-        The key number is fan-out inserts: about <strong>200× the post rate</strong>. That write amplification is the
-        price of O(1) reads. A 2.4 TB feed cache fits comfortably in a sharded Redis cluster, but only because it
-        holds post IDs rather than post bodies.
+        The key number is fan-out inserts: about <strong>200× the post rate</strong>. That{' '}
+        <Term def="When one logical write turns into many physical writes. Here, one post becomes one insert per follower.">write amplification</Term>{' '}
+        is the price of constant-time reads.
+      </p>
+      <p>
+        A 2.4 TB feed cache fits comfortably in a sharded Redis cluster. That only works because the cache holds post
+        IDs, not full posts.
       </p>
 
       <H2 id="api">3 · API</H2>
+      <p>Three calls cover the product: publish a post, read the feed, and follow an account.</p>
       <ApiSpec endpoints={[
         { method: 'POST', path: '/v1/posts', desc: 'Publish a post. Media is uploaded separately via pre-signed URLs.', body: '{ text, mediaIds[], idempotencyKey }', returns: '201 { postId }' },
         { method: 'GET', path: '/v1/feed', desc: 'Home feed, newest first. Cursor = last seen (score, postId).', body: '?cursor&limit=20', returns: '{ items[], nextCursor }' },
@@ -91,6 +108,11 @@ export default function NewsFeedChapter() {
       ]} />
 
       <H2 id="high-level">4 · High-level design</H2>
+      <p>
+        The design has a write path (publishing) and a read path (loading the feed). They only meet in the feed cache.
+        Publishing hands the slow work to background <Term def="The step that copies a new post into each follower’s feed.">fan-out</Term> workers
+        through an event bus, so posting stays fast no matter how many followers an author has.
+      </p>
       <ArchitectureDiagram nodes={NODES} edges={EDGES} height={420}
         caption="The write path and read path meet only in the feed cache"
         flows={[
@@ -103,6 +125,10 @@ export default function NewsFeedChapter() {
         ]} />
 
       <H2 id="fanout">5 · Deep dive: fan-out on write vs on read</H2>
+      <p>
+        This is the central decision. Move the follower-count slider in the simulator to see where push stops working,
+        then compare the three strategies in the table.
+      </p>
       <FeedFanoutSimulatorDemo />
       <CompareTable
         columns={['Push (fan-out on write)', 'Pull (fan-out on read)', 'Hybrid']}
@@ -121,8 +147,13 @@ export default function NewsFeedChapter() {
 
       <H2 id="read-path">6 · Deep dive: storage, pagination, and hydration</H2>
       <p>
-        Store <strong>only IDs</strong> in the per-user feed. Edits, deletes, and like counts then never need a
-        second fan-out, because hydration always reads the current post. Paginate with a <strong>cursor</strong>{' '}
+        Next, decide what the feed stores and how the client pages through it. Store <strong>only IDs</strong> in the
+        per-user feed. Edits, deletes and like counts then never need a second fan-out, because{' '}
+        <Term def="Turning a list of IDs into full objects by looking each one up, usually in a cache.">hydration</Term>{' '}
+        always reads the current post.
+      </p>
+      <p>
+        Paginate with a <strong><Term def="An opaque bookmark that marks where the last page ended, e.g. the last item’s score and ID.">cursor</Term></strong>{' '}
         (score + postId), not an offset. Offsets shift as new posts land at the top, which causes duplicates and gaps.
       </p>
       <CodeBlock lang="ts" title="feed read (sketch)" code={`
@@ -145,6 +176,11 @@ async function loadFeed(userId: string, cursor?: Cursor, limit = 20) {
       ]} caption="Read path stages. Ranking slots in without touching the write path." />
 
       <H2 id="data-model">7 · Data model</H2>
+      <p>
+        Three stores back the design: posts, the follow graph in both directions, and one capped{' '}
+        <Term def="A Redis data type that keeps members ordered by a numeric score, with fast range queries.">sorted set</Term>{' '}
+        per user for the feed.
+      </p>
       <CodeBlock lang="ts" title="storage layout" code={`
 // Post store (sharded by postId; Snowflake IDs sort by time)
 type Post = { postId: bigint; authorId: string; text: string; mediaIds: string[]; createdAt: number; deleted: boolean }
@@ -157,6 +193,7 @@ type Post = { postId: bigint; authorId: string; text: string; mediaIds: string[]
 //   capped with ZREMRANGEBYRANK feed:{u} 0 -501  → keep newest 500`} />
 
       <H2 id="staff">8 · Going beyond: staff-level extensions</H2>
+      <p>The hybrid design works. Staff candidates go on to cut its cost and close its correctness gaps.</p>
       <Callout kind="staff">
         <ul>
           <li><strong>Skip inactive users.</strong> Most followers of a big account haven't opened the app in days. Only fan out to users active within N days, and rebuild a cold user's feed on their next login (pull once, then cache). This is usually the largest single cost saving.</li>
@@ -172,7 +209,8 @@ type Post = { postId: bigint; authorId: string; text: string; mediaIds: string[]
         q="A user with 80M followers posts. Walk me through what happens in your system."
         senior={<p>They're above the celebrity threshold, so we don't fan out. The post is stored once, and when followers load their feed we merge in recent posts from the celebrities they follow.</p>}
         staff={<>
-          <p>Write path: one insert into the post store and one event on the bus. Fan-out sees the author is flagged as pull-mode and does nothing more. Read path: the feed service keeps a small per-user list of followed pull-mode authors and fetches their recent posts. These reads are extremely hot, so they're served from the post cache with request coalescing, and 80M readers become a handful of cache hits per node.</p>
+          <p>Write path: one insert into the post store and one event on the bus. Fan-out sees the author is flagged as pull-mode and does nothing more.</p>
+          <p>Read path: the feed service keeps a small per-user list of followed pull-mode authors and fetches their recent posts. These reads are extremely hot, so they're served from the post cache with request coalescing, and 80M readers become a handful of cache hits per node.</p>
           <p>The threshold shouldn't be a single hardcoded number. It should depend on active followers and fan-out lag. There's also a transition problem: when an account crosses the threshold, its existing pushed entries remain and the read-side merge must dedupe by postId.</p>
         </>}
         followUps={['How do you pick the threshold?', 'What if a reader follows 500 celebrities?', 'How does ranking change the cache?']}

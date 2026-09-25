@@ -1,6 +1,6 @@
 import {
   ApiSpec, ArchitectureDiagram, Callout, CodeBlock, CompareTable, EstimationTable, H2, InterviewQuestion,
-  KeyTakeaways, Requirements, References,
+  KeyTakeaways, Requirements, References, TLDR, Term,
 } from '../components/ui'
 import type { ArchEdge, ArchNode, Reference } from '../components/ui'
 import { CollabCrdtTombstoneDemo } from './demos/collab-crdt-tombstone-demo'
@@ -47,15 +47,30 @@ const REFS: Reference[] = [
 export default function CollaborativeEditorChapter() {
   return (
     <>
+      <TLDR items={[
+        'Core problem: many people type in one document at once, and every screen must end up with exactly the same text.',
+        'Key decision: one leased authority per document orders all edits; clients apply their own edits instantly.',
+        'The hard part: concurrent edits at shifting positions. OT rewrites them; CRDTs give every character an id.',
+        'Staff insight: writes are rarely the bottleneck. Fan-out and presence on hot documents are.',
+      ]} />
       <p>
-        Real-time collaborative editing looks like a chat problem, since it is just pushing small messages over WebSockets.
-        It is really a <strong>concurrency-control</strong> problem. Two people edit the same paragraph at the same moment,
-        both see their own keystroke instantly, and a few hundred milliseconds later every screen must show
-        <em> exactly</em> the same text. The interview is about how you get there: operational transformation or CRDTs,
-        where the authority lives, and how you persist, recover and scale a document that is hot.
+        Real-time collaborative editing looks like a chat problem, since it is just pushing small messages over
+        WebSockets. It is really a <strong>concurrency-control</strong> problem.
+      </p>
+      <p>
+        Two people edit the same paragraph at the same moment. Both see their own keystroke instantly. A few hundred
+        milliseconds later, every screen must show <em>exactly</em> the same text.
+      </p>
+      <p>
+        The interview is about how you get there. Do you use{' '}
+        <Term def="Operational transformation: rewrite each edit's position so it still means the same thing after other concurrent edits.">OT</Term>{' '}
+        or{' '}
+        <Term def="Conflict-free replicated data types: data structures whose copies can merge in any order and still agree.">CRDTs</Term>?
+        Where does the authority live? And how do you persist, recover and scale a document that is hot?
       </p>
 
       <H2 id="requirements">1 · Clarify requirements</H2>
+      <p>First, agree on the content type and the latency and convergence guarantees.</p>
       <Requirements
         functional={['Multiple users edit one document concurrently', 'See others’ edits and cursors live', 'Version history & restore', 'Offline edits merge on reconnect', 'Share with view / comment / edit roles']}
         nonFunctional={['Local keystroke latency ≈ 0 (optimistic)', 'Remote edits visible in < 300 ms p95 in-region', 'All replicas converge; no lost edits', 'Durable once acknowledged']}
@@ -68,6 +83,7 @@ export default function CollaborativeEditorChapter() {
       </Callout>
 
       <H2 id="estimation">2 · Back-of-the-envelope</H2>
+      <p>Next, size connections, edit messages and the op log.</p>
       <EstimationTable
         assumptions={['100M daily users, 10M concurrently connected at peak', '~30% of connected users actively typing', 'Clients batch keystrokes every ~200 ms into one message', '~100 B per op on the wire and on disk (illustrative)']}
         rows={[
@@ -78,13 +94,19 @@ export default function CollaborativeEditorChapter() {
           { label: 'Raw op log / day', math: '100M × ~5K ops × 100 B', result: '≈ 50 TB' },
         ]}
       />
+      <p>Two numbers drive the design.</p>
       <p>
-        Two numbers drive the design. The op log is huge but mostly cold, so <strong>snapshots and compaction</strong> are
-        required, not optional. Fan-out is usually tiny, which is why a single in-memory authority per document is
-        affordable. The exception is the hot doc: an all-hands agenda with hundreds of viewers.
+        The{' '}
+        <Term def="The append-only list of every edit (operation) applied to a document, in order.">op log</Term>{' '}
+        is huge but mostly cold, so <strong>snapshots and compaction</strong> are required, not optional.
+      </p>
+      <p>
+        Fan-out is usually tiny, which is why a single in-memory authority per document is affordable. The exception
+        is the hot doc: an all-hands agenda with hundreds of viewers.
       </p>
 
       <H2 id="api">3 · API</H2>
+      <p>Clients load a snapshot over HTTP, then edit over one WebSocket session per document.</p>
       <ApiSpec endpoints={[
         { method: 'GET', path: '/v1/docs/{id}', desc: 'Load the latest snapshot plus the op tail and the current revision.', returns: '{ snapshot, rev, ops[] }' },
         { method: 'WS', path: '/v1/docs/{id}/session', desc: 'Bidirectional stream: submit ops, receive acks, remote ops, and presence.', body: '{ type: "op", baseRev, ops[] }', returns: '{ type: "ack" | "remote" | "presence", rev, ops }' },
@@ -93,6 +115,7 @@ export default function CollaborativeEditorChapter() {
       ]} />
 
       <H2 id="high-level">4 · High-level design</H2>
+      <p>Now connect the pieces. Every edit for a document funnels to that document's single owner.</p>
       <ArchitectureDiagram nodes={NODES} edges={EDGES} height={420}
         caption="Every document has exactly one live authority at a time. Presence is ephemeral and never touches the log."
         flows={[
@@ -103,24 +126,32 @@ export default function CollaborativeEditorChapter() {
 
       <H2 id="authority">5 · Deep dive: one authority per document</H2>
       <p>
-        The simplest correct architecture sends every edit for a document through <strong>one server</strong> that assigns
-        a total order: revision 1, 2, 3 and so on. With a central sequencer, OT only needs to handle client-vs-server
-        concurrency, not the much harder peer-to-peer case. This is the client–server model introduced by the Jupiter
-        system from Xerox PARC. Google Wave’s published OT design builds on it, Google Docs describes a similar
-        server-ordered approach, and the open-source ot.js library implements it.
+        Here we decide where edits get ordered. The simplest correct architecture sends every edit for a document
+        through <strong>one server</strong>. It assigns a total order: revision 1, 2, 3 and so on.
+      </p>
+      <p>
+        With a central sequencer, OT only needs to handle client-vs-server concurrency. It avoids the much harder
+        peer-to-peer case.
+      </p>
+      <p>
+        This is the client–server model introduced by the Jupiter system from Xerox PARC. Google Wave’s published OT
+        design builds on it, Google Docs describes a similar server-ordered approach, and the open-source ot.js
+        library implements it.
       </p>
       <ul>
-        <li><strong>Routing:</strong> gateways route by doc id using a directory with leases, or consistent hashing plus a fencing token, so two servers never both believe they own a doc.</li>
+        <li><strong>Routing:</strong> gateways route by doc id using a directory with{' '}<Term def="Time-limited ownership that must be renewed; if the owner dies, the lease expires and someone else can take over.">leases</Term>, or consistent hashing plus a{' '}<Term def="An increasing number handed out with each lease, so storage can reject writes from an old owner.">fencing token</Term>, so two servers never both believe they own a doc.</li>
         <li><strong>Failover:</strong> when the owner dies, its lease expires. The new owner loads snapshot + log. Clients reconnect and resend any unacknowledged ops with their base revision, so nothing is lost.</li>
         <li><strong>Durability:</strong> ack only after the op is durable in the log. The in-memory copy is a cache.</li>
       </ul>
 
       <H2 id="ot">6 · Deep dive: operational transformation</H2>
       <p>
-        With OT, an op generated against revision <em>r</em> is rewritten (“transformed”) so it still means the same thing
-        after other ops have been applied. Try it: with <strong>naive apply</strong>, a concurrent insert and delete land at
-        stale positions and the replicas diverge. With <strong>OT</strong>, the server rewrites positions and every copy
-        converges.
+        Next, how concurrent edits are reconciled. With OT, an op generated against revision <em>r</em> is rewritten
+        (“transformed”) so it still means the same thing after other ops have been applied.
+      </p>
+      <p>
+        Try it. With <strong>naive apply</strong>, a concurrent insert and delete land at stale positions and the
+        replicas diverge. With <strong>OT</strong>, the server rewrites positions and every copy converges.
       </p>
       <CollabOtSyncDemo />
       <CodeBlock lang="ts" title="character-wise transform (a rewritten to apply after b)" code={`
@@ -143,9 +174,14 @@ function transform(a: Op, b: Op): Op {
 
       <H2 id="crdt">7 · Deep dive: CRDTs</H2>
       <p>
-        A sequence CRDT gives every character a globally unique, ordered id and remembers where it was inserted. Deletes
-        become <strong>tombstones</strong>. Replicas can merge in any order, with or without a server, and still converge.
-        That is why CRDT libraries (Yjs, Automerge) are popular for offline-first and peer-to-peer apps.
+        The alternative to OT is a CRDT. A sequence CRDT gives every character a globally unique, ordered id and
+        remembers where it was inserted.
+      </p>
+      <p>
+        Deletes become{' '}
+        <strong><Term def="A marker left in place of a deleted element, so other replicas still know where things were.">tombstones</Term></strong>.
+        Replicas can merge in any order, with or without a server, and still converge. That is why CRDT libraries
+        (Yjs, Automerge) are popular for offline-first and peer-to-peer apps.
       </p>
       <CollabCrdtTombstoneDemo />
       <CompareTable
@@ -161,14 +197,16 @@ function transform(a: Op, b: Op): Op {
       />
 
       <H2 id="presence-undo-offline">8 · Presence, undo and offline</H2>
+      <p>Four features look small but shape the protocol:</p>
       <ul>
-        <li><strong>Presence</strong> travels on the same socket but is ephemeral. Throttle it to a few updates per second, transform cursor positions through incoming ops, and drop it on disconnect.</li>
+        <li><strong><Term def="Live signals about who is here: cursors, selections, avatars.">Presence</Term></strong> travels on the same socket but is ephemeral. Throttle it to a few updates per second, transform cursor positions through incoming ops, and drop it on disconnect.</li>
         <li><strong>Undo</strong> must be <em>local</em>: undo my last op, not the last op in the document. Implement it as the inverse op, transformed against everything applied since.</li>
         <li><strong>Offline</strong>: queue ops with their base revision, fetch <code>ops?from=rev</code> on reconnect, then rebase (OT) or merge (CRDT). Cap how long a client may stay offline before it must reload a snapshot.</li>
         <li><strong>Permissions</strong> are enforced per op on the server. Never trust a client’s role, and push revocations to open sessions.</li>
       </ul>
 
       <H2 id="data-model">9 · Data model</H2>
+      <p>Three records: the op log, periodic snapshots, and document metadata with the access list.</p>
       <CodeBlock lang="ts" title="storage" code={`
 // Op log: partition by doc_id, cluster by rev → sequential appends, range reads for catch-up
 type OpRecord = { docId: string; rev: number; userId: string; ops: Op[]; ts: number }
@@ -193,7 +231,8 @@ type DocMeta = { docId: string; ownerId: string; title: string; acl: Record<stri
         q="OT or CRDT for a Google Docs competitor? Defend your choice."
         senior={<p>CRDTs, because they converge without a central server and handle offline well. OT is older and harder to get right.</p>}
         staff={<>
-          <p>For a server-backed product with rich text and permissions, I would start with <strong>OT behind a single authority per document</strong>. There is already a server that must authorize every op, persist it, and produce version history, so a central order costs nothing extra. Metadata stays small, and the transform matrix is manageable for a fixed op set.</p>
+          <p>For a server-backed product with rich text and permissions, I would start with <strong>OT behind a single authority per document</strong>.</p>
+          <p>There is already a server that must authorize every op, persist it, and produce version history, so a central order costs nothing extra. Metadata stays small, and the transform matrix is manageable for a fixed op set.</p>
           <p>I would pick a CRDT (e.g. Yjs) if offline-first or peer-to-peer is a core requirement, or if the team is small and wants a battle-tested merge library instead of owning transform code. Then I would budget for tombstone compaction and document-size growth.</p>
           <p>Either way the hard parts are the same: authority and failover, durability before ack, snapshots, and hot documents.</p>
         </>}

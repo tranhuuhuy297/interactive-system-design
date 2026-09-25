@@ -1,5 +1,5 @@
 import {
-  ArchitectureDiagram, Callout, CodeBlock, CompareTable, FlowDiagram, H2, InterviewQuestion, KeyTakeaways, References, Tabs,
+  ArchitectureDiagram, Callout, CodeBlock, CompareTable, FlowDiagram, H2, InterviewQuestion, KeyTakeaways, References, TLDR, Tabs, Term,
 } from '../components/ui'
 import type { ArchEdge, ArchNode, Reference } from '../components/ui'
 import { CacheEvictionSimulatorDemo } from './demos/cache-eviction-simulator-demo'
@@ -33,12 +33,23 @@ export default function CachingChapter() {
   return (
     <>
       <p>
-        Caching is the cheapest performance win in system design and one of the most common sources of subtle
-        bugs. The questions that matter are <strong>where</strong> to cache, <strong>how</strong> reads and writes
-        flow, <strong>what gets evicted</strong>, and <strong>what happens when the cache is wrong or empty</strong>.
+        Caching is the cheapest performance win in system design. It is also one of the most common sources of
+        subtle bugs.
+      </p>
+      <TLDR items={[
+        'Default pattern: read from the cache, fall back to the database, delete the key on writes, always set a TTL.',
+        'Know the race where a slow reader puts stale data back after a delete, and how to fix it.',
+        'Eviction choices: LRU favours recent keys, LFU favours popular keys.',
+        'Four named failures (stampede, penetration, avalanche, hot keys) each have a standard fix.',
+        'The database must survive the cache going away, because the cache carries real load.',
+      ]} />
+      <p>
+        The questions that matter are <strong>where</strong> to cache, <strong>how</strong> reads and writes flow,{' '}
+        <strong>what gets evicted</strong>, and <strong>what happens when the cache is wrong or empty</strong>.
       </p>
 
       <H2 id="layers">Where to cache</H2>
+      <p>You can cache at every hop between the user and the database. Closer to the user is faster but harder to keep fresh.</p>
       <FlowDiagram steps={[
         { label: 'Client', sub: 'HTTP cache, app memory' },
         { label: 'CDN / edge', sub: 'static + cacheable GETs' },
@@ -54,6 +65,10 @@ export default function CachingChapter() {
       </Callout>
 
       <H2 id="patterns">Read & write patterns</H2>
+      <p>
+        These patterns decide who loads data into the cache and when writes reach the database. The most common is{' '}
+        <Term def="The app checks the cache first, reads the database on a miss, then stores the result in the cache.">cache-aside</Term>.
+      </p>
       <ArchitectureDiagram nodes={NODES} edges={EDGES} height={330}
         caption="Pick a pattern to trace the request path"
         flows={[
@@ -81,15 +96,22 @@ export default function CachingChapter() {
 
       <H2 id="eviction">Eviction policies</H2>
       <p>
-        When memory is full, something has to go. <strong>LRU</strong> bets on recency, <strong>LFU</strong> on
-        long-term popularity, <strong>FIFO</strong> on insertion order. Real systems use approximations. Redis
-        samples a few keys for approximate LRU/LFU instead of keeping a global ordered list. Modern designs like
-        W-TinyLFU (Caffeine) combine a recency window with a frequency sketch to resist scans.
+        When memory is full, something has to go.{' '}
+        <strong><Term def="Least recently used: evict the key that was touched longest ago.">LRU</Term></strong> bets on recency,{' '}
+        <strong><Term def="Least frequently used: evict the key with the fewest accesses.">LFU</Term></strong> on long-term popularity,
+        and <strong>FIFO</strong> on insertion order.
+      </p>
+      <p>
+        Real systems use approximations. Redis samples a few keys for approximate LRU/LFU instead of keeping a
+        global ordered list. Modern designs like W-TinyLFU (Caffeine) combine a recency window with a frequency
+        sketch to resist <Term def="One-off reads of many keys (like a batch export) that would push out genuinely popular data.">scans</Term>.
       </p>
       <CacheEvictionSimulatorDemo />
 
       <H2 id="invalidation">Invalidation & consistency</H2>
-      <p>The classic cache-aside race, even when you “delete on write”:</p>
+      <p>
+        A cache is a copy, and copies go stale. Even when you “delete on write”, cache-aside has a classic race:
+      </p>
       <CodeBlock lang="text" title="stale forever (until TTL)" code={`
 t1  Reader A: cache miss → reads DB (value = v1)
 t2  Writer B: updates DB to v2
@@ -99,11 +121,15 @@ t4  Reader A: writes v1 into cache   ← stale value repopulated after the delet
         <li><strong>Always set a TTL</strong>, so every bug has a bounded lifetime.</li>
         <li><strong>Delete, don't update</strong> the cache on writes. Updating races even worse.</li>
         <li><strong>Delayed double delete</strong>, or <strong>versioned values</strong> with compare-and-set, shrink the race window.</li>
-        <li><strong>CDC-driven invalidation</strong> (DB binlog → Kafka → invalidator) removes the dual-write problem from app code.</li>
+        <li><strong><Term def="Change data capture: streaming every committed database change (from its log) to other systems.">CDC</Term>-driven invalidation</strong> (DB binlog → Kafka → invalidator) removes the dual-write problem from app code.</li>
         <li>Leases, as used in Facebook's memcache, let the cache refuse a stale set from a reader that started before the delete.</li>
       </ul>
 
       <H2 id="failure-modes">Failure modes: stampede, penetration, avalanche, hot keys</H2>
+      <p>
+        Most cache outages follow one of four patterns. In each, a burst of requests suddenly bypasses the cache and
+        lands on the database.
+      </p>
       <CacheStampedeSimulatorDemo />
       <Tabs items={[
         { label: 'Stampede', content: <p className="muted">A hot key expires and thousands of requests recompute it at once. Fixes: <strong>request coalescing</strong> (single-flight per key per process, or a distributed lock), <strong>probabilistic early refresh</strong> (XFetch), <strong>serve stale while revalidating</strong>.</p> },
@@ -137,6 +163,7 @@ function refresh(key: string): Promise<Value> {
 }`} />
 
       <H2 id="staff">Staff-level lens</H2>
+      <p>At scale, the hard questions are about what the cache hides and what happens when it disappears.</p>
       <Callout kind="staff">
         <ul>
           <li><strong>The cache is load-bearing.</strong> At 95% hit rate the DB sees 5% of traffic. If the cache dies, the DB sees 20× its normal load and falls over too. Capacity-plan the DB for a cache failure, or have load shedding ready.</li>

@@ -18,6 +18,7 @@ export default function KnowledgeQuizChapter() {
       </Callout>
 
       <H2 id="quiz">Take the quiz</H2>
+      <p>Ten random questions by default. Use keys 1–4 to answer and Enter to continue.</p>
       <QuizRunner />
 
       <H2 id="coverage">What it covers</H2>

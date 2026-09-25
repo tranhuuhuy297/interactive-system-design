@@ -1,20 +1,20 @@
 import {
   ApiSpec, ArchitectureDiagram, Callout, CodeBlock, CompareTable, EstimationTable, H2, InterviewQuestion,
-  KeyTakeaways, Requirements, References,
+  KeyTakeaways, Requirements, References, TLDR, Term,
 } from '../components/ui'
 import type { ArchEdge, ArchNode, Reference } from '../components/ui'
 import { LlmBatchingSimulatorDemo } from './demos/llm-batching-simulator-demo'
 import { LlmGpuMemoryCalculatorDemo } from './demos/llm-gpu-memory-calculator-demo'
 
 const NODES: ArchNode[] = [
-  { id: 'client', label: 'Apps / SDK', kind: 'client', x: 7, y: 50 },
-  { id: 'gw', label: 'API gateway', sub: 'auth · quotas · SSE', kind: 'lb', x: 24, y: 50,
+  { id: 'client', label: 'Apps / SDK', kind: 'client', x: 10, y: 50 },
+  { id: 'gw', label: 'API gateway', sub: 'auth · quotas · SSE', kind: 'lb', x: 28, y: 50,
     detail: 'Authenticates the API key and enforces limits in tokens per minute as well as requests per minute, since one request can cost 100× another. It holds the streaming connection open and never retries a request that has already streamed tokens.' },
-  { id: 'meter', label: 'Usage metering', sub: 'Kafka', kind: 'queue', x: 24, y: 86,
+  { id: 'meter', label: 'Usage metering', sub: 'Kafka', kind: 'queue', x: 28, y: 86,
     detail: 'Every request emits final input and output token counts asynchronously for billing, quotas and capacity planning.' },
-  { id: 'router', label: 'Scheduler', sub: 'model · tier · prefix', kind: 'service', x: 45, y: 50,
+  { id: 'router', label: 'Scheduler', sub: 'model · tier · prefix', kind: 'service', x: 47, y: 50,
     detail: 'Chooses a replica by model or LoRA adapter, priority tier, queue depth, free KV-cache memory, and prefix affinity (route shared system prompts to where their KV is already cached).' },
-  { id: 'queue', label: 'Priority queues', kind: 'queue', x: 45, y: 14,
+  { id: 'queue', label: 'Priority queues', kind: 'queue', x: 47, y: 14,
     detail: 'Separate queues per model and tier (interactive, standard, batch). Admission control rejects early with 429 instead of letting TTFT explode.' },
   { id: 'prefill', label: 'Prefill pool', sub: 'compute-bound', kind: 'worker', x: 67, y: 30,
     detail: 'Processes the whole prompt in parallel and builds its KV cache. Dominates time-to-first-token. Can be a separate GPU pool (disaggregated) or share GPUs with decode.' },
@@ -47,14 +47,24 @@ const REFS: Reference[] = [
 export default function LlmInferencePlatformChapter() {
   return (
     <>
+      <TLDR items={[
+        'Core problem: serve a large language model to hundreds of requests per second, streaming tokens, at the lowest cost per token.',
+        'Key decision: a GPU-aware scheduler with continuous batching behind a classic gateway.',
+        'The hard part: GPU memory. The KV cache, not compute, decides how many requests run at once.',
+        'Staff insight: frame every choice as cost per million tokens at a latency target.',
+      ]} />
       <p>
-        An LLM inference platform is a request/response API on the outside and a <strong>GPU scheduling problem</strong> on
-        the inside. Everything classic still applies: gateways, rate limits, queues, autoscaling. But the scarce resource
-        is GPU memory, requests vary in cost by orders of magnitude, and the response is a stream that cannot simply be
-        retried. Interviewers use this prompt to see whether you can reason from the hardware up.
+        An LLM inference platform is a request/response API on the outside and a <strong>GPU scheduling
+        problem</strong> on the inside. Everything classic still applies: gateways, rate limits, queues, autoscaling.
       </p>
+      <p>
+        But three things are different. The scarce resource is GPU memory. Requests vary in cost by orders of
+        magnitude. And the response is a stream that cannot simply be retried.
+      </p>
+      <p>Interviewers use this prompt to see whether you can reason from the hardware up.</p>
 
       <H2 id="requirements">1 · Clarify requirements</H2>
+      <p>First, agree on the API surface and the two latency targets that define “fast”.</p>
       <Requirements
         functional={['Chat/completions API with token streaming', 'Multiple models and sizes; fine-tuned adapters', 'Per-key quotas and usage-based billing', 'Batch (offline) API at a discount']}
         nonFunctional={['TTFT (time to first token) p95 < ~1 s for interactive traffic', 'TPOT (time per output token) fast enough to out-read humans', '99.9% availability', 'Cost per million tokens as low as possible']}
@@ -67,6 +77,10 @@ export default function LlmInferencePlatformChapter() {
       </Callout>
 
       <H2 id="estimation">2 · Back-of-the-envelope</H2>
+      <p>
+        Next, turn request volume into GPU count. The key memory item is the{' '}
+        <Term def="Per-token attention keys and values kept in GPU memory so the model doesn't recompute them for every new token.">KV cache</Term>.
+      </p>
       <EstimationTable
         assumptions={['50M requests/day, peak 3× average', 'Avg 1,000 input + 300 output tokens', 'One 70B-class model in fp16 (Llama-3-70B-like shape)', 'Illustrative: ~2,500 output tokens/s per 8-GPU replica; ~$3 per GPU-hour. Both vary widely by hardware, engine and batch size.']}
         rows={[
@@ -80,12 +94,15 @@ export default function LlmInferencePlatformChapter() {
           { label: 'Cost / 1M output tokens', math: '$24/h ÷ 9M tok/h', result: '≈ $2.7 (illustrative)' },
         ]}
       />
-      <p>
-        The punchline: the fleet is <strong>thousands of GPUs</strong>, so a 20% utilization gain from batching or
-        caching is worth more than any other optimization in the design.
-      </p>
+      <p>The punchline: the fleet is <strong>thousands of GPUs</strong>.</p>
+      <p>So a 20% utilization gain from batching or caching is worth more than any other optimization in the design.</p>
 
       <H2 id="api">3 · API</H2>
+      <p>
+        One streaming endpoint does most of the work. It returns{' '}
+        <Term def="Server-Sent Events: a one-way HTTP stream where the server pushes a series of small text events.">SSE</Term>{' '}
+        events, one per token chunk.
+      </p>
       <ApiSpec endpoints={[
         { method: 'POST', path: '/v1/chat/completions', desc: 'Generate a response. With stream=true, returns Server-Sent Events carrying token deltas, then a final usage event.', body: '{ model, messages[], max_tokens, temperature, stream }', returns: 'text/event-stream · data: { delta } … data: { usage }' },
         { method: 'POST', path: '/v1/batches', desc: 'Submit many requests for asynchronous processing within a window, at lower priority and price.', body: '{ input_file_id, completion_window }', returns: '202 { batch_id }' },
@@ -93,6 +110,7 @@ export default function LlmInferencePlatformChapter() {
       ]} />
 
       <H2 id="high-level">4 · High-level design</H2>
+      <p>Now connect the pieces. A normal front door leads to a scheduler that places requests on GPU replicas.</p>
       <ArchitectureDiagram nodes={NODES} edges={EDGES} height={420}
         caption="Classic front door, GPU-aware scheduling behind it. Prefill and decode may run on separate pools."
         flows={[
@@ -106,6 +124,13 @@ export default function LlmInferencePlatformChapter() {
         ]} />
 
       <H2 id="phases">5 · Deep dive: prefill vs decode</H2>
+      <p>
+        Every request runs in two phases with different bottlenecks.{' '}
+        <Term def="The first phase: the model reads the whole prompt in one parallel pass and builds its KV cache.">Prefill</Term>{' '}
+        processes the prompt;{' '}
+        <Term def="The second phase: the model generates output one token at a time, reusing the KV cache.">decode</Term>{' '}
+        generates the answer.
+      </p>
       <CompareTable
         columns={['Prefill', 'Decode']}
         rows={[
@@ -116,35 +141,50 @@ export default function LlmInferencePlatformChapter() {
         ]}
       />
       <p>
-        Because the two phases stress different hardware limits, large deployments increasingly
-        <strong> disaggregate</strong> them onto separate GPU pools and ship the KV cache between them. A long prompt then
-        no longer stalls everyone’s decode loop. The cost is KV transfer bandwidth and a more complex scheduler.
+        Because the two phases stress different hardware limits, large deployments increasingly{' '}
+        <strong>disaggregate</strong> them. Prefill and decode run on separate GPU pools, and the KV cache is shipped
+        between them.
+      </p>
+      <p>
+        A long prompt then no longer stalls everyone’s decode loop. The cost is KV transfer bandwidth and a more
+        complex scheduler.
       </p>
 
       <H2 id="batching">6 · Deep dive: continuous batching</H2>
       <p>
-        Decode is memory-bound. Reading the weights once and producing tokens for 32 sequences costs roughly the same as
-        doing it for one, so <strong>batching is where throughput comes from</strong>. Static batching wastes slots:
-        short answers finish and sit idle until the longest one ends. Iteration-level (“continuous”) scheduling, introduced
-        by the Orca paper (OSDI ’22) and now standard in engines like vLLM, admits new requests into freed slots
-        every step.
+        Next, how to get throughput out of each GPU. Decode is memory-bound. Reading the weights once and producing
+        tokens for 32 sequences costs roughly the same as doing it for one. So{' '}
+        <strong>batching is where throughput comes from</strong>.
+      </p>
+      <p>
+        Static batching wastes slots: short answers finish and sit idle until the longest one ends.
+      </p>
+      <p>
+        Iteration-level (“continuous”) scheduling fixes this. It admits new requests into freed slots every step. It
+        was introduced by the Orca paper (OSDI ’22) and is now standard in engines like vLLM. Compare both in the
+        simulator.
       </p>
       <LlmBatchingSimulatorDemo />
 
       <H2 id="kv-cache">7 · Deep dive: the KV cache is the real capacity limit</H2>
       <p>
-        Every in-flight token keeps its attention keys and values in GPU memory. Once the weights are loaded, the
-        remaining HBM decides how many sequences, and how much context, you can serve at once.
+        Now, the real capacity limit. Every in-flight token keeps its attention keys and values in GPU memory.
+      </p>
+      <p>
+        Once the weights are loaded, the remaining{' '}
+        <Term def="High-bandwidth memory: the fast memory stacked on the GPU that holds weights and the KV cache.">HBM</Term>{' '}
+        decides how many sequences, and how much context, you can serve at once. Try model sizes in the calculator.
       </p>
       <LlmGpuMemoryCalculatorDemo />
       <ul>
         <li><strong>Paged KV cache</strong> (PagedAttention, vLLM): store KV in fixed-size blocks like OS pages. This cuts fragmentation from reserving max_tokens up front and allows prefix blocks to be shared.</li>
-        <li><strong>Grouped-query attention</strong> in the model (8 KV heads instead of 64) is why modern 70B models need about 8× less KV than older ones.</li>
+        <li><strong><Term def="An attention variant where groups of query heads share one key/value head, shrinking the KV cache.">Grouped-query attention</Term></strong> in the model (8 KV heads instead of 64) is why modern 70B models need about 8× less KV than older ones.</li>
         <li><strong>When memory runs out</strong>: preempt the lowest-priority sequences, then swap their KV to CPU memory or drop it and recompute later. Never OOM the whole batch.</li>
         <li><strong>Quantization</strong> (fp8/int8 weights, fp8 KV) trades a small quality risk for roughly 2× capacity. Validate it with evals, not vibes.</li>
       </ul>
 
       <H2 id="scheduling">8 · Scheduling, scaling and cost</H2>
+      <p>Last, the levers that turn a working fleet into an efficient one. Each has a catch:</p>
       <CompareTable
         columns={['Lever', 'Effect', 'Trade-off']}
         rows={[
@@ -155,6 +195,7 @@ export default function LlmInferencePlatformChapter() {
           { label: 'Autoscale on queue + KV use', cells: ['Tracks real saturation (CPU% is meaningless here)', 'Cold start = minutes to load weights → keep warm headroom'] },
         ]}
       />
+      <p>Admission control ties quotas to tokens, not requests, because one request can cost 1,000× another.</p>
       <CodeBlock lang="ts" title="token-aware admission (sketch)" code={`
 // Reserve the worst case up front so one request can't blow the quota mid-stream.
 function admit(key: ApiKey, req: CompletionRequest): Admission {
@@ -166,6 +207,7 @@ function admit(key: ApiKey, req: CompletionRequest): Admission {
 }`} />
 
       <H2 id="data-model">9 · Data model</H2>
+      <p>Two records matter: a usage event per request for billing, and the scheduler's view of each replica.</p>
       <CodeBlock lang="ts" title="records" code={`
 type UsageEvent = {       // Kafka → billing & quota aggregates (idempotent on requestId)
   requestId: string; apiKeyId: string; model: string; adapter?: string
@@ -205,8 +247,10 @@ type Replica = { id: string; model: string; gpus: number; kvFreeBlocks: number; 
         q="How do you serve 500 customer fine-tunes of the same 8B model without 500 GPU pools?"
         senior={<p>Deploy each fine-tune on shared GPUs and load them on demand, evicting unused ones.</p>}
         staff={<>
-          <p>Use <strong>parameter-efficient adapters (LoRA)</strong> over one shared base model. Adapter weights are small, so many fit in GPU memory next to the base, and requests for different adapters can be batched together with kernels designed for mixed-adapter batches.</p>
-          <p>The system work: an adapter registry with versioning, LRU caching of adapters in HBM and host memory, routing affinity (the same adapter goes to replicas where it is already warm), and per-adapter quotas so one noisy customer can’t evict everyone else’s adapters. Full fine-tunes that change base weights need their own replicas; price them accordingly.</p>
+          <p>Use <strong>parameter-efficient adapters (LoRA)</strong> over one shared base model. Adapter weights are small, so many fit in GPU memory next to the base.</p>
+          <p>Requests for different adapters can be batched together with kernels designed for mixed-adapter batches.</p>
+          <p>The system work: an adapter registry with versioning, LRU caching of adapters in HBM and host memory, routing affinity (the same adapter goes to replicas where it is already warm), and per-adapter quotas so one noisy customer can’t evict everyone else’s adapters.</p>
+          <p>Full fine-tunes that change base weights need their own replicas; price them accordingly.</p>
         </>}
       />
 

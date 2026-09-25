@@ -1,6 +1,6 @@
 import {
   ApiSpec, ArchitectureDiagram, Callout, CodeBlock, CompareTable, EstimationTable, H2, InterviewQuestion,
-  KeyTakeaways, Requirements, References,
+  KeyTakeaways, Requirements, References, TLDR, Term,
 } from '../components/ui'
 import type { ArchEdge, ArchNode, Reference } from '../components/ui'
 import { NearbyFriendsSimulationDemo } from './demos/nearby-friends-simulation-demo'
@@ -42,14 +42,25 @@ const REFS: Reference[] = [
 export default function NearbyFriendsChapter() {
   return (
     <>
+      <TLDR items={[
+        'Core problem: show which friends are within a few km, updated every half minute or so.',
+        'Key decision: one pub/sub channel per user; each friend’s server checks the distance and drops far updates.',
+        'The hard part: fan-out. About 330K location updates per second become about 13M deliveries.',
+        'Staff insight: pick the fan-out key from who cares: the friend graph here, geography for nearby strangers.',
+      ]} />
       <p>
         Nearby Friends looks like a proximity problem, but it isn't one. Proximity search (“restaurants near me”)
-        queries a mostly <em>static</em> index. Here every point <strong>moves constantly</strong>, and the set of
-        people who care about a given point is the <strong>friend graph</strong>, not geography. That turns it into a
-        real-time <strong>fan-out</strong> problem, closer to chat than to Yelp.
+        queries a mostly <em>static</em> index.
+      </p>
+      <p>
+        Here every point <strong>moves constantly</strong>. And the people who care about a given point come from
+        the <strong>friend graph</strong>, not geography. That makes it a real-time{' '}
+        <strong><Term def="One incoming event copied out to many recipients.">fan-out</Term></strong> problem,
+        closer to chat than to Yelp.
       </p>
 
       <H2 id="requirements">1 · Clarify requirements</H2>
+      <p>First, settle freshness, consistency and privacy expectations. They are looser in some ways and stricter in others than you'd guess.</p>
       <Requirements
         functional={['See opted-in friends within X km, with distance', 'List updates within about a minute', 'Toggle sharing on and off at any time', 'Optional: location history']}
         nonFunctional={['Low latency for updates (seconds)', 'Eventual consistency is fine: an occasionally stale dot is OK', 'Battery friendly', 'Privacy by default']}
@@ -57,6 +68,7 @@ export default function NearbyFriendsChapter() {
       />
 
       <H2 id="estimation">2 · Back-of-the-envelope</H2>
+      <p>Next, estimate the inbound update rate, then multiply by the audience per update.</p>
       <EstimationTable
         assumptions={['100M users of the feature, 10% active concurrently', 'Location update every 30 s', 'Avg 400 friends, ~10% of them online and sharing']}
         rows={[
@@ -69,10 +81,15 @@ export default function NearbyFriendsChapter() {
       />
       <p>
         The number that shapes the design is <strong>13M deliveries per second</strong>, forty times the inbound rate.
-        Connections are a solved problem. The fan-out is where the capacity plan lives.
       </p>
+      <p>Connections are a solved problem. The fan-out is where the capacity plan lives.</p>
 
       <H2 id="api">3 · API</H2>
+      <p>
+        The main channel is a{' '}
+        <Term def="A long-lived, two-way connection between the app and a server, so either side can send messages at any time.">WebSocket</Term>.
+        Two small REST calls handle settings and the first snapshot.
+      </p>
       <ApiSpec endpoints={[
         { method: 'WS', path: 'wss://…/nearby', desc: 'Client → server: location updates. Server → client: friend location changes and removals.', body: '{ type: "loc", lat, lng, ts }', returns: '{ type: "friend", userId, lat, lng, distanceKm, ts } | { type: "gone", userId }' },
         { method: 'PUT', path: '/v1/me/sharing', desc: 'Turn location sharing on or off; takes effect immediately.', body: '{ enabled, visibleTo?: "all" | friendIds[] }' },
@@ -80,6 +97,11 @@ export default function NearbyFriendsChapter() {
       ]} />
 
       <H2 id="high-level">4 · High-level design</H2>
+      <p>
+        Now connect the pieces. A stateful WebSocket tier talks to a{' '}
+        <Term def="Publish/subscribe: senders publish to a named channel, and every current subscriber of that channel receives the message.">pub/sub</Term>{' '}
+        tier, with a location cache on the side.
+      </p>
       <ArchitectureDiagram nodes={NODES} edges={EDGES} height={400}
         caption="Stateful WebSocket tier and a sharded pub/sub tier; each user owns one channel"
         flows={[
@@ -90,9 +112,12 @@ export default function NearbyFriendsChapter() {
 
       <H2 id="fanout">5 · Deep dive: fan-out and filtering</H2>
       <p>
-        Every update is published to the user's own channel. Each online friend's connection handler is subscribed
-        and decides locally whether it's close enough to show. It's wasteful by design, because the distance check
-        is cheap and the alternative, a spatial index of moving points queried per friend, is not.
+        Here we decide who does the distance filtering. Every update is published to the user's own channel. Each
+        online friend's connection handler is subscribed, and decides locally whether it's close enough to show.
+      </p>
+      <p>
+        That is wasteful by design. The distance check is cheap. The alternative, a spatial index of moving points
+        queried per friend, is not. Watch how much gets filtered in the simulation.
       </p>
       <NearbyFriendsSimulationDemo />
       <CodeBlock lang="ts" title="connection handler (per connected user)" code={`
@@ -110,6 +135,7 @@ async function onFriendLocation(conn: Conn, msg: { userId: string; lat: number; 
     conn.send({ type: 'gone', userId: msg.userId })          // left the radius
   }                                                          // else: filtered, never leaves the server
 }`} />
+      <p>Which technology carries the fan-out? Compare the three candidates:</p>
       <CompareTable
         columns={['Redis pub/sub', 'Kafka topics', 'Geo index (query on read)']}
         rows={[
@@ -121,9 +147,10 @@ async function onFriendLocation(conn: Conn, msg: { userId: string; lat: number; 
       />
 
       <H2 id="scaling">6 · Deep dive: scaling the two stateful tiers</H2>
+      <p>Both tiers hold state, so neither scales by simply adding boxes. Take them one at a time.</p>
       <h3>Pub/sub cluster</h3>
       <ul>
-        <li><strong>Shard by channel</strong> (user id) with consistent hashing. A service-discovery store (etcd or ZooKeeper) holds the ring, and publishers and subscribers look up the owning shard.</li>
+        <li><strong>Shard by channel</strong> (user id) with{' '}<Term def="A hashing scheme where adding or removing a server moves only a small share of keys.">consistent hashing</Term>. A service-discovery store (etcd or ZooKeeper) holds the ring, and publishers and subscribers look up the owning shard.</li>
         <li>Size for <strong>CPU on fan-out</strong>, not memory: at ~13M deliveries/s you need many shards even though the channel metadata fits on a few boxes.</li>
         <li>Classic Redis Cluster pub/sub <strong>broadcasts to every node</strong>. Use sharded pub/sub (<code>SSUBSCRIBE</code>, Redis 7+) or client-side sharding across independent instances.</li>
         <li>Resizing moves channels, so every subscriber on them must resubscribe. Do it off-peak and gradually, and treat it as an operational event, not autoscaling.</li>
@@ -131,11 +158,12 @@ async function onFriendLocation(conn: Conn, msg: { userId: string; lat: number; 
       <h3>WebSocket tier</h3>
       <ul>
         <li>Stateful but <strong>replaceable</strong>: a lost connection just reconnects, re-subscribes and re-reads the cache.</li>
-        <li>Deploys <strong>drain</strong>: stop accepting, tell clients to reconnect with jitter, then terminate. This avoids a thundering herd of 100K sockets.</li>
+        <li>Deploys <strong><Term def="Stop sending new work to a server and let existing connections move away gracefully before shutting it down.">drain</Term></strong>: stop accepting, tell clients to reconnect with jitter, then terminate. This avoids a thundering herd of 100K sockets.</li>
         <li>Autoscale on connection count and CPU. Per-connection memory, which includes the subscription set, is the main limit.</li>
       </ul>
 
       <H2 id="battery-privacy">7 · Deep dive: battery and privacy</H2>
+      <p>The phone decides how often and how precisely to report. Each option trades battery, freshness and privacy.</p>
       <CompareTable
         columns={['Choice', 'Battery', 'Freshness', 'Privacy']}
         rows={[
@@ -151,6 +179,7 @@ async function onFriendLocation(conn: Conn, msg: { userId: string; lat: number; 
       </Callout>
 
       <H2 id="data-model">8 · Data model</H2>
+      <p>Storage is light: a cache of latest locations, channels with no storage, the friend graph, and optional history.</p>
       <CodeBlock lang="ts" title="storage" code={`
 // Location cache (Redis):  key loc:{userId}  →  { lat, lng, ts }   TTL 600 s
 //   TTL doubles as presence: no update for 10 min ⇒ user disappears from friends' lists.
@@ -174,7 +203,8 @@ type Friendship = { userId: string; friendId: string; sharing: boolean }
         q="Why not store everyone's location in a geospatial index and query friends within radius?"
         senior={<p>Locations change every 30 seconds, so the index would take 330K writes per second. We also only care about friends, so a friend-based pub/sub is more direct.</p>}
         staff={<>
-          <p>The access pattern is wrong for an index. The query is “which of <em>my friends</em> are near me”, and the candidate set, about 40 online friends, is tiny and already known. Pulling their 40 latest locations and computing distances is cheaper than a geo query, and pushing changes avoids polling entirely.</p>
+          <p>The access pattern is wrong for an index. The query is “which of <em>my friends</em> are near me”, and the candidate set, about 40 online friends, is tiny and already known. Pulling their 40 latest locations and computing distances is cheaper than a geo query.</p>
+          <p>Pushing changes also avoids polling entirely.</p>
           <p>A geo index is the right tool when the candidate set is <em>unknown</em>, as with nearby strangers. Then I'd use geohash-cell channels rather than a queried index, so the push model survives. The rule I'd state is to pick the fan-out key from who cares: the friend graph here, geography for strangers.</p>
         </>}
         followUps={['What happens when a user toggles sharing off?', 'How would you add “nearby strangers” without a second system?']}
@@ -184,7 +214,8 @@ type Friendship = { userId: string; friendId: string; sharing: boolean }
         senior={<p>Add more Redis nodes and rebalance channels, and maybe increase the update interval.</p>}
         staff={<>
           <p><strong>Now</strong>: shed load without resharding, since resharding forces a resubscription storm mid-incident. Push a config change that stretches the update interval (30 s → 60 s halves fan-out) and prioritizes moving users over stationary ones.</p>
-          <p><strong>Later</strong>: pre-split shards for predictable events, move to sharded pub/sub so fan-out doesn't broadcast cluster-wide, and filter earlier. For example, skip publishing when a user hasn't moved more than ~50 m, which removes most updates from stationary phones. I'd add a capacity alert on deliveries/s, not just CPU, because that's the true demand signal.</p>
+          <p><strong>Later</strong>: pre-split shards for predictable events, move to sharded pub/sub so fan-out doesn't broadcast cluster-wide, and filter earlier.</p>
+          <p>For example, skip publishing when a user hasn't moved more than ~50 m, which removes most updates from stationary phones. I'd add a capacity alert on deliveries/s, not just CPU, because that's the true demand signal.</p>
         </>}
         followUps={['How do you reshard without a thundering herd?', 'What metric would you autoscale on?']}
       />

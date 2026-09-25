@@ -1,5 +1,5 @@
 import {
-  Callout, CompareTable, H2, InterviewQuestion, KeyTakeaways, References, Tabs,
+  Callout, CompareTable, H2, InterviewQuestion, KeyTakeaways, References, TLDR, Tabs, Term,
 } from '../components/ui'
 import type { Reference } from '../components/ui'
 import { ScalingEvolutionStepper } from './demos/scaling-evolution-stepper'
@@ -18,18 +18,27 @@ export default function ScaleZeroToMillionsChapter() {
   return (
     <>
       <p>
-        Almost every large system started as a single server. What turns it into a distributed system is not ambition
-        but a sequence of <strong>bottlenecks</strong>, each forcing one specific change with one specific cost. If
-        you can tell that story fluently, which stage, which pain, which fix, what it cost, you can reason about
+        Almost every large system started as a single server. Ambition does not turn it into a distributed system.
+        A sequence of <strong>bottlenecks</strong> does, and each one forces one specific change with one specific cost.
+      </p>
+      <TLDR items={[
+        'Scaling is a story: each stage exists because a specific bottleneck forced it.',
+        'Scale up first. Scale out stateless tiers freely. Shard data last.',
+        'Stateless servers make load balancing, autoscaling, and deploys easy.',
+        'Latency climbs sharply as a component gets busy, so plan for about 60% utilization at peak.',
+      ]} />
+      <p>
+        If you can tell that story fluently (which stage, which pain, which fix, what it cost), you can reason about
         almost any design prompt from first principles.
       </p>
       <p>
-        This single-server-to-global progression is a classic way to teach scaling; Alex Xu’s <em>System Design
-        Interview</em> opens with a well-known version of it (see References). The stages, bottleneck analysis and
+        This single-server-to-global progression is a classic way to teach scaling. Alex Xu’s <em>System Design
+        Interview</em> opens with a well-known version of it (see References). The stages, bottleneck analysis, and
         simulations here are this handbook’s own.
       </p>
 
       <H2 id="evolution">The evolution, stage by stage</H2>
+      <p>Step through the stages. At each one, ask yourself what will break next before you click.</p>
       <ScalingEvolutionStepper />
       <Callout kind="tip">
         In an interview, <strong>start near the stage the requirements imply</strong>, not at stage one. For 100M DAU
@@ -38,6 +47,7 @@ export default function ScaleZeroToMillionsChapter() {
       </Callout>
 
       <H2 id="vertical-vs-horizontal">Vertical vs horizontal scaling</H2>
+      <p>There are only two ways to add capacity: a bigger machine, or more machines. Each has a different ceiling.</p>
       <CompareTable columns={['Vertical (scale up)', 'Horizontal (scale out)']} rows={[
         { label: 'How', cells: ['Bigger machine: more CPU, RAM, faster disks', 'More machines behind a load balancer'] },
         { label: 'Ceiling', cells: ['Hard limit: the biggest instance you can buy', 'Practically unbounded if the tier is stateless'] },
@@ -46,16 +56,20 @@ export default function ScaleZeroToMillionsChapter() {
         { label: 'Sweet spot', cells: ['Databases early on, and anything hard to shard', 'Web/API tiers, workers, caches'] },
       ]} />
       <p>
-        Vertical scaling is underrated. A single modern database server with hundreds of GB of RAM and NVMe storage
-        handles far more than most startups ever need. Scale up <strong>until the next step up is too
-        expensive or too risky</strong>, and design your keys so scaling out later is possible.
+        Vertical scaling is underrated. One modern database server with hundreds of GB of RAM and NVMe storage
+        handles far more than most startups ever need. Scale up <strong>until the next step up is too expensive
+        or too risky</strong>. Meanwhile, design your keys so scaling out later is possible.
       </p>
 
       <H2 id="stateless">Why statelessness unlocks everything</H2>
       <p>
-        A stateless server keeps nothing between requests that another server would need. Sessions, uploads in
-        progress, and rate-limit counters live in shared stores. The payoff: the load balancer can route anywhere,
-        autoscaling can add and kill instances freely, and deploys become rolling restarts rather than events.
+        A <Term def="A server that keeps no user data in its own memory between requests, so any copy of it can handle any request.">stateless</Term> server
+        keeps nothing between requests that another server would need. Sessions, uploads in progress, and
+        rate-limit counters live in shared stores instead.
+      </p>
+      <p>
+        The payoff: the load balancer can route anywhere, autoscaling can add and remove instances freely, and
+        deploys become <Term def="Replacing servers a few at a time, so the service stays up during a release.">rolling restarts</Term> instead of events.
       </p>
       <Callout kind="pitfall">
         Sticky sessions look like a shortcut, but they bring back state through the side door. Load becomes uneven,
@@ -65,13 +79,21 @@ export default function ScaleZeroToMillionsChapter() {
 
       <H2 id="saturation">Finding the bottleneck</H2>
       <p>
-        Every tier has a capacity. The system's capacity is the <strong>smallest capacity divided by its share of
-        traffic</strong>. Latency degrades well before that limit: queueing theory says waiting time grows roughly as
-        1 / (1 − utilization), so a component at 90% busy is already about 10× slower than at idle.
+        Every tier has a capacity. The whole system can only go as fast as its <strong>tightest tier, relative to
+        the share of traffic it sees</strong>.
+      </p>
+      <p>
+        Latency degrades well before that limit. <Term def="The math of waiting lines. It predicts how wait time grows as a server gets busier.">Queueing theory</Term> says
+        waiting time grows roughly as 1 / (1 − utilization). A component that is 90% busy is already about 10×
+        slower than when idle.
       </p>
       <ScalingSaturationSimulator />
 
       <H2 id="data-tier">Scaling the data tier: the real work</H2>
+      <p>
+        Stateless tiers are easy to copy. Data is not, which is why the data tier is where most scaling effort goes.
+        The right move depends on whether reads, writes, or geography is the pressure.
+      </p>
       <Tabs items={[
         { label: 'Read-heavy', content: (
           <ul>
@@ -97,6 +119,7 @@ export default function ScaleZeroToMillionsChapter() {
       ]} />
 
       <H2 id="staff">Staff lens: scaling the organization too</H2>
+      <p>Every stage costs money and on-call time, so knowing when <em>not</em> to add one is part of the skill.</p>
       <Callout kind="staff">
         <p>At staff level the question is not only “what breaks next?” but “<strong>what should we build now, and what should we deliberately defer?</strong>”</p>
         <ul>

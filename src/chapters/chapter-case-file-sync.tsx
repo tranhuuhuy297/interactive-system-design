@@ -1,6 +1,6 @@
 import {
   ApiSpec, ArchitectureDiagram, Callout, CodeBlock, CompareTable, EstimationTable, H2, InterviewQuestion,
-  KeyTakeaways, References, Requirements,
+  KeyTakeaways, References, Requirements, TLDR, Term,
 } from '../components/ui'
 import type { ArchEdge, ArchNode, Reference } from '../components/ui'
 import { FilesyncChunkingDemo } from './demos/filesync-chunking-demo'
@@ -44,14 +44,24 @@ const EDGES: ArchEdge[] = [
 export default function FileSyncChapter() {
   return (
     <>
-      <p>
-        “Design Google Drive / Dropbox” is really about three separate problems: <strong>moving bytes efficiently</strong>{' '}
-        (chunking, dedup, delta sync), <strong>keeping metadata strictly consistent</strong> (versions, ordering,
-        conflicts), and <strong>telling millions of idle devices that something changed</strong>. Keep bytes and
-        metadata on separate paths and each problem becomes simpler.
-      </p>
+      <TLDR items={[
+        'Sync files across a user’s devices without ever losing data.',
+        'Split files into chunks addressed by their hash, so only changed chunks are uploaded and duplicates are stored once.',
+        'Keep bytes and metadata on separate paths; metadata must be strictly consistent.',
+        'Each namespace has an ordered change journal; devices sync by replaying it from their cursor.',
+        'When two offline edits collide on a binary file, keep both copies rather than silently losing one.',
+      ]} />
+
+      <p>“Design Google Drive / Dropbox” is really three separate problems:</p>
+      <ul>
+        <li><strong>Moving bytes efficiently</strong>: chunking, deduplication and delta sync.</li>
+        <li><strong>Keeping metadata strictly consistent</strong>: versions, ordering and conflicts.</li>
+        <li><strong>Telling millions of idle devices that something changed.</strong></li>
+      </ul>
+      <p>Keep bytes and metadata on separate paths, and each problem becomes simpler.</p>
 
       <H2 id="requirements">1 · Clarify requirements</H2>
+      <p>Settle the features, then state the top priority: never lose user data.</p>
       <Requirements
         functional={['Upload / download files', 'Sync changes across a user’s devices', 'Revision history (restore old versions)', 'Share files with others', 'Work offline, sync on reconnect']}
         nonFunctional={['Never lose data (durability ≫ availability)', 'Efficient: minimize bandwidth on small edits', 'Sync latency: seconds', 'Files up to tens of GB', 'Scale: 50M users, 10M DAU (illustrative)']}
@@ -63,6 +73,7 @@ export default function FileSyncChapter() {
       </Callout>
 
       <H2 id="estimation">2 · Back-of-the-envelope</H2>
+      <p>Estimate storage, bandwidth and metadata load to see which one dominates.</p>
       <EstimationTable
         assumptions={['50M users, avg 10 GB stored', '10M DAU, ~2 file edits synced per user per day', 'Average edited file 1 MB; delta sync uploads ~10%', 'Illustrative numbers']}
         rows={[
@@ -73,9 +84,14 @@ export default function FileSyncChapter() {
           { label: 'Metadata reads', math: 'journal polls, list calls', result: '≫ writes (read-heavy)' },
         ]}
       />
-      <p>Storage cost dominates. Bandwidth stays modest <em>only if</em> delta sync works. Metadata QPS is small, but it must be exactly right.</p>
+      <p>
+        Storage cost dominates. Bandwidth stays modest <em>only if</em>{' '}
+        <Term def="Uploading only the parts of a file that changed, instead of the whole file.">delta sync</Term>{' '}
+        works. Metadata QPS is small, but it must be exactly right.
+      </p>
 
       <H2 id="api">3 · API</H2>
+      <p>Clients upload missing chunks, then commit a new file version that lists its chunks. A separate call waits for changes.</p>
       <ApiSpec endpoints={[
         { method: 'POST', path: '/blocks/check', desc: 'Which of these chunk hashes does the server lack?', body: '{ hashes: string[] }', returns: '{ missing: string[] }' },
         { method: 'PUT', path: '/blocks/{sha256}', desc: 'Upload one missing chunk. Idempotent: same hash, same bytes.', body: 'binary', returns: '201 | 200 (already present)' },
@@ -85,6 +101,10 @@ export default function FileSyncChapter() {
       ]} />
 
       <H2 id="high-level">4 · High-level design</H2>
+      <p>
+        Chunks flow through a block service into object storage. File versions and the change journal live in a
+        consistent metadata database. A notification service wakes up devices when something changes.
+      </p>
       <ArchitectureDiagram nodes={NODES} edges={EDGES} height={400}
         caption="Bytes (block path) and truth (metadata path) are separated"
         flows={[
@@ -95,11 +115,16 @@ export default function FileSyncChapter() {
 
       <H2 id="chunking">5 · Deep dive: chunking, dedup & delta sync</H2>
       <p>
-        Split files into chunks and <strong>address each chunk by its hash</strong>. A file version is then just an
-        ordered list of hashes. Unchanged chunks are never re-sent, identical files across users are stored once, and
-        restoring an old version is a metadata operation.
+        First, make uploads cheap. Split files into chunks and <strong>address each chunk by its hash</strong>{' '}
+        (<Term def="Storing data under the hash of its content, so identical content always gets the same address.">content addressing</Term>).
+        A file version is then just an ordered list of hashes.
+      </p>
+      <p>
+        Unchanged chunks are never re-sent. Identical files across users are stored once. Restoring an old version is
+        a metadata operation. Edit the text in the demo to see which chunks change.
       </p>
       <FilesyncChunkingDemo />
+      <p>How you cut the chunks matters: fixed-size cuts shift after an insert, while content-defined cuts do not.</p>
       <CompareTable
         columns={['Fixed-size chunks', 'Content-defined chunks (CDC)']}
         rows={[
@@ -116,6 +141,11 @@ export default function FileSyncChapter() {
       </Callout>
 
       <H2 id="consistency">6 · Deep dive: metadata consistency & the journal</H2>
+      <p>
+        Next, make metadata changes safe under concurrent edits. Each namespace keeps an ordered journal, and commits
+        use{' '}
+        <Term def="Proceed without locking, then check at commit time that nobody else changed the data; retry or report a conflict if they did.">optimistic concurrency</Term>.
+      </p>
       <ul>
         <li>Each namespace (a user's root or a shared folder) has a <strong>totally ordered journal</strong> of changes. Clients hold a cursor, meaning “I've applied everything up to entry 18,442”.</li>
         <li>Commits use <strong>optimistic concurrency</strong>: <code>parentRev</code> must equal the current revision, otherwise the server returns <code>409</code>. No locks are held across a slow upload.</li>
@@ -134,14 +164,20 @@ BEGIN;
 COMMIT;`} />
 
       <H2 id="conflicts">7 · Deep dive: conflicts & offline edits</H2>
+      <p>Two devices can edit the same file while offline. Step through the demo to see what happens when both come back.</p>
       <FilesyncConflictDemo />
       <p>
-        For opaque binary files the server can't merge, <strong>keep both</strong>: the first commit wins the
-        path and the loser becomes “filename (conflicted copy)”. Silent last-writer-wins is data loss. Real-time
-        co-editing (Google Docs) solves this with OT or CRDTs at the <em>application</em> layer, not in the file-sync layer.
+        For opaque binary files the server can't merge, <strong>keep both</strong>. The first commit wins the path,
+        and the loser becomes “filename (conflicted copy)”. Silent last-writer-wins is data loss.
+      </p>
+      <p>
+        Real-time co-editing (Google Docs) solves this differently, with{' '}
+        <Term def="Operational transformation and conflict-free replicated data types: two techniques for merging concurrent edits automatically.">OT or CRDTs</Term>{' '}
+        at the <em>application</em> layer, not in the file-sync layer.
       </p>
 
       <H2 id="data-model">8 · Data model</H2>
+      <p>Five small tables carry the whole design: namespaces, files, versions, the journal and the blocks.</p>
       <CodeBlock lang="ts" title="core tables" code={`
 type Namespace   = { nsId: string; ownerId: string; kind: 'user' | 'shared' }
 type FileEntry   = { nsId: string; path: string; rev: number; deleted: boolean }

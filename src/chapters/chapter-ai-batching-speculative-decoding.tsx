@@ -1,5 +1,5 @@
 import {
-  ArchitectureDiagram, Callout, CodeBlock, CompareTable, H2, InterviewQuestion, KeyTakeaways, References,
+  ArchitectureDiagram, Callout, CodeBlock, CompareTable, H2, InterviewQuestion, KeyTakeaways, References, Term, TLDR,
 } from '../components/ui'
 import type { ArchEdge, ArchNode, Reference } from '../components/ui'
 import { AiBatchSpeculativeDemo } from './demos/ai-batch-speculative-demo'
@@ -35,14 +35,26 @@ const EDGES: ArchEdge[] = [
 export default function AiBatchingSpeculativeChapter() {
   return (
     <>
+      <TLDR items={[
+        'Continuous batching re-forms the batch every step. It is the modern default.',
+        'Long prompts stall everyone’s stream. Chunked prefill caps the work per step.',
+        'At scale, prefill and decode can run on separate GPU pools.',
+        'Speculative decoding: a cheap model guesses tokens, the big model checks them in one pass. Output is unchanged.',
+        'Speculation helps most at low load. Measure the acceptance rate on your own traffic.',
+      ]} />
       <p>
-        One LLM replica serves many users at once, and its scheduler decides, every few milliseconds, which sequences
-        run in the next forward pass. That scheduler is where most of the throughput is won and most of the tail
-        latency is lost. This chapter covers how batches are formed, how to stop prefill and decode from hurting each
-        other, and how speculative decoding produces more than one token per expensive step.
+        One LLM replica serves many users at once. Every few milliseconds, its scheduler decides which sequences run
+        in the next{' '}<Term def="One run of the model over the current batch, producing the next token for each sequence.">forward pass</Term>.
+        Most throughput is won, and most{' '}<Term def="The slowest requests, e.g. p99 latency.">tail latency</Term>{' '}
+        is lost, right here.
+      </p>
+      <p>
+        This chapter covers three things: how batches are formed, how to stop prefill and decode from hurting each
+        other, and how speculative decoding gets more than one token per expensive step.
       </p>
 
       <H2 id="batching-kinds">Static, dynamic, and continuous batching</H2>
+      <p>Batching lets one weight read serve many users. How you form the batch decides how much of that win you keep.</p>
       <CompareTable
         columns={['How it works', 'Problem']}
         rows={[
@@ -52,18 +64,21 @@ export default function AiBatchingSpeculativeChapter() {
         ]}
       />
       <p>
-        Continuous batching was introduced by Orca as <strong>iteration-level scheduling</strong>: the engine runs a
-        single model iteration on the batch, then the scheduler decides again. It is now standard in vLLM, SGLang,
+        Continuous batching was introduced by Orca as <strong>iteration-level scheduling</strong>. The engine runs one
+        model iteration on the batch, then the scheduler decides again. It is now standard in vLLM, SGLang,
         TensorRT-LLM (“in-flight batching”), and others. The slot-by-slot simulation lives in the{' '}
         <a href="#/llm-serving">LLM inference platform</a> case study.
       </p>
 
       <H2 id="interference">Prefill–decode interference and chunked prefill</H2>
       <p>
-        A new 8K-token prompt admitted into a running batch makes that iteration much longer. Every user mid-answer
-        sees a stutter: a TPOT spike. The fix is <strong>chunked prefill</strong>. Split long prompts into fixed-size
-        chunks and mix one chunk with the ongoing decodes each iteration, so every step has a bounded amount of work.
-        Sarathi calls this piggybacking decodes onto prefill chunks.
+        Admit a new 8K-token prompt into a running batch and that iteration gets much longer. Every user mid-answer
+        sees a stutter: a spike in{' '}<Term def="Time per output token: the gap between streamed tokens a user sees.">TPOT</Term>.
+      </p>
+      <p>
+        The fix is <strong>chunked prefill</strong>. Split long prompts into fixed-size chunks. Mix one chunk with the
+        ongoing decodes each iteration, so every step does a bounded amount of work. Sarathi calls this piggybacking
+        decodes onto prefill chunks.
       </p>
       <CodeBlock lang="ts" title="one scheduler iteration (simplified)" code={`
 const TOKEN_BUDGET = 2048                   // max tokens processed per forward pass
@@ -84,9 +99,12 @@ function nextBatch(running: Seq[], waiting: Seq[]): Work[] {
       <H2 id="disaggregation">Disaggregation: separate prefill and decode pools</H2>
       <p>
         At larger scale you can go further and run prefill and decode on <strong>different GPUs</strong>. Each pool gets its
-        own batch sizes, parallelism, even hardware type. DistServe frames the goal as <em>goodput</em>: requests per second
-        that meet both the TTFT and TPOT SLOs. The price is moving the KV cache between pools, which needs a fast
-        interconnect.
+        own batch sizes, parallelism, even hardware type.
+      </p>
+      <p>
+        DistServe frames the goal as{' '}<em><Term def="Requests per second that meet all latency targets. Throughput that misses targets doesn’t count.">goodput</Term></em>:
+        requests per second that meet both the TTFT and TPOT SLOs. The price is moving the KV cache between pools,
+        which needs a fast{' '}<Term def="The link between GPUs or machines, such as NVLink inside a node or RDMA networking across nodes.">interconnect</Term>.
       </p>
       <ArchitectureDiagram nodes={NODES} edges={EDGES} height={340}
         caption="Disaggregated serving: prefill and decode scale independently"
@@ -95,6 +113,7 @@ function nextBatch(running: Seq[], waiting: Seq[]): Work[] {
           'KV cache is shipped to a decode worker', 'Decode streams tokens back'] }]} />
 
       <H2 id="scheduling">Scheduling policy: who runs next?</H2>
+      <p>When demand exceeds capacity, someone waits. The policy decides who, and it shows up directly in tail latency.</p>
       <ul>
         <li><strong>FCFS</strong> is simple and fair in arrival order, but one huge prompt blocks everyone behind it (head-of-line blocking).</li>
         <li><strong>Priority tiers</strong>: interactive before batch, paid before free. Pair them with admission caps so low tiers still make progress.</li>
@@ -104,11 +123,18 @@ function nextBatch(running: Seq[], waiting: Seq[]): Work[] {
 
       <H2 id="speculative">Speculative decoding: more than one token per step</H2>
       <p>
-        Decode is memory-bound, so the target model has spare compute during each step. Speculative decoding spends it:
-        a cheap <strong>draft</strong> proposes γ tokens, and the target model <strong>verifies</strong> all of them in one
-        forward pass. Accepted tokens come for free, and at the first rejection the target supplies the right token
-        itself. The accept/reject rule preserves the target model’s output distribution, so quality is unchanged. Chen et
-        al. report 2–2.5× on a 70B model in a distributed setup.
+        Decode is memory-bound, so the big model has spare compute during each step. Speculative decoding spends it.
+        Think of a junior writer drafting a sentence and a senior editor approving it in one read.
+      </p>
+      <p>
+        A cheap <strong>draft</strong> model proposes γ tokens. The{' '}<Term def="The large model whose output you actually want; the draft only proposes.">target model</Term>{' '}
+        <strong>verifies</strong> all of them in one forward pass. Accepted tokens come for free. At the first
+        rejection, the target supplies the right token itself.
+      </p>
+      <p>
+        The accept/reject rule preserves the target model’s output distribution, so quality is unchanged. Chen et al.
+        report 2–2.5× on a 70B model in a distributed setup. Below, α is the{' '}
+        <Term def="The fraction of draft tokens the target model agrees with. Higher α means bigger speedups.">acceptance rate</Term>.
       </p>
       <AiBatchSpeculativeDemo />
       <CodeBlock lang="ts" title="the two formulas to know (i.i.d. acceptance)" code={`

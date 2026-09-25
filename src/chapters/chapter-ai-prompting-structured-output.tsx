@@ -1,5 +1,5 @@
 import {
-  Callout, CodeBlock, CompareTable, FlowDiagram, H2, InterviewQuestion, KeyTakeaways, References,
+  Callout, CodeBlock, CompareTable, FlowDiagram, H2, InterviewQuestion, KeyTakeaways, References, Term, TLDR,
 } from '../components/ui'
 import type { Reference } from '../components/ui'
 import { AiPromptConstrainedDecodingDemo } from './demos/ai-prompt-constrained-decoding-demo'
@@ -16,14 +16,24 @@ const REFS: Reference[] = [
 export default function PromptingStructuredOutputChapter() {
   return (
     <>
+      <TLDR items={[
+        'Treat prompts as versioned API contracts. Log the version with every call.',
+        'Put durable rules in the system message. Wrap untrusted text in clear delimiters.',
+        'Schema-constrained decoding guarantees the output shape, not that it is correct.',
+        'A tool call from a model is a request, not a permission. Authorize it in code.',
+        'Temperature 0 is not deterministic. Pin versions and bound retries.',
+      ]} />
       <p>
         In a production LLM system, the prompt is not a clever sentence. It is an <strong>interface</strong>: the contract
-        between your application and a probabilistic component you don’t control. This chapter treats prompts the way a staff
-        engineer treats any API: versioned, tested, typed at the boundary, and designed for the component to fail in
+        between your application and a probabilistic component you don’t control.
+      </p>
+      <p>
+        This chapter treats prompts like any API: versioned, tested, typed at the boundary, and designed to fail in
         predictable ways.
       </p>
 
       <H2 id="contracts">Prompts are versioned contracts</H2>
+      <p>A prompt has inputs, outputs, and consumers, just like an endpoint. Manage it the same way.</p>
       <ul>
         <li><strong>Inputs</strong>: instructions, context (retrieved documents, user data), examples, tool definitions.</li>
         <li><strong>Outputs</strong>: free text for humans, or <em>structured data</em> for code. Code is the demanding consumer.</li>
@@ -36,9 +46,12 @@ export default function PromptingStructuredOutputChapter() {
 
       <H2 id="anatomy">Anatomy of a request: roles and messages</H2>
       <p>
-        Chat-style APIs separate <strong>system</strong> instructions (policy, persona, output rules), <strong>user</strong> turns,
-        prior <strong>assistant</strong> turns, and <strong>tool</strong> results. Keep durable rules in the system message and
-        untrusted content clearly delimited, because models weigh instructions by position and role.
+        Chat-style APIs separate four kinds of message: <strong>system</strong> instructions (policy, persona, output
+        rules), <strong>user</strong> turns, prior <strong>assistant</strong> turns, and <strong>tool</strong> results.
+      </p>
+      <p>
+        Keep durable rules in the system message. Delimit untrusted content clearly. Models weigh instructions by
+        position and role, so structure matters.
       </p>
       <CodeBlock lang="ts" title="a templated request" code={`
 const request = {
@@ -56,9 +69,12 @@ const request = {
 
       <H2 id="few-shot">Few-shot examples and templating</H2>
       <p>
-        Large models learn a task from a handful of examples placed in the prompt (in-context learning). Examples are the
-        most reliable way to pin down format and edge cases, but they cost tokens on every call and can over-anchor the
-        model to their surface features.
+        Large models learn a task from a handful of examples placed in the prompt. This is called{' '}
+        <Term def="The model picks up a task from examples in the prompt, with no weight updates.">in-context learning</Term>.
+      </p>
+      <p>
+        Examples are the most reliable way to pin down format and edge cases. But they cost tokens on every call, and
+        the model can copy their surface features too closely.
       </p>
       <CompareTable
         columns={['Zero-shot', 'Few-shot', 'Dynamic few-shot']}
@@ -70,11 +86,14 @@ const request = {
         ]}
       />
       <p>
-        Asking the model to reason step by step before answering (chain-of-thought) improves multi-step tasks, but it adds
-        output tokens and latency. If code consumes the result, keep the reasoning in a separate field or a separate call.
+        Asking the model to reason step by step before answering (
+        <Term def="Prompting the model to write out intermediate reasoning before its final answer.">chain-of-thought</Term>)
+        improves multi-step tasks. It also adds output tokens and latency. If code consumes the result, keep the
+        reasoning in a separate field or a separate call.
       </p>
 
       <H2 id="structured-output">Structured output: three levels of guarantee</H2>
+      <p>When code reads the output, “usually valid” isn’t good enough. You can buy three levels of guarantee.</p>
       <CompareTable
         columns={['Ask in the prompt', 'JSON mode', 'Schema-constrained decoding']}
         rows={[
@@ -91,18 +110,23 @@ const request = {
 
       <H2 id="constrained-decoding">How constrained decoding works</H2>
       <p>
-        At each step the model produces a score for every token in its vocabulary. A constraint engine tracks where the
-        output is within a grammar (compiled from a JSON schema or regex) and <strong>masks</strong> every token that could not
-        lead to a valid completion. Sampling then happens only among allowed tokens. Precompiling the grammar into an index
-        over the vocabulary keeps the per-token overhead small.
+        At each step the model scores every{' '}
+        <Term def="A chunk of text the model reads and writes, often part of a word. A model has a fixed vocabulary of tokens.">token</Term>{' '}
+        in its vocabulary. A constraint engine tracks where the output is within a{' '}
+        <Term def="Formal rules for what strings are valid, compiled here from a JSON schema or regex.">grammar</Term>.
+        It <strong>masks</strong> every token that could not lead to a valid completion.
+      </p>
+      <p>
+        Sampling then happens only among allowed tokens. It is like autocomplete that greys out keys you’re not allowed
+        to press. Precompiling the grammar into an index over the vocabulary keeps per-token overhead small.
       </p>
       <AiPromptConstrainedDecodingDemo />
 
       <H2 id="function-calling">Function calling is an API you expose to a model</H2>
       <p>
-        With tool use, you describe functions (name, purpose, JSON-schema parameters). The model responds with a structured
-        call; <em>your code</em> validates it, executes it, and returns the result as a tool message. Design the tool surface the
-        way you would a public API.
+        With tool use, you describe functions: name, purpose, and JSON-schema parameters. The model responds with a
+        structured call. <em>Your code</em> validates it, executes it, and returns the result as a tool message.
+        Design the tool surface the way you would a public API.
       </p>
       <CodeBlock lang="json" title="a tool definition" code={`
 {
@@ -120,7 +144,7 @@ const request = {
 }`} />
       <ul>
         <li><strong>Authorize in code, not in the prompt.</strong> The model choosing a tool is a request, not a permission.</li>
-        <li><strong>Make side-effecting tools idempotent</strong> (pass an idempotency key) because agent loops retry.</li>
+        <li><strong>Make side-effecting tools{' '}<Term def="Safe to repeat: running it twice has the same effect as running it once.">idempotent</Term></strong> (pass an idempotency key), because agent loops retry.</li>
         <li><strong>Few, well-described tools beat many overlapping ones.</strong> Tool descriptions are prompt text too. See <a href="#/ai-agents">Agents &amp; Tool Use</a>.</li>
       </ul>
 
@@ -132,16 +156,20 @@ const request = {
         { label: 'Fallback', sub: 'default, human, or error' },
       ]} caption="Bound the loop: one or two repairs, then a deterministic fallback" />
       <p>
-        Business rules (e.g. “refund ≤ order total”) are checked in code after parsing. A single repair turn that returns
-        the validator’s error message fixes most slips. Unbounded retries turn a quality problem into a cost and latency
+        Check business rules (e.g. “refund ≤ order total”) in code after parsing. One repair turn that returns the
+        validator’s error message fixes most slips. Unbounded retries turn a quality problem into a cost and latency
         incident.
       </p>
 
       <H2 id="determinism">Determinism and its limits</H2>
       <p>
-        Temperature 0 selects the most likely token but does not make a hosted model bit-for-bit reproducible. Batched GPU
-        kernels, floating-point ordering, and silent model updates all introduce drift, and provider seed parameters are
-        best-effort. (For how chat products are served at scale, see the <a href="#/ep-chatgpt">ChatGPT episode</a>.) Design for variance:
+        <Term def="A sampling setting; 0 always picks the most likely token, higher values add randomness.">Temperature</Term>{' '}
+        0 selects the most likely token. It does not make a hosted model bit-for-bit reproducible.
+      </p>
+      <p>
+        Batched GPU kernels, floating-point ordering, and silent model updates all introduce drift. Provider seed
+        parameters are best-effort. (For how chat products are served at scale, see the{' '}
+        <a href="#/ep-chatgpt">ChatGPT episode</a>.) Design for variance:
       </p>
       <ul>
         <li>Pin model versions and log them; re-run evals when the provider announces a change.</li>

@@ -1,5 +1,5 @@
 import {
-  Callout, CodeBlock, CompareTable, FlowDiagram, H2, InterviewQuestion, KeyTakeaways, References, Tabs,
+  Callout, CodeBlock, CompareTable, FlowDiagram, H2, InterviewQuestion, KeyTakeaways, References, TLDR, Tabs, Term,
 } from '../components/ui'
 import type { Reference } from '../components/ui'
 import { DbIsolationAnomaliesDemo } from './demos/db-isolation-anomalies-demo'
@@ -22,13 +22,23 @@ export default function DatabasesChapter() {
   return (
     <>
       <p>
-        “SQL or NoSQL?” is the wrong first question. Start from the <strong>access patterns</strong>: which queries,
-        at what rate, with what consistency and latency needs. The storage engine, the data model and the
-        partitioning scheme all follow from those. Interviewers want to hear you reason from workload to choice,
-        not from a favourite technology.
+        “SQL or NoSQL?” is the wrong first question. Start from the <strong>access patterns</strong>: which queries
+        run, how often, and with what consistency and latency needs.
+      </p>
+      <TLDR items={[
+        'Choose a database from your queries and their rates, not from a favourite technology.',
+        'Most databases run below full isolation by default, so some race conditions slip through.',
+        'B-trees favour reads; LSM trees favour heavy writes.',
+        'Tune, cache, and add replicas before you shard. Sharding is hard to undo.',
+        'The shard key should keep your most common queries on one machine.',
+      ]} />
+      <p>
+        The storage engine, data model, and partitioning scheme all follow from those. Interviewers want to hear you
+        reason from workload to choice.
       </p>
 
       <H2 id="families">Database families</H2>
+      <p>Each family is shaped around one kind of query. Match the family to your dominant access pattern.</p>
       <CompareTable
         columns={['Model', 'Strong at', 'Weak at', 'Examples']}
         rows={[
@@ -49,18 +59,27 @@ export default function DatabasesChapter() {
 
       <H2 id="acid">ACID, BASE & isolation</H2>
       <p>
-        ACID's “I” is where the subtlety lives. Most databases do not default to serializable, so real apps run at
-        weaker levels and get anomalies that are easy to miss in code review.
+        <Term def="Atomicity, Consistency, Isolation, Durability: the guarantees a database transaction gives.">ACID</Term>’s
+        “I” (isolation) is where the subtlety lives. Most databases do not default to{' '}
+        <Term def="The strictest isolation level: transactions behave as if they ran one at a time.">serializable</Term>.
+        Real apps run at weaker levels and get anomalies that are easy to miss in code review.
       </p>
       <DbIsolationAnomaliesDemo />
       <p>
-        <strong>BASE</strong> (basically available, soft state, eventually consistent) describes many NoSQL systems
-        that give up cross-item transactions and immediate consistency in exchange for availability and scale.
-        The line is blurring: DynamoDB, MongoDB and Cassandra (lightweight transactions) all offer some
-        transactional features now, and NewSQL systems give serializable transactions across shards.
+        <strong>BASE</strong> (basically available, soft state, eventually consistent) describes many NoSQL systems.
+        They give up cross-item transactions and immediate consistency in exchange for availability and scale.
+      </p>
+      <p>
+        The line is blurring. DynamoDB, MongoDB, and Cassandra (lightweight transactions) all offer some
+        transactional features now. NewSQL systems give serializable transactions across shards.
       </p>
 
       <H2 id="indexing">Storage engines: B-tree vs LSM</H2>
+      <p>
+        The storage engine decides how data sits on disk. That sets the cost of reads versus writes. An{' '}
+        <Term def="Log-structured merge tree: buffers writes in memory, flushes them as sorted files, and merges those files in the background.">LSM tree</Term>{' '}
+        trades read work for fast writes.
+      </p>
       <CompareTable
         columns={['B-tree', 'LSM tree']}
         rows={[
@@ -88,6 +107,7 @@ export default function DatabasesChapter() {
       ]} />
 
       <H2 id="replication-scaling">Scaling reads before sharding</H2>
+      <p>Most databases hit a read ceiling long before a write ceiling. These cheaper steps usually come first.</p>
       <FlowDiagram steps={[
         { label: 'Tune', sub: 'indexes, queries, pooling' },
         { label: 'Scale up', sub: 'bigger box, NVMe' },
@@ -99,8 +119,9 @@ export default function DatabasesChapter() {
 
       <H2 id="sharding">Partitioning (sharding)</H2>
       <p>
-        Sharding splits data across machines so writes and storage scale horizontally. The shard key decides
-        everything: whether load is even, which queries stay on one shard, and how painful growth will be.
+        Sharding splits data across machines so writes and storage scale horizontally. The{' '}
+        <Term def="The field used to decide which shard a row lives on, such as user_id.">shard key</Term>{' '}
+        decides everything: whether load is even, which queries stay on one shard, and how painful growth will be.
       </p>
       <DbShardingSimulatorDemo />
       <CompareTable
@@ -120,9 +141,10 @@ export default function DatabasesChapter() {
       </Callout>
 
       <H2 id="cross-shard">Life after sharding</H2>
+      <p>Sharding solves scale but takes away features you took for granted on one machine.</p>
       <ul>
         <li><strong>Cross-shard joins</strong> disappear. Denormalise, co-locate related data on the same shard key (all of a user's rows under <code>user_id</code>), or join in the application.</li>
-        <li><strong>Cross-shard transactions</strong> need 2PC or sagas. Design the shard key so most transactions stay single-shard.</li>
+        <li><strong>Cross-shard transactions</strong> need <Term def="Two-phase commit: a coordinator asks every shard to prepare, then tells all of them to commit or abort.">2PC</Term> or sagas. Design the shard key so most transactions stay single-shard.</li>
         <li><strong>Global uniqueness and auto-increment</strong> break. Use distributed IDs (see the Unique IDs chapter).</li>
         <li><strong>Resharding</strong> is an online migration: dual writes or CDC backfill, verification, cutover, cleanup. Budget weeks, not hours.</li>
         <li><strong>Hot tenants</strong>: one big customer can outgrow a shard. Plan to give them a dedicated shard (directory-based placement).</li>
@@ -138,6 +160,7 @@ await shard.tx(async (tx) => {
 })`} />
 
       <H2 id="staff">Staff-level lens</H2>
+      <p>Staff answers treat the database as a long-lived operational commitment, not just a schema.</p>
       <Callout kind="staff">
         <ul>
           <li><strong>Choose the shard key from the top 3 queries</strong> and say which query you are deliberately making expensive.</li>

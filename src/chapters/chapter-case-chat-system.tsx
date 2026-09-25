@@ -1,6 +1,6 @@
 import {
   ApiSpec, ArchitectureDiagram, Callout, CodeBlock, CompareTable, EstimationTable, H2, InterviewQuestion,
-  KeyTakeaways, References, Requirements,
+  KeyTakeaways, References, Requirements, TLDR, Term,
 } from '../components/ui'
 import type { ArchEdge, ArchNode, Reference } from '../components/ui'
 import { ChatConnectionRoutingDemo } from './demos/chat-connection-routing-demo'
@@ -45,14 +45,26 @@ const EDGES: ArchEdge[] = [
 export default function ChatSystemChapter() {
   return (
     <>
+      <TLDR items={[
+        'Every online user holds a long-lived connection to one gateway server, so routing means finding which gateway a user is on.',
+        'Keep gateways thin; put all logic in a stateless chat service behind them.',
+        'A per-conversation sequence number gives ordering, gap detection and offline sync in one field.',
+        'Delivery is at-least-once; clients dedupe by sequence number so each message displays once.',
+        'Presence and large groups are where naive fan-out explodes.',
+      ]} />
+
       <p>
-        Chat is the classic <strong>stateful connection</strong> problem. Unlike request/response services, every
-        online user holds a long-lived socket pinned to one machine, so “which server is Bob on?” becomes a
-        first-class question. Around that sit three hard guarantees: messages are <strong>never lost</strong>,
-        they show up <strong>in order</strong>, and every device ends up with the <strong>same history</strong>.
+        Chat is the classic <strong>stateful connection</strong> problem. In a normal request/response service, any
+        server can answer any request. In chat, every online user holds a long-lived socket pinned to one machine. So
+        “which server is Bob on?” becomes a first-class question.
+      </p>
+      <p>
+        Around that sit three hard guarantees: messages are <strong>never lost</strong>, they show up{' '}
+        <strong>in order</strong>, and every device ends up with the <strong>same history</strong>.
       </p>
 
       <H2 id="requirements">1 · Clarify requirements</H2>
+      <p>Pin down group size and the durability promise early. Both shape the whole design.</p>
       <Requirements
         functional={['1:1 and group chat (groups ≤ 500 members)', 'Delivery + read receipts', 'Online presence', 'Multi-device with shared history', 'Push notification when offline']}
         nonFunctional={['100M DAU, ~40 messages per user per day', 'Delivery p99 < 200 ms when both online', 'Durable: an ACKed message is never lost', 'Per-conversation ordering']}
@@ -60,6 +72,7 @@ export default function ChatSystemChapter() {
       />
 
       <H2 id="estimation">2 · Back-of-the-envelope</H2>
+      <p>Estimate message rate, open connections and storage growth.</p>
       <EstimationTable
         assumptions={['100M DAU × 40 messages/day; ~200 B per message with metadata', 'Half of DAU connected at peak', 'A tuned gateway holds on the order of 500K idle sockets (varies with memory and TLS)']}
         rows={[
@@ -70,9 +83,16 @@ export default function ChatSystemChapter() {
           { label: 'Storage per year', math: '4B × 200 B × 365', result: '≈ 290 TB' },
         ]}
       />
-      <p>The QPS is modest. The difficulty is <strong>connection count</strong> and <strong>storage growth</strong>, so the design centers on gateways and a write-optimized store.</p>
+      <p>
+        The QPS (queries per second) is modest. The difficulty is <strong>connection count</strong> and{' '}
+        <strong>storage growth</strong>. So the design centers on gateways and a write-optimized store.
+      </p>
 
       <H2 id="api">3 · API</H2>
+      <p>
+        Messages flow over a <Term def="A protocol that keeps one TCP connection open so client and server can both send messages at any time.">WebSocket</Term>.
+        Plain HTTP calls handle catch-up sync and read markers.
+      </p>
       <ApiSpec endpoints={[
         { method: 'WS', path: '/v1/connect', desc: 'Upgrade to WebSocket. Auth once at handshake, then heartbeat every ~30 s.', returns: 'bidirectional frames' },
         { method: 'WS', path: 'frame: send', desc: 'Client → server message. clientMsgId makes retries idempotent.', body: '{ clientMsgId, conversationId, body }', returns: 'ack { clientMsgId, seq }' },
@@ -81,6 +101,11 @@ export default function ChatSystemChapter() {
       ]} />
 
       <H2 id="high-level">4 · High-level design</H2>
+      <p>
+        Clients connect to gateways, which only hold sockets. A stateless chat service does the real work, and a{' '}
+        <Term def="A messaging pattern where senders publish to a named channel and every subscriber to that channel receives it.">pub/sub</Term>{' '}
+        channel carries each message to the gateway that holds the recipient. Trace the three flows below.
+      </p>
       <ArchitectureDiagram nodes={NODES} edges={EDGES} height={420}
         caption="Gateways are stateful but thin; all logic lives in the stateless chat service"
         flows={[
@@ -93,6 +118,10 @@ export default function ChatSystemChapter() {
         ]} />
 
       <H2 id="connections">5 · Deep dive: connections and routing</H2>
+      <p>
+        First, choose how the server pushes messages to clients. Then decide how a message finds the right gateway.
+        The table covers the transport options; the demo shows the routing.
+      </p>
       <CompareTable
         columns={['Short polling', 'Long polling', 'SSE', 'WebSocket']}
         rows={[
@@ -111,12 +140,18 @@ export default function ChatSystemChapter() {
 
       <H2 id="ordering">6 · Deep dive: ordering, receipts, and sync</H2>
       <p>
-        Wall clocks across devices can't be trusted for ordering. Instead, the chat service assigns a
-        <strong> monotonically increasing sequence number per conversation</strong>. Each device keeps a
-        <strong> cursor</strong>: the highest contiguous seq it has applied. That single number drives gap detection,
-        offline sync, and delivery receipts.
+        Next, make ordering and sync reliable. Wall clocks across devices can't be trusted for ordering. Instead, the
+        chat service assigns a <strong>sequence number per conversation</strong> that only ever goes up.
+      </p>
+      <p>
+        Each device keeps a <strong>cursor</strong>: the highest sequence number it has applied without gaps. That
+        single number drives gap detection, offline sync and delivery receipts.
       </p>
       <ChatOrderingSyncDemo />
+      <p>
+        Sends must be safe to retry. The client attaches its own message ID, and the server makes the send{' '}
+        <Term def="Safe to repeat: doing it twice has the same effect as doing it once.">idempotent</Term>.
+      </p>
       <CodeBlock lang="ts" title="idempotent send (server)" code={`
 async function handleSend(userId: string, f: SendFrame): Promise<Ack> {
   // Retry-safe: the same clientMsgId always maps to the same seq.
@@ -136,6 +171,7 @@ async function handleSend(userId: string, f: SendFrame): Promise<Ack> {
       </Callout>
 
       <H2 id="groups-presence">7 · Deep dive: groups and presence</H2>
+      <p>Group size changes the delivery strategy. Small groups fan out on send; huge channels let readers pull.</p>
       <CompareTable
         columns={['Small groups (≤ ~500)', 'Large channels (10K+)']}
         rows={[
@@ -145,13 +181,21 @@ async function handleSend(userId: string, f: SendFrame): Promise<Ack> {
         ]}
       />
       <p>
-        <strong>Presence</strong> is a heartbeat with a TTL: each heartbeat refreshes <code>presence:user</code>{' '}
-        with a TTL of about 2× the interval. Broadcasting every change to every friend explodes at scale, so push
-        presence only to users <em>currently viewing</em> that contact, and debounce flapping connections so a
-        subway tunnel doesn't produce 20 online/offline events.
+        <strong>Presence</strong> (online or offline) is a heartbeat with a{' '}
+        <Term def="Time to live: an expiry after which a key is deleted automatically.">TTL</Term>. Each heartbeat
+        refreshes <code>presence:user</code> with a TTL of about twice the heartbeat interval.
+      </p>
+      <p>
+        Broadcasting every change to every friend explodes at scale. Push presence only to users{' '}
+        <em>currently viewing</em> that contact. Also debounce flapping connections, so a subway tunnel doesn't
+        produce 20 online/offline events.
       </p>
 
       <H2 id="data-model">8 · Data model</H2>
+      <p>
+        Messages go in a wide-column store, partitioned by conversation and time bucket so no partition grows without
+        bound. A per-user inbox table drives the chat list.
+      </p>
       <CodeBlock lang="ts" title="wide-column layout (CQL-style)" code={`
 // messages: newest-first pages per conversation; bucket bounds partition size
 // PRIMARY KEY ((conversation_id, bucket), seq)  WITH CLUSTERING ORDER BY (seq DESC)
@@ -169,6 +213,7 @@ type MessageRow = {
 // PRIMARY KEY (user_id, last_seq_ts) ...`} />
 
       <H2 id="staff">9 · Going beyond: staff-level extensions</H2>
+      <p>With the core working, staff candidates address encryption, multiple regions, failures and compliance.</p>
       <Callout kind="staff">
         <ul>
           <li><strong>End-to-end encryption</strong> (Signal protocol) changes the design. The server stores ciphertext, so no server-side search, previews, or moderation. Multi-device needs per-device keys and fan-out of encrypted copies.</li>

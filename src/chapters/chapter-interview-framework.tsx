@@ -1,5 +1,5 @@
 import {
-  Callout, CompareTable, FlowDiagram, H2, InterviewQuestion, KeyTakeaways, References, Requirements, Tabs,
+  Callout, CompareTable, FlowDiagram, H2, InterviewQuestion, KeyTakeaways, References, Requirements, TLDR, Tabs, Term,
 } from '../components/ui'
 import type { Reference } from '../components/ui'
 import { FrameworkOpeningCompare } from './demos/framework-opening-compare'
@@ -17,16 +17,23 @@ export default function InterviewFrameworkChapter() {
   return (
     <>
       <p>
-        A system design interview is not a quiz with a correct diagram at the end. It is a <strong>45-minute
-        simulation of how you would lead a design review</strong>: you turn an ambiguous prompt into requirements,
-        propose an architecture, defend trade-offs under pressure, and know where it will break. The framework
-        below keeps you from the two classic failures, which are drowning in detail too early and never going
-        deep at all.
+        A system design interview is not a quiz with one correct diagram. It is a <strong>45-minute rehearsal of
+        leading a <Term def="A meeting where engineers present a proposed design and others challenge it before anything is built.">design review</Term></strong>.
+        You turn a vague prompt into requirements, propose an architecture, defend trade-offs, and say where it will break.
+      </p>
+      <TLDR items={[
+        'Use four steps: frame the problem, sketch the architecture, deep dive, wrap up.',
+        'Budget your time. Most failures are pacing failures, not knowledge gaps.',
+        'State assumptions as numbers early. Numbers anchor every later decision.',
+        'Depth means: quantify, compare options, decide, then cover failures.',
+        'Staff signal: talk about trade-offs, failure modes, evolution, cost, and operations unprompted.',
+      ]} />
+      <p>
+        The framework protects you from two classic failures: drowning in detail too early, and never going deep at all.
       </p>
       <p>
-        The four-phase shape below is the one most candidates learn, popularized by Alex Xu’s <em>System Design
-        Interview</em> (see References). The time budgets, checklists, board layout and staff-level extensions are
-        this handbook’s own.
+        Most candidates learn this four-phase shape from Alex Xu’s <em>System Design Interview</em> (see References).
+        The time budgets, checklists, board layout, and staff-level extensions are this handbook’s own.
       </p>
 
       <H2 id="four-steps">The four steps</H2>
@@ -37,16 +44,16 @@ export default function InterviewFrameworkChapter() {
         { label: '4 · Wrap-up', sub: '~3–5 min · summary, evolution' },
       ]} caption="Typical 45-minute budget. Real loops vary, so ask how long you have." />
       <p>
-        The budget matters more than the exact numbers. Candidates rarely fail because they lack knowledge. They
-        fail because they spend 25 minutes on requirements, or draw boxes for 40 minutes without ever
-        quantifying anything.
+        The budget matters more than the exact numbers. Candidates rarely fail for lack of knowledge. They fail
+        because they spend 25 minutes on requirements, or draw boxes for 40 minutes without quantifying anything.
       </p>
       <FrameworkTimelinePlanner />
 
       <H2 id="clarify">Step 1 · Frame the problem</H2>
       <p>
-        Your first job is to shrink an unbounded prompt into something you can design in half an hour. Split
-        requirements into what the system <em>does</em> and how <em>well</em> it must do it:
+        Your first job is to shrink an open-ended prompt into something you can design in half an hour. Split the
+        requirements into what the system <em>does</em> (<Term def="Features users can see: post a photo, read a feed, send a message.">functional</Term>)
+        and how <em>well</em> it must do it (<Term def="Qualities like scale, latency, availability, durability, and cost. They drive most architecture choices.">non-functional</Term>):
       </p>
       <Requirements
         functional={['The 3–5 user-visible capabilities you will design', 'Who the actors are (users, admins, other services)', 'Key flows: the one write and one read that matter most']}
@@ -61,6 +68,7 @@ export default function InterviewFrameworkChapter() {
       <FrameworkOpeningCompare />
 
       <H2 id="high-level">Step 2 · Sketch the architecture, then check alignment</H2>
+      <p>Now turn requirements into a rough shape. Stay broad: the goal is a complete path, not a perfect component.</p>
       <ul>
         <li><strong>API first.</strong> Three to five endpoints or messages define the contract and the data you must store.</li>
         <li><strong>Draw the request path end to end</strong>: client → edge → service → storage. Keep it to 6–10 boxes.</li>
@@ -88,7 +96,7 @@ export default function InterviewFrameworkChapter() {
       <H2 id="deep-dive">Step 3 · Deep dive</H2>
       <p>
         This is where levels are decided. Pick the one or two components where the system is actually hard, or let
-        the interviewer pick, and go deep with numbers. A good deep dive has a rhythm:
+        the interviewer pick. Then go deep, with numbers. A good deep dive follows a rhythm:
       </p>
       <FlowDiagram steps={[
         { label: 'Quantify', sub: 'what load hits this box?' },
@@ -104,12 +112,13 @@ export default function InterviewFrameworkChapter() {
 
       <H2 id="wrap-up">Step 4 · Wrap-up</H2>
       <p>
-        Leave three to five minutes. Summarize the design in two sentences, name the bottlenecks you would watch,
-        and describe what changes at 10× scale. Interviewers remember endings. A calm, honest summary beats
+        Save three to five minutes. Summarize the design in two sentences, name the bottlenecks you would watch,
+        and describe what changes at 10× scale. Interviewers remember endings, so a calm, honest summary beats
         cramming in one more feature.
       </p>
 
       <H2 id="staff">Staff-level extensions</H2>
+      <p>This is what separates a working design from one a company could actually run.</p>
       <Callout kind="staff">
         <p>Senior candidates design a system that works. Staff candidates design a system an organization can <strong>run, evolve, and afford</strong>. Weave these in without being asked:</p>
         <ul>
@@ -122,6 +131,7 @@ export default function InterviewFrameworkChapter() {
       </Callout>
 
       <H2 id="anti-patterns">Anti-patterns that sink candidates</H2>
+      <p>Each of these is common, easy to spot, and easy to fix once you know it.</p>
       <CompareTable columns={['What it looks like', 'What to do instead']} rows={[
         { label: 'Silent drawing', cells: ['Minutes of boxes with no narration', 'Think out loud. The interviewer grades reasoning, not art.'] },
         { label: 'Buzzword bingo', cells: ['Microservices, Kafka, and Kubernetes in the first minute', 'Start simple and add components only when a requirement forces it'] },

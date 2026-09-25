@@ -1,6 +1,6 @@
 import {
   ApiSpec, ArchitectureDiagram, Callout, CodeBlock, CompareTable, EstimationTable, FlowDiagram, H2, InterviewQuestion,
-  KeyTakeaways, References, Requirements,
+  KeyTakeaways, References, Requirements, TLDR, Term,
 } from '../components/ui'
 import type { ArchEdge, ArchNode, Reference } from '../components/ui'
 import { AutocompleteTrieExplorerDemo } from './demos/autocomplete-trie-explorer-demo'
@@ -14,13 +14,13 @@ const REFS: Reference[] = [
 ]
 
 const NODES: ArchNode[] = [
-  { id: 'client', label: 'Search box', sub: 'debounce + local cache', kind: 'client', x: 7, y: 30,
+  { id: 'client', label: 'Search box', sub: 'debounce + local cache', kind: 'client', x: 10, y: 30,
     detail: 'Debounce about 50–100 ms, cancel in-flight requests when the prefix changes, and cache responses per prefix so backspacing costs nothing.' },
-  { id: 'edge', label: 'Edge cache', sub: 'CDN, short TTL', kind: 'cdn', x: 24, y: 30,
+  { id: 'edge', label: 'Edge cache', sub: 'CDN, short TTL', kind: 'cdn', x: 27, y: 30,
     detail: 'Short, popular prefixes ("w", "we", "wea") are requested millions of times per hour and give identical answers for everyone, which makes them ideal for the CDN.' },
-  { id: 'svc', label: 'Suggest service', sub: 'stateless', kind: 'service', x: 44, y: 30,
+  { id: 'svc', label: 'Suggest service', sub: 'stateless', kind: 'service', x: 45, y: 30,
     detail: 'Normalizes the prefix, looks up top-k, applies safety filters and (optionally) personalization, and returns in a few milliseconds.' },
-  { id: 'trie', label: 'Top-k index', sub: 'in-memory, replicated', kind: 'cache', x: 66, y: 30,
+  { id: 'trie', label: 'Top-k index', sub: 'in-memory, replicated', kind: 'cache', x: 64, y: 30,
     detail: 'Either an in-memory trie or a flattened prefix → top-k table. Sharded by prefix range and read-only between rebuilds.' },
   { id: 'logs', label: 'Query logs', sub: 'Kafka', kind: 'queue', x: 44, y: 80,
     detail: 'Every submitted search (not every keystroke) is logged, possibly sampled 1-in-N to cut cost.' },
@@ -41,14 +41,25 @@ const EDGES: ArchEdge[] = [
 export default function SearchAutocompleteChapter() {
   return (
     <>
+      <TLDR items={[
+        'Return the top 5 completions for a typed prefix, between keystrokes (well under 100 ms).',
+        'Do all the expensive work offline; serving is a lookup, never a computation.',
+        'A trie with the top-k results cached at every node makes each lookup nearly constant time.',
+        'Rank by a time-decayed popularity score, built from logged searches in a batch pipeline.',
+        'Scale reads with client debounce, CDN caching of short prefixes, and read-only replicas.',
+      ]} />
+
       <p>
         Autocomplete has a brutal latency budget. It must answer <strong>between keystrokes</strong>, so the answer
-        needs to come back in well under 100 ms end to end. The design principle that makes this possible:
-        <strong> do all the expensive work offline</strong>. The serving path should be a lookup, never a
-        computation.
+        needs to come back in well under 100 ms end to end.
+      </p>
+      <p>
+        One design principle makes this possible: <strong>do all the expensive work offline</strong>. The serving
+        path should be a lookup, never a computation.
       </p>
 
       <H2 id="requirements">1 · Clarify requirements</H2>
+      <p>Agree on how many suggestions, how they are ranked, and how fresh they must be.</p>
       <Requirements
         functional={['Return the top 5 completions for a typed prefix', 'Ranked by popularity (with recency)', 'Prefix match only, lowercase, single language to start']}
         nonFunctional={['End-to-end p99 < 100 ms', '50M DAU, ~10 searches per user per day', 'Suggestions may lag reality by hours (trending: minutes, as an extension)', 'Filter unsafe or legally removed suggestions']}
@@ -56,6 +67,7 @@ export default function SearchAutocompleteChapter() {
       />
 
       <H2 id="estimation">2 · Back-of-the-envelope</H2>
+      <p>Estimate request volume and whether the index fits in memory.</p>
       <EstimationTable
         assumptions={['50M DAU × 10 searches × ~20 characters typed', 'Client debounce removes roughly half of keystroke requests (illustrative)', 'Around 100M distinct queries worth indexing']}
         rows={[
@@ -72,12 +84,17 @@ export default function SearchAutocompleteChapter() {
       </p>
 
       <H2 id="api">3 · API</H2>
+      <p>The serving API is a single read: prefix in, ranked suggestions out.</p>
       <ApiSpec endpoints={[
         { method: 'GET', path: '/v1/suggest', desc: 'Top-k completions. The response is identical for all users (unless personalized), so it can be cached at the edge.', body: '?q={prefix}&limit=5&locale=en', returns: '200 { suggestions[] } · Cache-Control: max-age=600' },
         { method: 'POST', path: '/v1/search-events', desc: 'Log a submitted search, which feeds aggregation (often piggybacked on the search request itself).', body: '{ query, ts, sessionId }', returns: '202' },
       ]} />
 
       <H2 id="high-level">4 · High-level design</H2>
+      <p>
+        Split the system in two. The read path only looks up a prebuilt index. The write path collects search logs,
+        aggregates them offline, and periodically publishes a new index version.
+      </p>
       <ArchitectureDiagram nodes={NODES} edges={EDGES} height={380}
         caption="A read path of lookups only; a write path of offline aggregation and index rebuilds"
         flows={[
@@ -88,11 +105,19 @@ export default function SearchAutocompleteChapter() {
         ]} />
 
       <H2 id="trie">5 · Deep dive: the trie and cached top-k</H2>
+      <p>
+        The index is a <Term def="A tree where each edge is one character, so every path from the root spells a prefix.">trie</Term>.
+        Type into the explorer to watch a lookup walk down it.
+      </p>
       <AutocompleteTrieExplorerDemo />
       <p>
-        A naive trie lookup walks to the prefix node (O(p)) and then traverses the <em>entire subtree</em> to find
-        the best completions. For a one-letter prefix that's a large fraction of all queries. Precomputing
-        <strong> top-k at every node</strong> turns the lookup into O(p) plus a constant, trading memory for latency.
+        A naive trie lookup walks to the prefix node, which costs O(p) for a prefix of length p. It then traverses
+        the <em>entire subtree</em> to find the best completions. For a one-letter prefix, that is a large fraction
+        of all queries.
+      </p>
+      <p>
+        Precomputing the <strong><Term def="The k best-scoring items, e.g. the 5 most popular completions under a prefix.">top-k</Term> at every node</strong>{' '}
+        turns the lookup into O(p) plus a constant. It trades memory for latency.
       </p>
       <CodeBlock lang="ts" title="serving lookup" code={`
 function suggest(root: TrieNode, rawPrefix: string, k = 5): string[] {
@@ -116,6 +141,7 @@ function suggest(root: TrieNode, rawPrefix: string, k = 5): string[] {
       />
 
       <H2 id="pipeline">6 · Deep dive: collecting and ranking data</H2>
+      <p>The index is only as good as its data. This pipeline turns raw search logs into ranked suggestions.</p>
       <FlowDiagram steps={[
         { label: 'Search logs', sub: 'submitted queries' },
         { label: 'Sample + clean', sub: '1-in-N, dedupe bots' },
@@ -126,11 +152,19 @@ function suggest(root: TrieNode, rawPrefix: string, k = 5): string[] {
       ]} caption="Weekly or daily batch build, plus a streaming trending layer if freshness matters" />
       <p>
         Rank by a <strong>decayed score</strong>, not raw all-time counts, so last year's fad doesn't beat today's
-        news: <code>score = Σ count(day) × e^(−λ·age)</code>. Log <em>submitted</em> searches rather than
-        keystrokes. That's two orders of magnitude less data, and it reflects what people actually wanted.
+        news: <code>score = Σ count(day) × e^(−λ·age)</code>.
+      </p>
+      <p>
+        Log <em>submitted</em> searches rather than keystrokes. That is two orders of magnitude less data, and it
+        reflects what people actually wanted.
       </p>
 
       <H2 id="scaling">7 · Deep dive: scaling reads</H2>
+      <p>
+        Finally, absorb the read load. Each layer below removes traffic before it reaches the next. Client-side{' '}
+        <Term def="Waiting briefly after each keystroke and only sending a request once typing pauses.">debounce</Term>{' '}
+        is the cheapest win.
+      </p>
       <ul>
         <li><strong>Client</strong>: debounce, cancel stale requests, cache per prefix, and prefetch the next likely prefix.</li>
         <li><strong>Edge</strong>: short prefixes are the hottest and the same for everyone, so they belong on the CDN.</li>

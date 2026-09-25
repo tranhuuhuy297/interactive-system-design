@@ -1,5 +1,5 @@
 import {
-  ArchitectureDiagram, Callout, CodeBlock, CompareTable, EstimationTable, H2, InterviewQuestion, KeyTakeaways, References,
+  ArchitectureDiagram, Callout, CodeBlock, CompareTable, EstimationTable, H2, InterviewQuestion, KeyTakeaways, References, Term, TLDR,
 } from '../components/ui'
 import type { ArchEdge, ArchNode, Reference } from '../components/ui'
 import { AiServeCascadeDemo } from './demos/ai-serve-cascade-demo'
@@ -35,14 +35,27 @@ const EDGES: ArchEdge[] = [
 export default function AiServingStacksRoutingChapter() {
   return (
     <>
+      <TLDR items={[
+        'Don’t build an engine. Pick vLLM, SGLang, TensorRT-LLM, etc. by replaying your own traffic.',
+        'Multi-LoRA lets hundreds of fine-tunes share one GPU pool.',
+        'Routers and cascades send easy requests to small models. That is often the biggest cost win.',
+        'Cost per 1M tokens = GPU price ÷ (tokens/s at SLO × utilization).',
+        'Keep an OpenAI-compatible internal API so engines stay swappable.',
+      ]} />
       <p>
         Nobody writes an LLM server from scratch anymore. The real decisions are which engine to run, how many models
-        and adapters to host, and which model each request should go to. This chapter maps the serving landscape,
-        explains multi-LoRA and model cascades, and turns GPU prices into the number finance actually asks for:
-        {' '}<strong>cost per million tokens</strong>.
+        and adapters to host, and which model each request should go to.
+      </p>
+      <p>
+        This chapter maps the serving landscape and explains multi-LoRA and model cascades. Then it turns GPU prices
+        into the number finance actually asks for: <strong>cost per million tokens</strong>.
       </p>
 
       <H2 id="landscape">The serving engine landscape</H2>
+      <p>
+        A serving engine runs the model loop: batching, KV memory, kernels, and an HTTP API. Most teams choose one of
+        these.
+      </p>
       <CompareTable
         columns={['Strengths', 'Watch out for']}
         caption="Fast-moving space: this reflects the projects’ own docs as of 2026. Check current docs before choosing."
@@ -62,10 +75,14 @@ export default function AiServingStacksRoutingChapter() {
 
       <H2 id="multi-lora">Multi-LoRA: one base model, many fine-tunes</H2>
       <p>
-        LoRA adapters are small low-rank weight deltas, often a tiny fraction of the base model. Instead of one full
-        deployment per customer or task, a server keeps the base weights resident and applies the right adapter per
-        request, batching requests for <em>different</em> adapters in the same forward pass. S-LoRA and Punica showed
-        how to do this with custom kernels and adapter paging, and it is now supported in mainstream engines.
+        <Term def="Low-Rank Adaptation: fine-tuning that trains small add-on matrices instead of changing the full model.">LoRA</Term>{' '}
+        adapters are small{' '}<Term def="Compact matrices built from two thin factors, so they hold far fewer numbers than a full matrix.">low-rank</Term>{' '}
+        weight deltas, often a tiny fraction of the base model. Think of them as clip-on lenses for one camera body.
+      </p>
+      <p>
+        Instead of one full deployment per customer, a server keeps the base weights resident. It applies the right
+        adapter per request, and it batches requests for <em>different</em> adapters in the same forward pass. S-LoRA
+        and Punica showed how, with custom kernels and adapter paging. Mainstream engines now support it.
       </p>
       <ul>
         <li><strong>Economics:</strong> hundreds of fine-tunes share one GPU pool instead of hundreds of idle deployments.</li>
@@ -76,8 +93,12 @@ export default function AiServingStacksRoutingChapter() {
       <p>
         Most traffic doesn’t need the biggest model. A <strong>router</strong> guesses difficulty up front and picks a
         model. A <strong>cascade</strong> tries a cheap model first and escalates only when a check says the answer is
-        not good enough. FrugalGPT reports matching the best single model’s performance at a fraction of the cost on
-        its benchmarks, and RouteLLM trains routers from preference data.
+        not good enough.
+      </p>
+      <p>
+        FrugalGPT reports matching the best single model’s performance at a fraction of the cost on its benchmarks.
+        RouteLLM trains routers from{' '}
+        <Term def="Data where humans (or models) picked which of two answers was better.">preference data</Term>.
       </p>
       <ArchitectureDiagram nodes={NODES} edges={EDGES} height={340}
         caption="A routed, cascading serving tier"
@@ -93,6 +114,7 @@ export default function AiServingStacksRoutingChapter() {
       </Callout>
 
       <H2 id="unit-economics">Cost per million tokens</H2>
+      <p>Finance asks one question: what does a million tokens cost? Here is how to answer it from GPU prices.</p>
       <EstimationTable
         assumptions={['Illustrative GPU price: $3 per GPU-hour (varies widely by provider and commitment)', '8-GPU replica sustaining 10,000 output tokens/s at the target SLO (measure yours)']}
         rows={[
@@ -110,19 +132,21 @@ costPer1MTokens = (gpuHourlyPrice × gpusPerReplica)
 // Levers: tokens/s at SLO (batching, quantization, speculation, prefix caching),
 // utilization (autoscaling, mixing batch + interactive traffic), and price (hardware, commitments).`} />
       <p>
-        Utilization is usually the largest hidden multiplier: a fleet sized for peak but idle at night pays for the
+        Utilization is usually the largest hidden multiplier. A fleet sized for peak but idle at night pays for the
         idle hours. Mixing interactive traffic with deferrable batch jobs (see the priority tiers in the{' '}
         <a href="#/ep-chatgpt">ChatGPT episode</a>) is how large providers keep GPUs busy.
       </p>
 
-      <H2 id="capacity">Capacity planning in one paragraph</H2>
+      <H2 id="capacity">Capacity planning in four steps</H2>
       <p>
-        Start from demand in <em>tokens</em>: peak requests/s × (average prompt tokens for prefill, average output tokens
-        for decode). Benchmark one replica’s goodput at your SLOs with a realistic length mix. Replicas needed = peak
-        token demand ÷ per-replica goodput, plus headroom for failures and cold starts (see{' '}
-        <a href="#/ai-parallelism">Parallelism, MoE &amp; Scaling Out</a>). Then price it with the formula above and
-        decide which traffic can be routed to smaller models.
+        Plan in four steps. Everything starts from demand in <em>tokens</em>, not requests.
       </p>
+      <ol>
+        <li>Peak token demand = peak requests/s × (average prompt tokens for prefill, average output tokens for decode).</li>
+        <li>Benchmark one replica’s{' '}<Term def="Throughput that still meets your latency targets.">goodput</Term>{' '}at your SLOs, with a realistic length mix.</li>
+        <li>Replicas needed = peak token demand ÷ per-replica goodput, plus headroom for failures and cold starts (see{' '}<a href="#/ai-parallelism">Parallelism, MoE &amp; Scaling Out</a>).</li>
+        <li>Price it with the formula above, then decide which traffic can move to smaller models.</li>
+      </ol>
 
       <Callout kind="staff">
         <ul>
@@ -147,7 +171,8 @@ costPer1MTokens = (gpuHourlyPrice × gpusPerReplica)
         senior={<p>Classify requests by difficulty and send simple ones to a cheaper model. Use the expensive model for complex requests.</p>}
         staff={<>
           <p>First, measure: what share of traffic does the small model already handle acceptably, per task type, according to evals? That sets the ceiling on savings.</p>
-          <p>Then combine cheap rules (task type, prompt length, tenant tier) with a learned router, plus a cascade for structured tasks where a verifier is cheap (e.g. JSON schema checks). Roll out behind a shadow mode that runs both paths on a sample and compares, with per-route quality dashboards and automatic fallback if quality drops. Report savings as cost per 1M tokens at equal eval scores.</p>
+          <p>Then combine cheap rules (task type, prompt length, tenant tier) with a learned router, plus a cascade for structured tasks where a verifier is cheap (e.g. JSON schema checks).</p>
+          <p>Roll out behind a shadow mode that runs both paths on a sample and compares, with per-route quality dashboards and automatic fallback if quality drops. Report savings as cost per 1M tokens at equal eval scores.</p>
         </>}
         followUps={['How do you handle streaming with a cascade?', 'How do you detect router drift?']}
       />

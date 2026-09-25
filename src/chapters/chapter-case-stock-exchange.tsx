@@ -1,6 +1,6 @@
 import {
   ApiSpec, ArchitectureDiagram, Callout, CodeBlock, CompareTable, EstimationTable, H2, InterviewQuestion,
-  KeyTakeaways, Requirements, References,
+  KeyTakeaways, Requirements, References, TLDR, Term,
 } from '../components/ui'
 import type { ArchEdge, ArchNode, Reference } from '../components/ui'
 import { ExchangeOrderBookDemo } from './demos/exchange-order-book-demo'
@@ -43,15 +43,31 @@ const REFS: Reference[] = [
 export default function StockExchangeChapter() {
   return (
     <>
+      <TLDR items={[
+        'Core problem: match buy and sell orders fairly, in microseconds, without ever losing or reordering one.',
+        'Key decision: a sequencer gives every order a number, and a single-threaded in-memory engine processes them in that order.',
+        'The hard part: tail latency. One pause or cache miss can cost more than the whole matching budget.',
+        'Staff insight: the engine is a deterministic state machine, so the journal gives failover, replay and audit for free.',
+      ]} />
       <p>
         Most system design questions reward horizontal scale and eventual consistency. The stock exchange rewards the
-        opposite: <strong>one ordered stream, processed deterministically, as fast as physics allows</strong>. The
-        core insight is that a matching engine is a state machine. If every replica applies the same inputs in the
-        same order, they reach the same state. Put a sequencer in front, a journal behind, and keep the hot path
-        single-threaded and in memory.
+        opposite: <strong>one ordered stream, processed deterministically, as fast as physics allows</strong>.
+      </p>
+      <p>
+        The core insight: a{' '}
+        <Term def="The component that pairs incoming buy and sell orders according to the exchange's priority rules.">matching engine</Term>{' '}
+        is a state machine. If every replica applies the same inputs in the same order, they reach the same state.
+      </p>
+      <p>
+        So put a{' '}
+        <Term def="The single component that stamps every incoming message with the next number in one global order.">sequencer</Term>{' '}
+        in front and a{' '}
+        <Term def="An append-only, durable log of every sequenced message.">journal</Term>{' '}
+        behind. Keep the hot path single-threaded and in memory.
       </p>
 
       <H2 id="requirements">1 · Clarify requirements</H2>
+      <p>First, agree on order types, fairness and latency. Here fairness and determinism are hard requirements, not nice-to-haves.</p>
       <Requirements
         functional={['Accept, cancel and amend limit and market orders', 'Match with price-time priority; partial fills', 'Publish market data (top of book, depth, trades)', 'Pre-trade risk checks; execution reports to brokers']}
         nonFunctional={['Deterministic and fair: same inputs → same outcome, no queue-jumping', 'Matching latency in microseconds; tail latency matters more than the average', 'No lost or duplicated orders; full audit trail', 'Fast failover with zero data loss']}
@@ -59,6 +75,7 @@ export default function StockExchangeChapter() {
       />
 
       <H2 id="estimation">2 · Back-of-the-envelope</H2>
+      <p>Next, turn message volume into a per-message time budget. That budget, not throughput, drives the design.</p>
       <EstimationTable
         assumptions={['Illustrative mid-size venue: 100M order messages/day', '6.5 h trading session; opening and closing auctions create bursts', '~100 bytes per sequenced message']}
         rows={[
@@ -71,11 +88,19 @@ export default function StockExchangeChapter() {
       />
       <p>
         Throughput is modest; a single core handles it. The hard part is <strong>latency and determinism at the
-        tail</strong>. A single garbage-collection pause or cross-core cache miss can be worth more than the whole
-        matching budget. Storage is tiny, so keep the entire book in memory.
+        tail</strong>.
+      </p>
+      <p>
+        A single garbage-collection pause or cross-core cache miss can be worth more than the whole matching budget.
+        Storage is tiny, so keep the entire book in memory.
       </p>
 
       <H2 id="api">3 · API</H2>
+      <p>
+        Brokers speak{' '}
+        <Term def="Financial Information eXchange: the standard messaging protocol between brokers and trading venues.">FIX</Term>{' '}
+        or a binary protocol over TCP, not REST. The operations map onto the order lifecycle plus a market-data feed.
+      </p>
       <ApiSpec endpoints={[
         { method: 'POST', path: 'NewOrderSingle', desc: 'Submit an order (FIX or a binary protocol over TCP, not REST).', body: '{ clOrdId, symbol, side, type, price?, qty, tif }', returns: 'ExecutionReport: ack · fill · partial · reject' },
         { method: 'DELETE', path: 'OrderCancelRequest', desc: 'Cancel a resting order by clOrdId.', returns: 'ExecutionReport: cancelled | reject' },
@@ -84,6 +109,7 @@ export default function StockExchangeChapter() {
       ]} />
 
       <H2 id="high-level">4 · High-level design</H2>
+      <p>Now connect the pieces. The sequencer divides the diagram: parallel work on the left, strictly ordered work on the right.</p>
       <ArchitectureDiagram nodes={NODES} edges={EDGES} height={420}
         caption="Everything left of the sequencer can be parallel; everything right of it is ordered"
         flows={[
@@ -97,11 +123,19 @@ export default function StockExchangeChapter() {
 
       <H2 id="matching">5 · Deep dive: order book and matching</H2>
       <p>
-        Each symbol has two sides. Bids are sorted by price descending, asks ascending, and within a price level
-        orders queue <strong>first in, first out</strong>. An incoming order that crosses the spread trades against
-        the best resting orders <em>at the resting price</em> until it is filled or no longer crosses. The remainder of
-        a limit order rests; the remainder of a market order is cancelled.
+        Here we decide how orders are stored and matched. Each symbol's{' '}
+        <Term def="The list of all resting buy orders (bids) and sell orders (asks) for one symbol, sorted by price.">order book</Term>{' '}
+        has two sides. Bids are sorted by price descending, asks ascending. Within a price level, orders queue{' '}
+        <strong>first in, first out</strong>.
       </p>
+      <p>
+        An incoming order that crosses the{' '}
+        <Term def="The gap between the highest bid and the lowest ask.">spread</Term>{' '}
+        trades against the best{' '}
+        <Term def="An order sitting in the book waiting for a counterparty.">resting orders</Term>{' '}
+        <em>at the resting price</em>. It keeps trading until it is filled or no longer crosses.
+      </p>
+      <p>The remainder of a limit order rests; the remainder of a market order is cancelled. Try it in the demo.</p>
       <ExchangeOrderBookDemo />
       <CodeBlock lang="ts" title="core matching loop (price-time priority)" code={`
 function match(order: Order, book: Book): Trade[] {
@@ -118,6 +152,7 @@ function match(order: Order, book: Book): Trade[] {
   if (order.qty > 0 && order.type === 'limit') book.rest(order)
   return trades
 }`} />
+      <p>Which data structure holds each side? Cancels dominate traffic, so they must be cheap too.</p>
       <CompareTable
         columns={['Structure', 'Best price', 'Insert / cancel', 'Notes']}
         rows={[
@@ -128,15 +163,17 @@ function match(order: Order, book: Book): Trade[] {
       />
 
       <H2 id="sequencer">6 · Deep dive: sequencer, determinism and failover</H2>
+      <p>Next, how the system stays correct when a machine dies. Kill the primary in the demo and watch the standby catch up.</p>
       <ExchangeSequencerReplayDemo />
       <ul>
         <li><strong>Total order</strong>: the sequencer is the single place where "who was first" is decided. Everything downstream is a deterministic function of its output. That is also the fairness guarantee.</li>
-        <li><strong>Event sourcing</strong>: the journal <em>is</em> the database. The book is a cache you can rebuild by replaying from a snapshot plus the tail.</li>
+        <li><strong><Term def="Storing the sequence of events as the source of truth, and deriving current state by replaying them.">Event sourcing</Term></strong>: the journal <em>is</em> the database. The book is a cache you can rebuild by replaying from a snapshot plus the tail.</li>
         <li><strong>Determinism discipline</strong>: no wall-clock reads, random numbers or hash-map iteration order in the engine. Time comes from the sequencer's timestamp in the event.</li>
         <li><strong>Hot standby</strong>: replicas consume the same log. Promote only after the replica has applied the last committed sequence number, or you split-brain the market.</li>
       </ul>
 
       <H2 id="latency">7 · Deep dive: the low-latency toolbox</H2>
+      <p>Last, how to hit a budget of a few microseconds. Each technique removes work from the hot path.</p>
       <CompareTable
         columns={['Technique', 'Why it helps']}
         rows={[
@@ -155,6 +192,7 @@ function match(order: Order, book: Book): Trade[] {
       </Callout>
 
       <H2 id="data-model">8 · Data model</H2>
+      <p>The book lives in memory; only the sequenced events are durably written on the hot path.</p>
       <CodeBlock lang="ts" title="in-memory structures + sequenced events" code={`
 type Order = { id: bigint; side: 'buy' | 'sell'; price: number /* ticks */; qty: number; seq: bigint }
 type PriceLevel = { price: number; totalQty: number; orders: Order[] /* FIFO */ }
@@ -183,7 +221,8 @@ type SequencedEvent = {
         q="Why is the matching engine single-threaded? Wouldn't multiple threads be faster?"
         senior={<p>Matching must be done in strict order, so parallelism inside one order book would need locks and could reorder orders. A single thread avoids locks and is fast enough for one symbol.</p>}
         staff={<>
-          <p>For one book, the work per message is tiny (a few hundred nanoseconds), so coordination costs would dominate. Locks, cache-line bouncing and memory fences cost more than the matching itself. Single-threading also gives <strong>determinism</strong>, which unlocks replicas, replay and audit for free.</p>
+          <p>For one book, the work per message is tiny (a few hundred nanoseconds), so coordination costs would dominate. Locks, cache-line bouncing and memory fences cost more than the matching itself. </p>
+          <p>Single-threading also gives <strong>determinism</strong>, which unlocks replicas, replay and audit for free.</p>
           <p>Parallelism happens <em>around</em> the core: gateways and risk scale out, and books shard by symbol, one engine thread per shard. The only cross-symbol concern is shared risk limits. Those can be checked pre-sequencer with a conservative reservation, or post-trade with kill switches.</p>
         </>}
         followUps={['How do you handle a symbol that gets 10× normal traffic?', 'How do cross-symbol risk limits work without breaking isolation?']}

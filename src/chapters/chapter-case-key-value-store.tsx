@@ -1,6 +1,6 @@
 import {
   ApiSpec, ArchitectureDiagram, Callout, CodeBlock, CompareTable, EstimationTable, FlowDiagram, H2, InterviewQuestion,
-  KeyTakeaways, References, Requirements,
+  KeyTakeaways, References, Requirements, TLDR, Term,
 } from '../components/ui'
 import type { ArchEdge, ArchNode, Reference } from '../components/ui'
 import { KvDynamoClusterSim } from './demos/kv-dynamo-cluster-sim'
@@ -41,14 +41,27 @@ const EDGES: ArchEdge[] = [
 export default function KeyValueStoreChapter() {
   return (
     <>
+      <TLDR items={[
+        'Store keys and values across many machines, always writable, scaling by adding nodes.',
+        'Consistent hashing with virtual nodes spreads keys and limits data movement when nodes join or leave.',
+        'Each key lives on N replicas; W write acks and R read replies tune consistency against latency.',
+        'Failures are repaired in layers: hinted handoff, read repair, then Merkle-tree comparison.',
+        'Concurrent writes need a conflict policy: last-write-wins, vector clocks, or CRDTs.',
+      ]} />
+
       <p>
-        Designing a distributed key-value store is the interview version of reading the Dynamo paper. It is less about
-        the <code>get</code>/<code>put</code> API and more about <strong>which guarantees you give up, and how you
-        repair what breaks</strong>: partitioning, replication, tunable consistency, conflict handling, failure
-        detection, and anti-entropy. Every choice is a trade-off you should be able to defend.
+        Designing a distributed key-value store is the interview version of reading the Dynamo paper. It is less
+        about the <code>get</code>/<code>put</code> API. It is more about{' '}
+        <strong>which guarantees you give up, and how you repair what breaks</strong>.
+      </p>
+      <p>
+        The topics are partitioning, replication, tunable consistency, conflict handling, failure detection and{' '}
+        <Term def="Background processes that find and fix differences between replicas, so they converge over time.">anti-entropy</Term>.
+        Every choice is a trade-off you should be able to defend.
       </p>
 
       <H2 id="requirements">1 · Clarify requirements</H2>
+      <p>Confirm the simple API, then ask the question that decides everything: availability or consistency during a network split?</p>
       <Requirements
         functional={['put(key, value)', 'get(key) → value', 'Values small (< 10 KB); keys opaque bytes']}
         nonFunctional={['Always writable (high availability)', 'Scale to 10+ TB and 1M+ ops/s by adding nodes', 'Tunable consistency per request', 'Low latency (single-digit ms p99 within a region)', 'Automatic failure handling']}
@@ -61,6 +74,7 @@ export default function KeyValueStoreChapter() {
       </Callout>
 
       <H2 id="estimation">2 · Back-of-the-envelope</H2>
+      <p>Estimate how many nodes we need for both storage and throughput.</p>
       <EstimationTable
         assumptions={['10B keys × 1 KB avg (illustrative)', 'Replication factor N = 3', '1M ops/s peak, 80% reads', 'One node: ~2 TB usable SSD, ~50K ops/s']}
         rows={[
@@ -71,9 +85,13 @@ export default function KeyValueStoreChapter() {
           { label: 'Plan', math: 'max of both + failure headroom', result: '~32 nodes' },
         ]}
       />
-      <p>Throughput, not storage, sets the node count here, because each write fans out to N replicas. Say this out loud: it is the kind of reasoning interviewers look for.</p>
+      <p>
+        Throughput, not storage, sets the node count here, because each write fans out to N replicas. Say this out
+        loud: it is the kind of reasoning interviewers look for.
+      </p>
 
       <H2 id="api">3 · API</H2>
+      <p>Two calls, with an optional consistency level per request.</p>
       <ApiSpec endpoints={[
         { method: 'PUT', path: '/kv/{key}', desc: 'Write a value; the client may pass the causal context (version) it read to help conflict resolution.', body: '{ value, context?, w? }', returns: '200 { context }' },
         { method: 'GET', path: '/kv/{key}', desc: 'Read; may return multiple sibling versions if concurrent writes conflicted.', body: '?r=2', returns: '{ values: [ … ], context }' },
@@ -81,6 +99,11 @@ export default function KeyValueStoreChapter() {
       ]} />
 
       <H2 id="high-level">4 · High-level design</H2>
+      <p>
+        There is no leader. Any node can act as the{' '}
+        <Term def="The node that receives a client request and forwards it to the replicas that own the key.">coordinator</Term>{' '}
+        for any request and forward it to the replicas that own the key.
+      </p>
       <ArchitectureDiagram nodes={NODES} edges={EDGES} height={380}
         caption="Leaderless: any node can coordinate any request"
         flows={[
@@ -90,6 +113,7 @@ export default function KeyValueStoreChapter() {
         ]} />
 
       <H2 id="partitioning">5 · Deep dive: partitioning & replication</H2>
+      <p>First decide where each key lives, and how many copies it has.</p>
       <ul>
         <li><strong>Consistent hashing</strong> places nodes and keys on a ring. A key belongs to the first node clockwise, and adding a node moves only about 1/n of the keys.</li>
         <li><strong>Virtual nodes</strong>: each physical node owns many small ranges. This evens out load, lets bigger machines take more ranges, and spreads a failed node's load across the cluster.</li>
@@ -98,10 +122,16 @@ export default function KeyValueStoreChapter() {
 
       <H2 id="quorum">6 · Deep dive: quorums & failures</H2>
       <p>
-        With N replicas, a write waits for <strong>W</strong> acks and a read for <strong>R</strong> replies. If{' '}
-        <code>W + R &gt; N</code>, every read quorum overlaps every write quorum, so a read sees the latest
-        acknowledged write (absent sloppy quorums and concurrent writes). Lower W and R buy latency and availability
-        at the cost of staleness.
+        Next, decide how many replicas must answer. With N replicas, a write waits for <strong>W</strong> acks and a
+        read waits for <strong>R</strong> replies.
+      </p>
+      <p>
+        If <code>W + R &gt; N</code>, every read{' '}
+        <Term def="The minimum number of replicas that must respond for an operation to succeed.">quorum</Term>{' '}
+        overlaps every write quorum. So a read sees the latest acknowledged write, unless{' '}
+        <Term def="A quorum that may count stand-in nodes when the true owners are down, trading consistency for availability.">sloppy quorums</Term>{' '}
+        or concurrent writes interfere. Lower W and R buy latency and availability at the cost of staleness. Try it in
+        the simulator.
       </p>
       <KvDynamoClusterSim />
       <CompareTable
@@ -122,13 +152,23 @@ export default function KeyValueStoreChapter() {
 
       <H2 id="anti-entropy">7 · Deep dive: anti-entropy with Merkle trees</H2>
       <p>
-        Hints can be lost if the hint holder also dies, and read repair only fixes keys that are actually read. So
-        replicas periodically compare <strong>Merkle trees</strong> of each key range. Matching roots mean the whole
-        range is in sync. A mismatch leads you down only the branches that differ.
+        Cheaper repairs miss some cases. Hints can be lost if the hint holder also dies. Read repair only fixes keys
+        that are actually read.
+      </p>
+      <p>
+        So replicas periodically compare{' '}
+        <strong><Term def="A tree of hashes where each parent is the hash of its children; equal roots mean equal data.">Merkle trees</Term></strong>{' '}
+        of each key range. Matching roots mean the whole range is in sync. A mismatch leads you down only the branches
+        that differ.
       </p>
       <KvMerkleDemo />
 
       <H2 id="conflicts">8 · Deep dive: conflicts & storage engine</H2>
+      <p>
+        Leaderless replicas can accept concurrent writes to the same key. Pick a policy for resolving them, then see
+        how each node stores data on disk with an{' '}
+        <Term def="Log-structured merge tree: writes go to memory and an append-only log, then flush to sorted immutable files that are merged in the background.">LSM tree</Term>.
+      </p>
       <CompareTable
         columns={['Last-write-wins (timestamps)', 'Vector clocks / siblings', 'CRDTs']}
         rows={[

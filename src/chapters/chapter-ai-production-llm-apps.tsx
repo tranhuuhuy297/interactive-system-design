@@ -1,5 +1,5 @@
 import {
-  ArchitectureDiagram, Callout, CodeBlock, CompareTable, H2, InterviewQuestion, KeyTakeaways, References,
+  ArchitectureDiagram, Callout, CodeBlock, CompareTable, H2, InterviewQuestion, KeyTakeaways, References, Term, TLDR,
 } from '../components/ui'
 import type { ArchEdge, ArchNode, Reference } from '../components/ui'
 import { AiProdCostDemo } from './demos/ai-prod-cost-demo'
@@ -41,15 +41,33 @@ const EDGES: ArchEdge[] = [
 export default function ProductionLlmAppsChapter() {
   return (
     <>
+      <TLDR items={[
+        'Put a gateway between product code and models. Quotas, fallbacks, caching, and logging live there.',
+        'Stream tokens and measure time to first token. Cancel upstream when the user leaves.',
+        'Exact, semantic, and provider prompt caching save very different amounts at very different risk.',
+        'Budget and rate-limit in tokens, per tenant and per feature.',
+        'Fail over on slow first tokens, only to fallbacks you have evaluated.',
+      ]} />
       <p>
         Calling a model API takes one line of code. Running an LLM feature for millions of users is a systems
-        problem: variable latency measured in seconds, costs that scale with tokens rather than requests, providers
-        with rate limits and outages, and outputs you cannot unit-test with <code>assertEquals</code>. This chapter is
-        the production checklist. The GPU side is covered in <a href="#/llm-serving">LLM Inference Platform</a> and
-        the <a href="#/ai-inference">inference chapters</a>.
+        problem:
+      </p>
+      <ul>
+        <li>latency varies and is measured in seconds;</li>
+        <li>costs scale with{' '}<Term def="Chunks of text, roughly ¾ of a word each in English. Providers bill per token in and out.">tokens</Term>, not requests;</li>
+        <li>providers have rate limits and outages;</li>
+        <li>outputs can’t be unit-tested with <code>assertEquals</code>.</li>
+      </ul>
+      <p>
+        This chapter is the production checklist. The GPU side is covered in{' '}
+        <a href="#/llm-serving">LLM Inference Platform</a> and the <a href="#/ai-inference">inference chapters</a>.
       </p>
 
       <H2 id="architecture">Reference architecture</H2>
+      <p>
+        The key move is an{' '}<Term def="An internal proxy service that every LLM call goes through, owning cross-cutting concerns.">LLM gateway</Term>{' '}
+        between product code and models. Trace the three flows to see what it does.
+      </p>
       <ArchitectureDiagram nodes={NODES} edges={EDGES} height={400}
         caption="Put a gateway between product code and models; everything cross-cutting lives there"
         flows={[
@@ -59,14 +77,20 @@ export default function ProductionLlmAppsChapter() {
         ]} />
 
       <H2 id="streaming">Streaming UX</H2>
+      <p>A full answer can take many seconds. Streaming makes the wait feel short, but it changes how you handle errors.</p>
       <ul>
-        <li><strong>Stream tokens</strong> over server-sent events or WebSockets. Users judge speed by <em>time to first token</em>, not total time.</li>
+        <li><strong>Stream tokens</strong> over{' '}<Term def="SSE: a simple HTTP mechanism where the server keeps the response open and pushes events.">server-sent events</Term>{' '}or WebSockets. Users judge speed by <em>time to first token</em>, not total time.</li>
         <li><strong>Separate timeouts</strong> for first token (e.g. a few seconds) and for the whole response. A slow first token is the best signal to fail over.</li>
         <li><strong>Propagate cancel.</strong> When the user closes the tab, abort the upstream request so you stop paying for tokens nobody reads.</li>
         <li><strong>Stream structured output carefully.</strong> Partial JSON is not valid JSON, so validate at the end or use a streaming parser.</li>
       </ul>
 
       <H2 id="caching">Three kinds of caching</H2>
+      <p>
+        Caching is the cheapest cost lever, but “similar” is not “identical.” A{' '}
+        <Term def="A cache that returns a stored answer when a new question’s embedding is close enough to an old one.">semantic cache</Term>{' '}
+        can serve the wrong answer. Compare the three kinds, then play with the calculator.
+      </p>
       <CompareTable
         columns={['What matches', 'Savings', 'Risk']}
         rows={[
@@ -79,14 +103,25 @@ export default function ProductionLlmAppsChapter() {
 
       <H2 id="limits">Rate limits and token budgets</H2>
       <p>
-        Providers limit <strong>requests per minute</strong> and <strong>tokens per minute</strong>, so your own
-        limits should be token-aware too. Budget per tenant and per feature, estimate tokens before the call (input is
-        known, output is capped by <code>max_tokens</code>), then reconcile with actual usage afterwards. Reserve
-        capacity for interactive traffic and push batch jobs to off-peak or to discounted batch APIs. The algorithms
-        are the same as in <a href="#/rate-limiting">Rate Limiting</a>, with tokens as the unit.
+        Providers limit <strong>requests per minute</strong> (RPM) and <strong>tokens per minute</strong> (TPM). So your
+        own limits should count tokens too.
+      </p>
+      <ol>
+        <li>Budget per tenant and per feature.</li>
+        <li>Estimate tokens before the call. Input is known; output is capped by <code>max_tokens</code>.</li>
+        <li>Reconcile with actual usage afterwards.</li>
+      </ol>
+      <p>
+        Reserve capacity for interactive traffic. Push batch jobs to off-peak hours or discounted batch APIs. The
+        algorithms are the same as in <a href="#/rate-limiting">Rate Limiting</a>, with tokens as the unit.
       </p>
 
       <H2 id="reliability">Timeouts, retries, and fallbacks</H2>
+      <p>
+        Providers fail, often by getting slow rather than returning errors. A fallback chain with a{' '}
+        <Term def="A switch that stops sending traffic to a failing dependency for a while, then tests it again.">circuit breaker</Term>{' '}
+        keeps the feature up.
+      </p>
       <CodeBlock lang="ts" title="gateway call with fallback (sketch)" code={`
 const CHAIN = [
   { model: 'primary-large',  firstTokenTimeoutMs: 4_000 },
@@ -114,6 +149,7 @@ async function complete(req: LlmRequest): Promise<LlmStream> {
       </Callout>
 
       <H2 id="observability">Observability and cost attribution</H2>
+      <p>When the bill doubles or quality dips, you need to find the cause in minutes. That takes rich, tagged traces.</p>
       <ul>
         <li><strong>Trace every call:</strong> model and version, prompt template version, input and output tokens, time to first token, total latency, cache status, finish reason, and cost.</li>
         <li><strong>Tag with tenant and feature</strong> so cost rolls up to whoever caused it. “The AI bill doubled” must be answerable in minutes.</li>
@@ -123,14 +159,19 @@ async function complete(req: LlmRequest): Promise<LlmStream> {
 
       <H2 id="versioning">Prompts and models are deployable artifacts</H2>
       <p>
-        Version prompts like code, pin model versions explicitly, and never let a provider’s silent model update or an
-        edited prompt reach 100% of traffic untested. Roll out with offline eval gates, then shadow or canary traffic
-        with online quality metrics. See <a href="#/ai-evals">Evaluating LLM Systems</a>.
+        Version prompts like code. Pin model versions explicitly. Never let a provider’s silent model update or an
+        edited prompt reach 100% of traffic untested.
+      </p>
+      <p>
+        Roll out with offline eval gates, then{' '}
+        <Term def="Shadow: run the new version on real traffic without showing users. Canary: show it to a small slice first.">shadow or canary</Term>{' '}
+        traffic with online quality metrics. See <a href="#/ai-evals">Evaluating LLM Systems</a>.
       </p>
 
       <H2 id="privacy">Privacy and data handling</H2>
+      <p>Every prompt is data leaving your system. Treat it with the same care as any other data flow.</p>
       <ul>
-        <li>Redact or tokenize PII before it leaves your boundary when the model doesn’t need it.</li>
+        <li>Redact or tokenize{' '}<Term def="Personally identifiable information: names, emails, phone numbers, IDs, and similar.">PII</Term>{' '}before it leaves your boundary when the model doesn’t need it.</li>
         <li>Know each provider’s data retention and training policies, and route regulated data only to approved endpoints or regions.</li>
         <li>Apply the same retention and deletion rules to logs, traces, and caches as to the source data. Semantic caches are easy to forget.</li>
       </ul>
@@ -150,7 +191,8 @@ async function complete(req: LlmRequest): Promise<LlmStream> {
         senior={<p>Add caching, use a cheaper model for simple requests, shorten prompts, and limit output tokens.</p>}
         staff={<>
           <p>First, <strong>attribute</strong>: break cost down by feature, tenant, and token type (input vs output, cached vs not). Growth faster than usage usually means context growth (longer histories, bigger retrieved chunks) or a model change.</p>
-          <p>Then fix it in order of safety. Reorder prompts so the stable prefix gets provider prompt caching. Trim retrieval to fewer, better chunks. Use an exact cache for repeated requests. Route by difficulty to a smaller model, gated by eval parity on a labeled set. Add a semantic cache only with a measured false-hit rate. Each change ships behind an eval gate, and cost per <em>successful</em> task is the metric, so we don’t save money by quietly failing users.</p>
+          <p>Then fix it in order of safety. Reorder prompts so the stable prefix gets provider prompt caching. Trim retrieval to fewer, better chunks. Use an exact cache for repeated requests. Route by difficulty to a smaller model, gated by eval parity on a labeled set.</p>
+          <p>Add a semantic cache only with a measured false-hit rate. Each change ships behind an eval gate, and cost per <em>successful</em> task is the metric, so we don’t save money by quietly failing users.</p>
         </>}
         followUps={['How would you decide which requests are “easy”?', 'What goes into the cache key?', 'How do you detect quality regressions from routing?']}
       />
@@ -159,7 +201,8 @@ async function complete(req: LlmRequest): Promise<LlmStream> {
         senior={<p>Retry with backoff and fail over to another provider. Add a circuit breaker so we stop sending traffic to the failing one.</p>}
         staff={<>
           <p>Detect it on <strong>time to first token</strong>, not errors, because partial outages often look like slowness. A first-token timeout of a few seconds triggers per-request failover, and a circuit breaker on first-token latency percentiles moves traffic proactively.</p>
-          <p>The fallback must already be evaluated and have quota reserved. Otherwise failover just moves the outage (or a rate-limit storm) to provider B. Degrade by tier: interactive traffic gets the fallback, batch jobs pause, and the UI can show a limited-mode notice. Retries only happen before any tokens have streamed. Afterwards, compare quality metrics between the two windows.</p>
+          <p>The fallback must already be evaluated and have quota reserved. Otherwise failover just moves the outage (or a rate-limit storm) to provider B.</p>
+          <p>Degrade by tier: interactive traffic gets the fallback, batch jobs pause, and the UI can show a limited-mode notice. Retries only happen before any tokens have streamed. Afterwards, compare quality metrics between the two windows.</p>
         </>}
       />
 

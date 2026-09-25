@@ -1,5 +1,5 @@
 import {
-  Callout, CodeBlock, CompareTable, FlowDiagram, H2, InterviewQuestion, KeyTakeaways, References,
+  Callout, CodeBlock, CompareTable, FlowDiagram, H2, InterviewQuestion, KeyTakeaways, References, Term, TLDR,
 } from '../components/ui'
 import type { Reference } from '../components/ui'
 import { AiSecInjectionDemo } from './demos/ai-sec-injection-demo'
@@ -18,15 +18,29 @@ const REFS: Reference[] = [
 export default function AiSafetySecurityChapter() {
   return (
     <>
+      <TLDR items={[
+        'LLMs can’t separate instructions from data. Any text they read can try to steer them.',
+        'Indirect prompt injection hides commands in content the model reads, such as web pages and emails.',
+        'Danger = private data + untrusted content + a way to send data out. Remove one leg.',
+        'Put real controls in code: least-privilege tools, confirmations, output encoding.',
+        'Treat model output like user input before it reaches HTML, SQL, or a shell.',
+      ]} />
       <p>
         Classic application security separates <strong>code</strong> from <strong>data</strong>: SQL has parameters,
         HTML has escaping. Language models have no such boundary. Instructions and data arrive in the same stream of
-        tokens, so any text the model reads can try to steer it. That single property explains most of this chapter.
-        Treat model output as untrusted, treat anything the model reads as potentially hostile, and put the real
-        controls in code around the model.
+        tokens, so any text the model reads can try to steer it.
+      </p>
+      <p>
+        That single property explains most of this chapter. Treat model output as untrusted. Treat anything the model
+        reads as potentially hostile. Put the real controls in code around the model.
       </p>
 
       <H2 id="threat-model">Threat model: OWASP Top 10 for LLM apps</H2>
+      <p>
+        Start from a shared list of what goes wrong.{' '}
+        <Term def="Open Worldwide Application Security Project: a non-profit that publishes widely used security risk lists.">OWASP</Term>{' '}
+        maintains one for LLM applications.
+      </p>
       <CompareTable
         columns={['What goes wrong', 'Primary control']}
         rows={[
@@ -42,8 +56,12 @@ export default function AiSafetySecurityChapter() {
       />
 
       <H2 id="injection">Direct vs indirect prompt injection</H2>
+      <p>
+        <Term def="Text crafted to make a model ignore its instructions and follow the attacker’s instead.">Prompt injection</Term>{' '}
+        comes in two forms, and the second is far more dangerous.
+      </p>
       <ul>
-        <li><strong>Direct:</strong> the user types instructions to subvert the system (“ignore your rules…”). The attacker is the user, so the blast radius is mostly their own session. Jailbreaks are a variant.</li>
+        <li><strong>Direct:</strong> the user types instructions to subvert the system (“ignore your rules…”). The attacker is the user, so the{' '}<Term def="How much damage a successful attack can do.">blast radius</Term>{' '}is mostly their own session.{' '}<Term def="Prompts designed to get a model to break its safety rules.">Jailbreaks</Term>{' '}are a variant.</li>
         <li><strong>Indirect:</strong> instructions hide in content the model processes for someone else: a web page, email, PDF, code comment, tool result, or MCP tool description. The victim never sees them. This is the dangerous one for agents.</li>
       </ul>
       <FlowDiagram steps={[
@@ -61,12 +79,17 @@ export default function AiSafetySecurityChapter() {
       <H2 id="sandbox">Try it: layers of defense</H2>
       <p>
         The scenario: an email assistant summarizes your inbox, and one newsletter hides instructions for it. There are
-        two exfiltration paths, a tool call and a markdown image whose URL carries data. Notice that a clever enough
-        attacker gets past prompt-level defenses, and only controls enforced in code hold every time.
+        two{' '}<Term def="Sneaking data out of a system to an attacker.">exfiltration</Term>{' '}paths: a tool call, and a
+        markdown image whose URL carries data.
+      </p>
+      <p>
+        Notice that a clever enough attacker gets past prompt-level defenses. Only controls enforced in code hold every
+        time.
       </p>
       <AiSecInjectionDemo />
 
       <H2 id="defense-in-depth">Defense in depth</H2>
+      <p>No single layer stops everything. Know what each one stops, and what it lets through.</p>
       <CompareTable
         columns={['Stops', 'Doesn’t stop']}
         rows={[
@@ -80,13 +103,21 @@ export default function AiSafetySecurityChapter() {
       />
       <p>
         In the <strong>dual-LLM pattern</strong>, a privileged model plans and calls tools but never sees untrusted
-        content. A quarantined model, with no tools, processes that content, and its outputs are passed around as
-        opaque references (“summary $1”) rather than as text the privileged model reads. It is not a silver bullet,
-        but it shows the principle: separate the component that <em>reads</em> hostile text from the component that
-        can <em>act</em>.
+        content. A quarantined model, with no tools, processes that content. Its outputs are passed around as opaque
+        references (“summary $1”), not as text the privileged model reads.
+      </p>
+      <p>
+        It is like a mailroom that X-rays packages before they reach the executive. Not a silver bullet, but it shows
+        the principle: separate the component that <em>reads</em> hostile text from the component that can{' '}
+        <em>act</em>.
       </p>
 
       <H2 id="output-handling">Treat model output as untrusted input</H2>
+      <p>
+        A steered model can emit anything. If its output reaches a browser, database, or shell unchecked, you get
+        classic bugs like{' '}<Term def="Cross-site scripting: injecting script into a web page that runs in other users’ browsers.">XSS</Term>{' '}
+        and SQL injection, by proxy.
+      </p>
       <CodeBlock lang="ts" title="never trust generated content" code={`
 // ❌ XSS: the model can be steered into emitting <img onerror=...>
 el.innerHTML = markdownToHtml(modelOutput)
@@ -107,13 +138,18 @@ eval(modelOutput.code)
 
       <H2 id="content-safety">Jailbreaks and content safety</H2>
       <p>
-        Alignment training makes models refuse harmful requests, but jailbreaks, including automatically generated
-        adversarial suffixes, keep finding gaps. Production systems add <strong>moderation classifiers</strong> on
-        inputs and outputs, category-specific policies, and rate limits for abusive accounts. Assume the system prompt
-        will leak: keep secrets and authorization decisions out of it, and enforce permissions in code.
+        <Term def="Training that teaches a model to follow intended behavior, including refusing harmful requests.">Alignment training</Term>{' '}
+        makes models refuse harmful requests. But jailbreaks, including automatically generated adversarial suffixes,
+        keep finding gaps.
+      </p>
+      <p>
+        Production systems add <strong>moderation classifiers</strong> on inputs and outputs, category-specific
+        policies, and rate limits for abusive accounts. Assume the system prompt will leak. Keep secrets and
+        authorization decisions out of it, and enforce permissions in code.
       </p>
 
       <H2 id="data">Data protection</H2>
+      <p>An LLM can only leak what it can reach. Limit what reaches it.</p>
       <ul>
         <li><strong>Permission-aware retrieval:</strong> filter RAG results by the requesting user’s access <em>before</em> they enter the prompt. See <a href="#/ai-rag">RAG Systems</a>.</li>
         <li><strong>Tenant isolation</strong> in caches, memories, and fine-tuning data. A semantic cache shared across tenants is a data leak waiting to happen.</li>
@@ -123,10 +159,15 @@ eval(modelOutput.code)
 
       <H2 id="operations">Red-teaming, monitoring, response</H2>
       <p>
-        Maintain an evolving attack suite (known injections, jailbreaks, exfiltration attempts) and run it as a release
-        gate like any other eval. In production, log tool calls and blocked actions, alert on spikes, and keep kill
-        switches per tool and per feature. Frameworks like the NIST AI Risk Management Framework help organize this
-        as a continuous process rather than a launch checklist.
+        Security is ongoing work, not a launch checklist. Maintain an evolving{' '}
+        <Term def="Red-teaming: deliberately attacking your own system to find weaknesses before attackers do.">red-team</Term>{' '}
+        attack suite (known injections, jailbreaks, exfiltration attempts). Run it as a release gate like any other eval.
+      </p>
+      <p>
+        In production, log tool calls and blocked actions, alert on spikes, and keep{' '}
+        <Term def="A switch that instantly disables a feature or tool without a deploy.">kill switches</Term>{' '}
+        per tool and per feature. Frameworks like the NIST AI Risk Management Framework help organize this as a
+        continuous process.
       </p>
 
       <Callout kind="staff">

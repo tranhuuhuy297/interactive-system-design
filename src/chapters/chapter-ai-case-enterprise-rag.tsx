@@ -1,6 +1,6 @@
 import {
   ApiSpec, ArchitectureDiagram, Callout, CodeBlock, CompareTable, EstimationTable, H2, InterviewQuestion,
-  KeyTakeaways, References, Requirements,
+  KeyTakeaways, References, Requirements, Term, TLDR,
 } from '../components/ui'
 import type { ArchEdge, ArchNode, Reference } from '../components/ui'
 import { AiCaseRagAclDemo } from './demos/ai-case-rag-acl-demo'
@@ -49,12 +49,24 @@ const REFS: Reference[] = [
 export default function EnterpriseRagChapter() {
   return (
     <>
+      <TLDR items={[
+        'The hard parts aren’t the vector database. They are permissions, freshness, and trust.',
+        'Filter by the user’s permissions inside the search, never after it or in the prompt.',
+        'Deletes and permission revocations get a fast priority lane with its own SLO.',
+        'Hybrid search + reranking, few strong passages, and a citation per claim.',
+        'Key every cache by the user’s permission set, never by question text alone.',
+      ]} />
       <p>
         “Ask anything about the company” sounds like a vector database plus an LLM. The hard parts are elsewhere.
-        The assistant must <strong>never reveal a document the asker cannot open</strong>. It must forget a file
-        minutes after it is deleted, and it must stay grounded enough that people trust its citations. Interviewers
-        use this prompt to see whether you treat permissions, freshness, and evaluation as first-class requirements
-        or as afterthoughts.
+      </p>
+      <ul>
+        <li>The assistant must <strong>never reveal a document the asker cannot open</strong>.</li>
+        <li>It must forget a file minutes after it is deleted.</li>
+        <li>It must stay{' '}<Term def="Answering only from retrieved sources, not from the model’s own guesses.">grounded</Term>{' '}enough that people trust its citations.</li>
+      </ul>
+      <p>
+        Interviewers use this prompt to see whether you treat permissions, freshness, and evaluation as first-class
+        requirements or as afterthoughts.
       </p>
 
       <H2 id="requirements">1 · Clarify requirements</H2>
@@ -82,9 +94,9 @@ export default function EnterpriseRagChapter() {
         ]}
       />
       <p>
-        Query traffic is modest. The costs are <strong>LLM tokens</strong> (context size dominates) and
-        <strong> keeping a billion-chunk index fresh and permission-correct</strong>. Design effort should go where
-        the cost and risk are.
+        Query traffic is modest. The costs are <strong>LLM tokens</strong> (context size dominates) and{' '}
+        <strong>keeping a billion-chunk index fresh and permission-correct</strong>. Spend design effort where the
+        cost and risk are.
       </p>
 
       <H2 id="api">3 · API</H2>
@@ -106,10 +118,14 @@ export default function EnterpriseRagChapter() {
 
       <H2 id="permissions">5 · Deep dive: permissions-aware retrieval</H2>
       <p>
-        The index cannot call Google Drive on every query to ask “may Dana read this?”. Instead it keeps a
-        <strong> mirror of each document’s allowed principals</strong> (users and groups) on every chunk. At query
-        time the service expands the user into their principals and passes them as a <em>filter inside the
-        search</em>. Where that filter runs is the whole game:
+        The index cannot call Google Drive on every query to ask “may Dana read this?”. Instead it keeps a{' '}
+        <strong>mirror of each document’s allowed{' '}
+        <Term def="Identities that can hold permissions: individual users and the groups they belong to.">principals</Term></strong>{' '}
+        (users and groups) on every{' '}<Term def="A passage cut from a document; the unit that gets embedded and retrieved.">chunk</Term>.
+      </p>
+      <p>
+        At query time, the service expands the user into their principals. It passes them as a <em>filter inside the
+        search</em>. Where that filter runs is the whole game. Try the three options:
       </p>
       <AiCaseRagAclDemo />
       <CompareTable
@@ -138,6 +154,11 @@ const passages = (await reranker.score(rewrittenQuestion, candidates)).slice(0, 
       </Callout>
 
       <H2 id="ingestion">6 · Deep dive: ingestion, freshness, and deletes</H2>
+      <p>
+        An index is only as correct as its last sync. Ingestion must be cheap for edits and fast for deletes. Content
+        is turned into vectors by an{' '}
+        <Term def="A model that maps text to a vector so that similar meanings land close together.">embedding model</Term>.
+      </p>
       <ul>
         <li><strong>Structure-aware chunking.</strong> Split on headings, slides, and table boundaries into chunks of a few hundred tokens, with a little overlap. Keep the document title and section path on every chunk so a passage makes sense on its own.</li>
         <li><strong>Idempotent upserts.</strong> Key chunks by <code>(docId, chunkIndex)</code> and store a content hash. An unchanged chunk is not re-embedded, which saves most of the daily embedding cost.</li>
@@ -146,6 +167,10 @@ const passages = (await reranker.score(rewrittenQuestion, candidates)).slice(0, 
       </ul>
 
       <H2 id="retrieval-quality">7 · Deep dive: retrieval quality and grounded answers</H2>
+      <p>
+        If the right passage isn’t retrieved, no model can use it. Combine keyword and vector search, then{' '}
+        <Term def="Re-scoring the top candidates with a slower, more precise model that reads query and passage together.">rerank</Term>.
+      </p>
       <CompareTable
         columns={['Keyword (BM25)', 'Dense vectors', 'Hybrid + rerank']}
         rows={[
@@ -161,6 +186,7 @@ const passages = (await reranker.score(rewrittenQuestion, candidates)).slice(0, 
       </ul>
 
       <H2 id="data-model">8 · Data model</H2>
+      <p>Each chunk carries its text, vector, and the permission data needed to filter it.</p>
       <CodeBlock lang="ts" title="chunk record (per-tenant index)" code={`
 type Chunk = {
   tenantId: string          // partition / separate index per tenant
@@ -208,7 +234,8 @@ type Chunk = {
         q="Answers got worse after you switched to a new embedding model. How should that migration have worked?"
         senior={<p>We should have compared results before switching and kept the old index to roll back.</p>}
         staff={<>
-          <p>Treat it like a database migration with an evaluation gate. Build a <strong>shadow index</strong> with the new model and backfill it at low priority, dual-writing new changes. Run the retrieval eval suite (recall@k and MRR on golden questions per tenant) and a small online interleaving test. Then cut over tenant by tenant, keeping the old index warm for a fast rollback.</p>
+          <p>Treat it like a database migration with an evaluation gate. Build a <strong>shadow index</strong> with the new model and backfill it at low priority, dual-writing new changes.</p>
+          <p>Run the retrieval eval suite (recall@k and MRR on golden questions per tenant) and a small online interleaving test. Then cut over tenant by tenant, keeping the old index warm for a fast rollback.</p>
           <p>Also check that the query side uses the same model version as the documents; mixed versions produce silent garbage. And budget the backfill cost explicitly, because at 800M chunks it is a real line item.</p>
         </>}
       />

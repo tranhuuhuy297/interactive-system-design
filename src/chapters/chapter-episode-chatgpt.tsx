@@ -1,10 +1,11 @@
 import {
-  References,
+  References, TLDR, Term,
   ArchitectureDiagram, Callout, CompareTable, EpisodePlayer, EstimationTable, H2, InterviewQuestion, KeyTakeaways,
 } from '../components/ui'
 import type { ArchEdge, ArchNode, Reference } from '../components/ui'
 import { EpisodeChatgptContextBudgetDemo } from './demos/episode-chatgpt-context-budget-demo'
 import { CHATGPT_STAGES } from './demos/episode-chatgpt-stages'
+import { GSRC } from './demos/episode-chatgpt-stage-nodes'
 
 const MSG_NODES: ArchNode[] = [
   { id: 'client', label: 'Browser', sub: 'SSE stream open', kind: 'client', x: 10, y: 50 },
@@ -23,33 +24,56 @@ const MSG_EDGES: ArchEdge[] = [
   { from: 'orch', to: 'fleet' }, { from: 'orch', to: 'store', async: true },
 ]
 
-// Primary public sources behind the “In the real world” notes.
+// Primary public sources behind the episode (per-stage sources live in the Go deeper panels).
 const REFS: Reference[] = [
-  { title: "Introducing ChatGPT", source: "OpenAI", year: 2022, url: "https://openai.com/index/chatgpt/", kind: "blog", note: "launched 30 Nov 2022; trained on Azure" },
-  { title: "Streaming API responses", source: "OpenAI API docs", url: "https://developers.openai.com/api/docs/guides/streaming-responses", kind: "docs", note: "stream=true over SSE" },
-  { title: "Rate limits", source: "OpenAI API docs", url: "https://platform.openai.com/docs/guides/rate-limits", kind: "docs", note: "RPM/TPM and usage tiers" },
-  { title: "Memory and new controls for ChatGPT", source: "OpenAI", year: 2024, url: "https://openai.com/index/memory-and-new-controls-for-chatgpt/", kind: "blog" },
-  { title: "Function calling and other API updates", source: "OpenAI", year: 2023, url: "https://openai.com/index/function-calling-and-other-api-updates/", kind: "blog" },
-  { title: "ChatGPT plugins", source: "OpenAI", year: 2023, url: "https://openai.com/index/chatgpt-plugins/", kind: "blog", note: "Code Interpreter announcement" },
-  { title: "Moderation", source: "OpenAI API docs", url: "https://platform.openai.com/docs/guides/moderation", kind: "docs" },
-  { title: "Microsoft and OpenAI extend partnership", source: "Official Microsoft Blog", year: 2023, url: "https://blogs.microsoft.com/blog/2023/01/23/microsoftandopenaiextendpartnership/", kind: "blog" },
+  GSRC.launch, GSRC.plus, GSRC.streaming, GSRC.rateLimits, GSRC.plugins, GSRC.functions, GSRC.seeHear,
+  GSRC.gpt4o, GSRC.gpts, GSRC.wau, GSRC.memory, GSRC.moderation, GSRC.microsoft, GSRC.stargate,
 ]
+
+const TIMELINE = [
+  ['Nov 2022', 'ChatGPT launches as a free research preview'],
+  ['Jan 2023', 'Microsoft extends its partnership with OpenAI'],
+  ['Feb 2023', 'ChatGPT Plus: priority access at peak times'],
+  ['Mar 2023', 'Plugins: web browsing, code interpreter, retrieval'],
+  ['Jun 2023', 'Function calling in the API'],
+  ['Sep 2023', 'Voice and image input in ChatGPT'],
+  ['Nov 2023', 'Custom GPTs; 100M weekly active users'],
+  ['Feb 2024', 'Memory testing begins'],
+  ['May 2024', 'GPT-4o: audio replies in ~320 ms on average'],
+  ['Jan 2025', 'Stargate infrastructure venture announced'],
+] as const
 
 export default function ChatgptEpisode() {
   return (
     <>
+      <TLDR items={[
+        <><strong>GPU time is the scarce resource.</strong> Limits, queues, and plans are all measured in tokens.</>,
+        <><strong>Stream every answer.</strong> Time to first token decides how fast it feels.</>,
+        <>The model is stateless. The <strong>orchestrator</strong> decides what goes in each prompt: history, files, memory.</>,
+        <>Tools make it useful and risky. <strong>Tool output is untrusted input</strong>, and code runs in a sandbox.</>,
+        <>Plan the <strong>degradation ladder</strong> before launch day: queue, spill, smaller model, shed.</>,
+      ]} />
       <p>
-        ChatGPT looks like a text box, but the product is an orchestration layer wrapped around a very expensive,
-        very slow function call. Every design decision follows from two facts: <strong>GPU time is scarce</strong>,
-        and <strong>generation is sequential</strong> (one token at a time). This episode builds the product layer
-        from a single GPU box to a global service. For what happens <em>inside</em> the GPU fleet (batching, KV
-        cache, prefill vs decode), see the <a href="#/llm-serving">LLM Inference Platform</a> case study.
+        ChatGPT looks like a text box. The product is really an orchestration layer around a slow, expensive
+        function call. Two facts drive every decision: <strong>GPU time is scarce</strong>, and
+        <strong> generation is sequential</strong>, one token at a time.
+      </p>
+      <p>
+        This episode builds the product layer, stage by stage, from launch in 2022. For what happens inside the GPU
+        fleet (batching, KV cache, prefill vs decode), see the <a href="#/llm-serving">LLM Inference Platform</a>{' '}
+        case study.
       </p>
       <Callout kind="info" title="How to watch this episode">
-        OpenAI publishes little about its internal architecture. The stages below describe <strong>common industry
-        practice</strong> for LLM products. “In the real world” notes stick to publicly documented features.
+        OpenAI publishes little about its internal architecture. Dates and numbers come from OpenAI posts, API docs,
+        and press coverage. The designs describe <strong>common industry practice</strong>, and stages that are
+        design patterns rather than history are labelled that way.
       </Callout>
       <p className="muted"><em>This episode is an independent reconstruction from public sources. It is not affiliated with or endorsed by OpenAI; all trademarks belong to their owners.</em></p>
+
+      <H2 id="timeline">Timeline at a glance</H2>
+      <ol className="gpt-timeline">
+        {TIMELINE.map(([when, what]) => <li key={when}><strong>{when}</strong> {what}</li>)}
+      </ol>
 
       <H2 id="the-build">The build, stage by stage</H2>
       <EpisodePlayer stages={CHATGPT_STAGES} height={400} />
@@ -73,8 +97,13 @@ export default function ChatgptEpisode() {
       />
       <p>
         Prompt tokens outnumber output tokens several times over. Every history turn and retrieved chunk is
-        re-processed on <em>every</em> message, which is why context management is a cost problem as much as a
-        quality problem. Concurrency is also high: hundreds of thousands of open streams at once.
+        processed again on <em>every</em> message. So context management is a cost problem, not just a quality
+        problem.
+      </p>
+      <p>
+        Concurrency is high too. By{' '}
+        <Term def="Little’s law: items in a system = arrival rate × time each item spends there.">Little’s law</Term>,
+        12K messages per second lasting 15 seconds each means about 180K open streams at once.
       </p>
 
       <H2 id="life-of-a-message">Life of a message</H2>
@@ -89,9 +118,13 @@ export default function ChatgptEpisode() {
 
       <H2 id="context">Deep dive: the context window is a budget</H2>
       <p>
-        The model is stateless. “Memory” is whatever the orchestrator puts in the prompt this time. Fixed costs
-        (system prompt, tool definitions, retrieved documents, room for the answer) come off the top, and history
-        competes for the rest. Compare strategies as the conversation grows:
+        The model is stateless. “Memory” is whatever the orchestrator puts in the prompt this time.
+      </p>
+      <p>
+        Fixed costs come off the top: system prompt, tool definitions, retrieved documents, and room for the answer.
+        History competes for what is left in the{' '}
+        <Term def="The maximum number of tokens the model can read and write in one request.">context window</Term>.
+        Compare strategies as the conversation grows:
       </p>
       <EpisodeChatgptContextBudgetDemo />
       <Callout kind="tip">
@@ -128,8 +161,9 @@ export default function ChatgptEpisode() {
         q="How would you rate-limit an LLM chat product fairly when requests vary wildly in cost?"
         senior={<p>Use a token bucket per user in Redis, with higher limits for paid users. Return 429 with Retry-After when exceeded.</p>}
         staff={<>
-          <p>Limit on <strong>tokens</strong>, not requests: estimate prompt plus expected output at admission, reserve that from the user’s budget, then settle to actual usage when the stream ends. Enforce at two layers. Per-user and per-org budgets at the edge give fairness. A global priority scheduler in front of the fleet protects capacity, so paid and interactive traffic go ahead of batch and free traffic.</p>
-          <p>When the fleet is saturated I’d rather queue briefly with a visible wait, then degrade to a smaller model for low tiers, than let requests time out mid-stream. I’d watch time to first token per tier and rejection rate as the SLOs, and make sure the budget store fails open for paid users if it goes down.</p>
+          <p>Limit <strong>tokens</strong>, not requests. At admission, estimate prompt plus expected output and reserve it from the budget. Settle to actual usage when the stream ends.</p>
+          <p>Enforce at two layers. Per-user and per-org budgets at the edge give fairness. A priority scheduler in front of the fleet protects capacity, putting paid and interactive traffic first.</p>
+          <p>When saturated, queue briefly with a visible wait, then fall back to a smaller model for low tiers. Watch time to first token per tier and rejection rate. Let the budget store fail open for paid users.</p>
         </>}
         followUps={['How do you handle a request whose output is much longer than estimated?', 'Where does the rate-limit state live across regions?', 'How do you stop one enterprise tenant starving others?']}
       />
@@ -137,8 +171,9 @@ export default function ChatgptEpisode() {
         q="A user edits their third message in a 40-turn conversation. How does your data model handle it?"
         senior={<p>Update the third message and delete everything after it, then regenerate the answer.</p>}
         staff={<>
-          <p>Model the conversation as a <strong>tree</strong>: each message has a parent id. An edit creates a new sibling of message three, with a fresh branch below it, and the conversation tracks which leaf is “current”. Nothing is destroyed, so users can flip between branches, and regenerate is just another sibling.</p>
-          <p>Reads load the path from root to the current leaf, which bounds work per request. It also lets context building and caching key on stable message ids, and keeps a complete record for abuse investigations and deletion requests.</p>
+          <p>Model the conversation as a <strong>tree</strong>: each message has a parent id. An edit creates a new sibling of message three, with a fresh branch below it.</p>
+          <p>The conversation tracks its “current” leaf. Nothing is destroyed, so users can flip between branches. Regenerate is just another sibling.</p>
+          <p>Reads load the path from root to the current leaf, which bounds work per request. Stable message ids also help caching, abuse review, and deletion requests.</p>
         </>}
       />
 
@@ -151,6 +186,7 @@ export default function ChatgptEpisode() {
         'The model is stateless; the orchestrator owns context: budgets, summaries, retrieval, memory.',
         'Tools turn a chatbot into an agent, and turn tool output into an untrusted security boundary.',
         'Plan the degradation ladder: queue → spill → smaller model → shed, with honest UX.',
+        'Voice raises the latency bar to hundreds of milliseconds: stream every stage and remove hops.',
       ]} />
     </>
   )

@@ -1,5 +1,5 @@
 import {
-  ArchitectureDiagram, Callout, CodeBlock, CompareTable, FlowDiagram, H2, InterviewQuestion, KeyTakeaways, References, Tabs,
+  ArchitectureDiagram, Callout, CodeBlock, CompareTable, FlowDiagram, H2, InterviewQuestion, KeyTakeaways, References, TLDR, Tabs, Term,
 } from '../components/ui'
 import type { ArchEdge, ArchNode, Reference } from '../components/ui'
 import { LbAlgorithmRaceDemo } from './demos/lb-algorithm-race-demo'
@@ -37,13 +37,26 @@ export default function LoadBalancingChapter() {
   return (
     <>
       <p>
-        A load balancer does three jobs: <strong>spread work</strong> so no single machine melts, <strong>hide
-        failures</strong> by routing around unhealthy backends, and give you a <strong>stable front door</strong> so
-        you can add, drain and replace servers without clients noticing. Consistent hashing is the companion idea
-        for the cases where <em>which</em> server handles a key matters, as with caches, shards and stateful sessions.
+        A load balancer does three jobs. It <strong>spreads work</strong> so no single machine melts. It <strong>hides
+        failures</strong> by routing around unhealthy backends. And it gives you a <strong>stable front door</strong>,
+        so you can add, drain, and replace servers without clients noticing.
+      </p>
+      <TLDR items={[
+        'L4 balancers spread connections fast; L7 balancers spread individual requests with full HTTP context.',
+        '“Pick the less busy of two random servers” beats round robin when requests vary in cost.',
+        'Health checks and draining are what make zero-downtime deploys possible.',
+        'Consistent hashing moves only about 1/N of keys when a server joins or leaves.',
+      ]} />
+      <p>
+        Consistent hashing is the companion idea. It matters when <em>which</em> server handles a key is important, as
+        with caches, shards, and stateful sessions.
       </p>
 
       <H2 id="l4-vs-l7">L4 vs L7</H2>
+      <p>
+        The names come from the network layer each balancer inspects. An L4 balancer sees only addresses and ports.
+        An L7 balancer reads the HTTP request itself.
+      </p>
       <CompareTable
         columns={['Layer 4 (transport)', 'Layer 7 (application)']}
         rows={[
@@ -62,10 +75,11 @@ export default function LoadBalancingChapter() {
       </Callout>
 
       <H2 id="algorithms">Balancing algorithms</H2>
+      <p>The algorithm decides which backend gets the next request. The right one depends on how much requests vary.</p>
       <ul>
         <li><strong>Round robin / weighted round robin</strong>: simple and stateless. It ignores how busy each server actually is.</li>
         <li><strong>Least connections / least outstanding requests</strong>: adapts to slow requests and slow servers, but needs a global view of load.</li>
-        <li><strong>Least response time (EWMA)</strong>: weights servers by recent latency. Good with heterogeneous fleets.</li>
+        <li><strong>Least response time (EWMA)</strong>: weights servers by recent latency, using an exponentially weighted moving average. Good with mixed hardware.</li>
         <li><strong>Power of two choices (P2C)</strong>: sample two servers at random and pick the less loaded. It gets most of least-connections' benefit with almost no coordination, which is why many distributed proxies use it (Envoy's least-request policy, Finagle, Linkerd).</li>
         <li><strong>Hash-based (source IP, header, consistent hash)</strong>: sends the same key to the same server for affinity, at the cost of balance.</li>
       </ul>
@@ -77,6 +91,7 @@ export default function LoadBalancingChapter() {
       </Callout>
 
       <H2 id="health">Health checks, draining & sticky sessions</H2>
+      <p>A balancer is only as good as its knowledge of which backends can take traffic right now.</p>
       <ul>
         <li><strong>Active checks</strong> probe <code>/healthz</code> on an interval. <strong>Passive checks</strong> (outlier detection) eject a backend after N consecutive 5xx responses or timeouts. Use both.</li>
         <li><strong>Liveness ≠ readiness.</strong> A process can be alive but not ready (cache still warming, dependency down). Route only to ready backends.</li>
@@ -85,6 +100,11 @@ export default function LoadBalancingChapter() {
       </ul>
 
       <H2 id="global">Global load balancing</H2>
+      <p>
+        For users worldwide, balancing happens in tiers. First DNS or{' '}
+        <Term def="Many locations announce the same IP address, and the internet routes each user to the nearest one.">anycast</Term>{' '}
+        picks a region. Then L4 and L7 balancers spread traffic inside it.
+      </p>
       <ArchitectureDiagram nodes={GLOBAL_NODES} edges={GLOBAL_EDGES} height={320}
         caption="A typical tiered path: DNS or anycast picks a region, L4 spreads connections, L7 routes requests"
         flows={[
@@ -95,14 +115,18 @@ export default function LoadBalancingChapter() {
       <H2 id="consistent-hashing">Consistent hashing</H2>
       <p>
         With <code>hash(key) % N</code>, changing N remaps almost every key. For a cache cluster that means a cold
-        cache and a stampede on the database. Consistent hashing places servers and keys on a ring. Each key belongs
-        to the first server clockwise, so adding or removing a server moves only about <strong>1/N</strong> of the keys.
+        cache and a stampede on the database.
+      </p>
+      <p>
+        Consistent hashing places servers and keys on a ring. Each key belongs to the first server clockwise from it.
+        Adding or removing a server then moves only about <strong>1/N</strong> of the keys.
       </p>
       <LbConsistentHashRingDemo />
       <p>
-        With only one point per server, the arcs are wildly uneven. <strong>Virtual nodes</strong> give each
-        physical server many points, which smooths the load and lets you weight bigger machines with more points.
-        When a server fails, its load spreads across many neighbours instead of landing on one.
+        With only one point per server, the arcs are wildly uneven.{' '}
+        <strong><Term def="Extra positions on the ring for the same physical server, so its share of keys evens out.">Virtual nodes</Term></strong>{' '}
+        give each server many points. That smooths the load and lets bigger machines take more points. When a
+        server fails, its load spreads across many neighbours instead of landing on one.
       </p>
       <Tabs items={[
         { label: 'Ring lookup', content: <CodeBlock lang="ts" title="consistent-hash.ts" code={`
@@ -140,6 +164,10 @@ class HashRing {
       ]} caption="Where consistent hashing shows up in real systems" />
 
       <H2 id="staff">Staff-level lens</H2>
+      <p>
+        At scale the balancer can become the outage, for example as a{' '}
+        <Term def="Single point of failure: one component whose failure takes the whole system down.">SPOF</Term>.
+      </p>
       <Callout kind="staff">
         <p>The load balancer is itself a distributed system. Staff answers cover:</p>
         <ul>
@@ -155,7 +183,8 @@ class HashRing {
         q="Why use consistent hashing instead of hash mod N for a distributed cache?"
         senior={<p>Changing N with modulo hashing remaps almost every key, which empties the cache. With consistent hashing only about 1/N of keys move when a node joins or leaves. Virtual nodes keep the load balanced.</p>}
         staff={<>
-          <p>The real cost of mod-N is a <strong>correlated miss storm</strong>: every key misses at once, so the database takes the full read load. That often turns a routine scale-out into an outage. Consistent hashing limits the movement to about 1/N, and virtual nodes spread a failed node's range across many peers instead of doubling one neighbour's load.</p>
+          <p>The real cost of mod-N is a <strong>correlated miss storm</strong>: every key misses at once, so the database takes the full read load. That often turns a routine scale-out into an outage.</p>
+          <p>Consistent hashing limits the movement to about 1/N, and virtual nodes spread a failed node's range across many peers instead of doubling one neighbour's load.</p>
           <p>I'd call out what it doesn't solve: hot keys, and the fact that the moved 1/N is still cold. For the hot-key case I'd use bounded-load hashing or key replication. When adding capacity, I'd warm the moved range, or double-read from the old owner during the transition.</p>
         </>}
         followUps={['How many virtual nodes per server, and what does that cost?', 'How do clients learn about ring membership changes?', 'Compare with rendezvous hashing.']}

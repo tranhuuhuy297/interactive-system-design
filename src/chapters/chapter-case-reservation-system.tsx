@@ -1,6 +1,6 @@
 import {
   ApiSpec, ArchitectureDiagram, Callout, CodeBlock, CompareTable, EstimationTable, H2, InterviewQuestion,
-  KeyTakeaways, Requirements, References,
+  KeyTakeaways, Requirements, References, TLDR, Term,
 } from '../components/ui'
 import type { ArchEdge, ArchNode, Reference } from '../components/ui'
 import { ReserveRaceDemo } from './demos/reserve-race-demo'
@@ -42,13 +42,23 @@ const REFS: Reference[] = [
 export default function ReservationSystemChapter() {
   return (
     <>
+      <TLDR items={[
+        'Core problem: never sell the same room-night or seat twice.',
+        'Key decision: one atomic conditional UPDATE plus the reservation insert, in a single short transaction.',
+        'The hard part: payment happens outside that transaction, so holds need an expiry.',
+        'Staff insight: flash sales are a different system: a waiting room, in-memory counters, async persistence.',
+      ]} />
       <p>
         Hotel and ticket booking is the canonical <strong>“don't sell the same thing twice”</strong> problem. The
-        write rate is tiny next to the browse rate, so the design splits into a cheap, stale-tolerant read path and
-        a small, strictly correct write path. Flash sales then break every assumption about the write rate.
+        write rate is tiny next to the browse rate.
+      </p>
+      <p>
+        So the design splits in two: a cheap read path that tolerates stale data, and a small, strictly correct write
+        path. Flash sales then break every assumption about the write rate.
       </p>
 
       <H2 id="requirements">1 · Clarify requirements</H2>
+      <p>First, agree on what is being sold and how strict “never oversell” really is.</p>
       <Requirements
         functional={['Search hotels and see availability for a date range', 'Reserve a room type for N nights', 'Pay, then confirm; cancel with refund policy', 'Admin: set inventory and rates']}
         nonFunctional={['Never exceed capacity (with an optional overbooking allowance)', 'Booking p99 < 1 s excluding payment', 'Availability views may be slightly stale', 'Survive flash-sale spikes (ticketing variant)']}
@@ -61,6 +71,7 @@ export default function ReservationSystemChapter() {
       </Callout>
 
       <H2 id="estimation">2 · Back-of-the-envelope</H2>
+      <p>Next, compare the booking rate with the browse rate. The gap between them shapes the whole design.</p>
       <EstimationTable
         assumptions={['5,000 hotels, 1M rooms total (illustrative chain)', '70% occupancy, 3-night average stay', 'Views : bookings ≈ 100 : 1']}
         rows={[
@@ -71,9 +82,14 @@ export default function ReservationSystemChapter() {
           { label: 'Inventory rows', math: '5K hotels × ~20 types × 365 days × 2 yrs', result: '≈ 73M' },
         ]}
       />
-      <p>Three bookings per second fits on one relational database. The write path is a <strong>correctness</strong> problem, not a scale problem. A concert on-sale is different: a million users competing for 50K seats in minutes.</p>
+      <p>Three bookings per second fits on one relational database. The write path is a <strong>correctness</strong> problem, not a scale problem.</p>
+      <p>A concert on-sale is different: a million users competing for 50K seats in minutes.</p>
 
       <H2 id="api">3 · API</H2>
+      <p>
+        The API mirrors the booking lifecycle: check availability, hold, confirm, cancel. Creating a hold needs an{' '}
+        <Term def="A client-chosen unique key sent with a request, so a retried request is recognised and not applied twice.">idempotency key</Term>.
+      </p>
       <ApiSpec endpoints={[
         { method: 'GET', path: '/v1/hotels/{id}/availability', desc: 'Cached, may be seconds stale.', body: '?roomType&checkIn&checkOut', returns: '{ available: true, nightlyRates: [...] }' },
         { method: 'POST', path: '/v1/reservations', desc: 'Creates a HELD reservation with an expiry. Idempotency-Key required.', body: '{ hotelId, roomTypeId, checkIn, checkOut, guest }', returns: '201 { reservationId, status: HELD, holdExpiresAt }' },
@@ -82,6 +98,7 @@ export default function ReservationSystemChapter() {
       ]} />
 
       <H2 id="high-level">4 · High-level design</H2>
+      <p>Now connect the pieces. Browsing hits caches; booking goes to the database that owns inventory.</p>
       <ArchitectureDiagram nodes={NODES} edges={EDGES} height={420}
         caption="The read path is cached and approximate. The booking path hits the source of truth."
         flows={[
@@ -91,6 +108,12 @@ export default function ReservationSystemChapter() {
         ]} />
 
       <H2 id="concurrency">5 · Deep dive: preventing double booking</H2>
+      <p>
+        Here we decide how two simultaneous bookings for the last room are serialised. The options are{' '}
+        <Term def="Lock the row first, so other transactions wait until you commit.">pessimistic locking</Term>,{' '}
+        <Term def="Read a version number, and write only if it hasn't changed; otherwise retry.">optimistic locking</Term>,
+        or a single conditional update. Race them in the demo.
+      </p>
       <ReserveRaceDemo />
       <CompareTable
         columns={['Pessimistic (FOR UPDATE)', 'Optimistic (version)', 'Atomic conditional update']}
@@ -116,8 +139,14 @@ COMMIT;`} />
 
       <H2 id="holds">6 · Deep dive: holds, payment & expiry</H2>
       <p>
-        Never hold a database transaction open while calling a payment provider. Instead: <strong>HELD</strong> with an
-        expiry → pay → <strong>CONFIRMED</strong>. A sweeper releases expired holds by incrementing inventory back.
+        Next, how payment fits in. Never hold a database transaction open while calling a payment provider.
+      </p>
+      <p>
+        Instead: <strong>HELD</strong> with an expiry → pay → <strong>CONFIRMED</strong>. A{' '}
+        <Term def="A background job that periodically finds expired holds and releases them.">sweeper</Term>{' '}
+        releases expired holds by incrementing inventory back.
+      </p>
+      <p>
         The state guard (<code>WHERE status = 'HELD'</code>) makes release and confirm race-safe against each other.
       </p>
       <CodeBlock lang="ts" title="reservation lifecycle" code={`
@@ -126,15 +155,17 @@ HELD ──pay ok──▶ CONFIRMED ──cancel──▶ CANCELLED (inventory 
   └──expired / pay failed──▶ RELEASED (inventory released)`} />
 
       <H2 id="flash-sale">7 · Deep dive: flash sales & ticketing</H2>
-      <p>When demand exceeds supply by 20× in the first minute, the database row for “section A” becomes the hottest lock on the planet. Layered defences:</p>
+      <p>Finally, the ticketing variant. When demand exceeds supply by 20× in the first minute, the database row for “section A” becomes the hottest lock on the planet.</p>
+      <p>Layered defences:</p>
       <ul>
-        <li><strong>Virtual waiting room</strong>: a static page with a queue position. Admit users at the rate the booking tier can sustain, and issue signed, short-lived admission tokens.</li>
+        <li><strong><Term def="A holding page that queues visitors and lets them into the real site at a controlled rate.">Virtual waiting room</Term></strong>: a static page with a queue position. Admit users at the rate the booking tier can sustain, and issue signed, short-lived admission tokens.</li>
         <li><strong>Pre-sharded inventory in memory</strong>: split 50K seats into buckets in Redis and <code>DECR</code> atomically (Lua for multi-key). The fast “you got one” answer then gets persisted asynchronously with a durable queue behind it.</li>
         <li><strong>Seat maps</strong>: holds per seat ID with a TTL (<code>SET seat:123 user NX EX 600</code>) so two users can't pick the same seat.</li>
         <li><strong>Bots</strong>: rate limits per account and device, and challenges at the admission gate rather than at checkout.</li>
       </ul>
 
       <H2 id="data-model">8 · Data model</H2>
+      <p>Two tables carry the design: inventory counts per night, and reservations. Both are keyed by hotel.</p>
       <CodeBlock lang="ts" title="core tables (shard key: hotel_id)" code={`
 // room_inventory(hotel_id, room_type_id, date, total, reserved,
 //                PRIMARY KEY (hotel_id, room_type_id, date),
@@ -157,7 +188,8 @@ HELD ──pay ok──▶ CONFIRMED ──cancel──▶ CANCELLED (inventory 
         q="Two users click 'book' on the last room at the same millisecond. Walk me through what happens."
         senior={<p>Use optimistic locking with a version column. One update succeeds, and the other sees zero affected rows, so it re-reads and shows sold out.</p>}
         staff={<>
-          <p>I'd make the check and the write <strong>one statement</strong>: <code>UPDATE … SET reserved = reserved + 1 WHERE … AND reserved &lt; total</code>, in the same transaction as the reservation insert. The row lock lasts only for that short transaction (milliseconds), with no read-modify-write gap and no retry loop: a concurrent booker simply waits, re-checks the condition, and gets 0 rows. For multi-night stays, the affected-row count must equal the number of nights, otherwise roll back.</p>
+          <p>I'd make the check and the write <strong>one statement</strong>: <code>UPDATE … SET reserved = reserved + 1 WHERE … AND reserved &lt; total</code>, in the same transaction as the reservation insert.</p>
+          <p>The row lock lasts only for that short transaction (milliseconds), with no read-modify-write gap and no retry loop: a concurrent booker simply waits, re-checks the condition, and gets 0 rows. For multi-night stays, the affected-row count must equal the number of nights, otherwise roll back.</p>
           <p>Around it: an idempotency key so a double click or retry doesn't create two holds, a CHECK constraint as a backstop, and payment outside the transaction using a HELD state with expiry. Under flash-sale contention I'd move the counter into Redis behind a waiting room.</p>
         </>}
         followUps={['What if payment succeeds after the hold expired?', 'How do you avoid deadlocks for multi-night stays?', 'How does availability search stay fast?']}
@@ -166,7 +198,8 @@ HELD ──pay ok──▶ CONFIRMED ──cancel──▶ CANCELLED (inventory 
         q="A concert with 50K seats goes on sale and 2M users arrive at once. What changes?"
         senior={<p>Add a queue in front so requests are processed in order, and cache seat availability in Redis.</p>}
         staff={<>
-          <p>The bottleneck is contention on a small amount of inventory, not raw QPS. I'd put a <strong>virtual waiting room</strong> at the edge (static, CDN-served), admitting users at the rate checkout can finish, maybe 2–5K per minute, with signed tokens. Inventory lives in pre-bucketed Redis counters or per-seat NX holds with a TTL, and confirmed orders persist asynchronously to SQL through a durable queue.</p>
+          <p>The bottleneck is contention on a small amount of inventory, not raw QPS. I'd put a <strong>virtual waiting room</strong> at the edge (static, CDN-served), admitting users at the rate checkout can finish, maybe 2–5K per minute, with signed tokens.</p>
+          <p>Inventory lives in pre-bucketed Redis counters or per-seat NX holds with a TTL, and confirmed orders persist asynchronously to SQL through a durable queue.</p>
           <p>Then the product decisions: queue vs lottery fairness, per-account limits, bot defence at admission. Also the failure plan: if Redis fails over and loses the last seconds of holds, reconciliation against the order DB must catch any oversell.</p>
         </>}
       />

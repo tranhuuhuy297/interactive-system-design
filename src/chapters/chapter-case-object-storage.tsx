@@ -1,6 +1,6 @@
 import {
   ApiSpec, ArchitectureDiagram, Callout, CodeBlock, CompareTable, EstimationTable, H2, InterviewQuestion,
-  KeyTakeaways, Requirements, References,
+  KeyTakeaways, Requirements, References, TLDR, Term,
 } from '../components/ui'
 import type { ArchEdge, ArchNode, Reference } from '../components/ui'
 import { ObjstoreErasureCodingDemo } from './demos/objstore-erasure-coding-demo'
@@ -44,16 +44,28 @@ const REFS: Reference[] = [
 export default function ObjectStorageChapter() {
   return (
     <>
+      <TLDR items={[
+        'Core problem: keep exabytes of blobs durable on disks that fail every day, cheaply.',
+        'Key decision: split a metadata plane (what exists, where) from a data plane (the bytes).',
+        'The hard part: durability at low cost. Erasure coding halves storage versus 3× replication but makes repair heavy.',
+        'Staff insight: the metadata write is the commit point, which gives read-after-write consistency without distributed transactions.',
+      ]} />
       <p>
-        Object storage looks like a giant key-value store for blobs, and at the API level it is:
+        Object storage looks like a giant key-value store for blobs. At the API level it is:{' '}
         <code>PUT bucket/key</code>, <code>GET bucket/key</code>. The interesting engineering is underneath.
-        You have to keep exabytes <strong>durable</strong> on hardware that fails every day, at a cost per byte that
-        makes replication look expensive, while still answering "list everything under this prefix" over billions of
-        keys. The design splits cleanly into a <strong>metadata plane</strong> and a <strong>data plane</strong>, and
-        most strong answers are organised around that split.
+      </p>
+      <p>
+        You have to keep exabytes <strong>durable</strong> on hardware that fails every day. The cost per byte makes
+        replication look expensive. And you still have to answer "list everything under this prefix" over billions
+        of keys.
+      </p>
+      <p>
+        The design splits cleanly into a <strong>metadata plane</strong> and a <strong>data plane</strong>. Most
+        strong answers are organised around that split.
       </p>
 
       <H2 id="requirements">1 · Clarify requirements</H2>
+      <p>First, pin down durability, consistency and object sizes. Each one rules out designs.</p>
       <Requirements
         functional={['Create buckets; PUT / GET / DELETE objects', 'Objects from bytes to terabytes (multipart for large)', 'LIST by prefix with pagination', 'Optional versioning and lifecycle rules']}
         nonFunctional={['Durability ≥ 11 nines for stored objects', 'Availability ~99.99% for reads', 'Strong read-after-write consistency, including overwrites and LIST', 'Low cost per GB; throughput over latency']}
@@ -65,6 +77,7 @@ export default function ObjectStorageChapter() {
       </Callout>
 
       <H2 id="estimation">2 · Back-of-the-envelope</H2>
+      <p>Next, size both planes: object count drives metadata, and bytes drive disks.</p>
       <EstimationTable
         assumptions={['100 PB logical data, 1 MB average object (heavily skewed: many tiny, a few huge)', '~1 KB metadata per object', '20 TB disks', 'Illustrative numbers for sizing only']}
         rows={[
@@ -76,14 +89,20 @@ export default function ObjectStorageChapter() {
           { label: 'Daily disk failures', math: '7,500 disks × 2% AFR / 365', result: '≈ 0.4/day' },
         ]}
       />
+      <p>Two conclusions follow from the table.</p>
       <p>
-        Two conclusions follow from the table. First, metadata is a <strong>100 TB sharded database</strong> problem
-        in its own right, not a side table. Second, the data plane's biggest lever is the storage scheme. Erasure
-        coding halves raw capacity compared with triple replication, and disks fail continuously, so repair is a
-        permanent background workload.
+        First, metadata is a <strong>100 TB sharded database</strong> problem in its own right, not a side table.
+      </p>
+      <p>
+        Second, the data plane's biggest lever is the storage scheme.{' '}
+        <Term def="Split data into k pieces and add m parity pieces; any k of the k+m pieces can rebuild the original.">Erasure coding</Term>{' '}
+        halves raw capacity compared with triple replication. And disks fail continuously (see{' '}
+        <Term def="Annualized failure rate: the share of disks expected to fail in a year.">AFR</Term>), so repair
+        is a permanent background workload.
       </p>
 
       <H2 id="api">3 · API</H2>
+      <p>The API is small and S3-shaped: put, get, delete, list, plus multipart for large files.</p>
       <ApiSpec endpoints={[
         { method: 'PUT', path: '/{bucket}/{key}', desc: 'Upload an object in one request (practical up to a few GB).', body: 'bytes + Content-MD5 / checksum header', returns: '200 { ETag, versionId? }' },
         { method: 'GET', path: '/{bucket}/{key}', desc: 'Read an object; supports Range for partial reads.', returns: '200 bytes · 206 partial · 404' },
@@ -93,6 +112,7 @@ export default function ObjectStorageChapter() {
       ]} />
 
       <H2 id="high-level">4 · High-level design</H2>
+      <p>Now connect the pieces. Trace a PUT, a GET and a repair through both planes.</p>
       <ArchitectureDiagram nodes={NODES} edges={EDGES} height={420}
         caption="Metadata plane (top) and data plane (bottom) scale and fail independently"
         flows={[
@@ -111,9 +131,12 @@ export default function ObjectStorageChapter() {
 
       <H2 id="durability">5 · Deep dive: replication vs erasure coding</H2>
       <p>
-        With <strong>Reed–Solomon (k, m)</strong>, an object is split into k data fragments and m parity fragments
-        are computed. <em>Any</em> k of the k+m fragments can rebuild it. RS(8,4) stores 1.5× the data and survives
-        any 4 failures. Triple replication stores 3× and survives only 2.
+        Here we decide how bytes survive disk failures. With <strong>Reed–Solomon (k, m)</strong>, an object is split
+        into k data fragments, and m parity fragments are computed. <em>Any</em> k of the k+m fragments can rebuild it.
+      </p>
+      <p>
+        RS(8,4) stores 1.5× the data and survives any 4 failures. Triple replication stores 3× and survives only 2.
+        Fail some nodes in the demo.
       </p>
       <ObjstoreErasureCodingDemo />
       <CompareTable
@@ -136,10 +159,17 @@ export default function ObjectStorageChapter() {
 
       <H2 id="data-layout">6 · Deep dive: on-disk layout, integrity and GC</H2>
       <p>
-        Storing each object as its own file does not scale to billions of small objects: inode and seek overhead
-        dominate. Data nodes instead <strong>append</strong> fragments into large (for example 1–10 GB) files and
-        record <code>(file, offset, length)</code>. Deletes only drop the metadata reference. A compactor later
-        rewrites files whose live ratio has fallen below a threshold.
+        Next, how fragments sit on disk. Storing each object as its own file does not scale to billions of small
+        objects: file-system bookkeeping and disk seeks dominate.
+      </p>
+      <p>
+        Data nodes instead <strong>append</strong> fragments into large (for example 1–10 GB) files and record{' '}
+        <code>(file, offset, length)</code>. Deletes only drop the metadata reference.
+      </p>
+      <p>
+        A{' '}
+        <Term def="A background job that rewrites mostly-dead files into new ones and frees the space.">compactor</Term>{' '}
+        later rewrites files whose live ratio has fallen below a threshold.
       </p>
       <CodeBlock lang="ts" title="fragment record in an append-only data file" code={`
 type FragmentHeader = {
@@ -152,19 +182,23 @@ type FragmentHeader = {
 // index:     objectId#fragmentIndex -> { fileId, offset }`} />
       <ul>
         <li><strong>Checksums end to end</strong>: client-supplied hash → verified at the API → stored per fragment → re-verified on read. Silent bit rot is detected and repaired rather than served.</li>
-        <li><strong>Scrubbing</strong> re-reads cold data on a schedule, because a latent sector error is only found when someone reads the sector.</li>
-        <li><strong>GC is dangerous</strong>: only delete fragments that no metadata version references, after a grace period. A bug here is a data-loss incident.</li>
+        <li><strong><Term def="Periodically reading all stored data and verifying checksums, to find silent corruption early.">Scrubbing</Term></strong> re-reads cold data on a schedule, because a latent sector error is only found when someone reads the sector.</li>
+        <li><strong><Term def="Garbage collection: deleting fragments that no metadata row points to any more.">GC</Term> is dangerous</strong>: only delete fragments that no metadata version references, after a grace period. A bug here is a data-loss incident.</li>
       </ul>
 
       <H2 id="multipart">7 · Deep dive: multipart upload</H2>
+      <p>
+        Now, how a 50 GB file gets in reliably. Large objects are uploaded as independent parts (for example 8–100 MB
+        each). Parts can be sent in parallel and retried individually.
+      </p>
       <ObjstoreMultipartUploadDemo />
       <p>
-        Large objects are uploaded as independent parts (for example 8–100 MB each) that can be sent in parallel and
-        retried individually. <code>CompleteMultipartUpload</code> atomically records the ordered part list as one
-        object. Parts that are never completed still use disk, so lifecycle rules should abort stale uploads.
+        <code>CompleteMultipartUpload</code> atomically records the ordered part list as one object. Parts that are
+        never completed still use disk, so lifecycle rules should abort stale uploads.
       </p>
 
       <H2 id="listing">8 · Deep dive: metadata, listing and consistency</H2>
+      <p>Last, how to partition metadata so both GET and LIST stay fast and consistent. Here is the row we store per object version:</p>
       <CodeBlock lang="ts" title="metadata row (sharded store, sorted by key within shard)" code={`
 type ObjectVersion = {
   bucket: string
@@ -177,12 +211,21 @@ type ObjectVersion = {
   placement: { scheme: 'rs-8-4' | 'rep-3'; nodes: string[] }
 }`} />
       <p>
-        Hash-partitioning by full key spreads load but breaks prefix LIST, which must then scatter-gather. Range
-        partitioning by <code>(bucket, key)</code> keeps LIST cheap but creates hot shards for sequential key names
-        (timestamps, auto-increment IDs). Common answers are range partitioning with <strong>automatic
-        splitting</strong> of hot ranges, plus guidance or hashing of key prefixes for write-heavy buckets. Strong
-        read-after-write comes from making the metadata store linearizable per key (for example Paxos/Raft per shard),
-        so a successful PUT is immediately visible to GET and LIST.
+        Hash-partitioning by full key spreads load but breaks prefix LIST, which must then{' '}
+        <Term def="Send the query to every shard, then merge the partial results.">scatter-gather</Term>.
+      </p>
+      <p>
+        Range partitioning by <code>(bucket, key)</code> keeps LIST cheap. But it creates hot shards for sequential
+        key names (timestamps, auto-increment IDs).
+      </p>
+      <p>
+        Common answers are range partitioning with <strong>automatic splitting</strong> of hot ranges, plus guidance
+        or hashing of key prefixes for write-heavy buckets.
+      </p>
+      <p>
+        Strong read-after-write comes from making the metadata store{' '}
+        <Term def="Every read sees the latest completed write, as if there were a single copy.">linearizable</Term>{' '}
+        per key (for example Paxos/Raft per shard). Then a successful PUT is immediately visible to GET and LIST.
       </p>
 
       <H2 id="staff">9 · Going beyond: staff-level extensions</H2>
@@ -202,7 +245,8 @@ type ObjectVersion = {
         senior={<p>Write to a strongly consistent metadata store and only return 200 after the metadata is committed. Reads always go through metadata to find the latest version.</p>}
         staff={<>
           <p>Treat each PUT as <strong>write data under a new immutable object ID, then atomically swap the key's pointer</strong> in a linearizable metadata shard. The pointer swap is the single commit point, so readers see either the old version or the new one, never a mix.</p>
-          <p>The details that matter: metadata caches at the API tier must be invalidated or versioned (or you break the guarantee). LIST must read from the same linearizable index, not a lagging secondary. The replaced version's fragments go to GC only after a grace period, so in-flight readers of the old version still succeed.</p>
+          <p>The details that matter: metadata caches at the API tier must be invalidated or versioned (or you break the guarantee).</p>
+          <p>LIST must read from the same linearizable index, not a lagging secondary. The replaced version's fragments go to GC only after a grace period, so in-flight readers of the old version still succeed.</p>
         </>}
         followUps={['What happens to a reader mid-download when the object is overwritten?', 'How does versioning change deletes?', 'How do you keep LIST consistent under concurrent writes?']}
       />
@@ -216,7 +260,8 @@ type ObjectVersion = {
             <li>Small objects are inefficient unless packed.</li>
             <li>Encoding costs CPU on the write path.</li>
           </ul>
-          <p>So I'd use a <strong>hybrid</strong>: replicate new and small objects for fast writes, then asynchronously re-encode them into EC once they're cold or batched into large files. I'd choose k and m from the failure-domain count: 12 fragments need at least 12 independent domains, or you're overstating durability.</p>
+          <p>So I'd use a <strong>hybrid</strong>: replicate new and small objects for fast writes, then asynchronously re-encode them into EC once they're cold or batched into large files.</p>
+          <p>I'd choose k and m from the failure-domain count: 12 fragments need at least 12 independent domains, or you're overstating durability.</p>
         </>}
         followUps={['How would you size repair bandwidth?', 'What are locally repairable codes and when do they help?']}
       />

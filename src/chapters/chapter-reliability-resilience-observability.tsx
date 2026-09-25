@@ -1,5 +1,5 @@
 import {
-  Callout, CodeBlock, CompareTable, FlowDiagram, H2, InterviewQuestion, KeyTakeaways, References, Tabs,
+  Callout, CodeBlock, CompareTable, FlowDiagram, H2, InterviewQuestion, KeyTakeaways, References, TLDR, Tabs, Term,
 } from '../components/ui'
 import type { Reference } from '../components/ui'
 import { ReliabilityAvailabilityComposerDemo } from './demos/reliability-availability-composer-demo'
@@ -23,13 +23,24 @@ export default function ReliabilityChapter() {
   return (
     <>
       <p>
-        Every design eventually meets partial failure: a slow dependency, a bad deploy, a zone going dark. Reliability
-        engineering is the discipline of <strong>deciding how reliable to be</strong>, <strong>limiting the
-        blast radius</strong> when things break, and <strong>seeing what is happening</strong> fast enough to act.
-        In interviews, this is where you show you have been on call.
+        Every design eventually meets partial failure: a slow dependency, a bad deploy, a zone going dark.
+        Reliability engineering means <strong>deciding how reliable to be</strong>,{' '}
+        <strong>limiting the <Term def="How much of the system and how many users a single failure affects.">blast radius</Term></strong>{' '}
+        when things break, and <strong>seeing what is happening</strong> fast enough to act.
       </p>
+      <TLDR items={[
+        'Set a reliability target (SLO); the gap to 100% is an error budget you are allowed to spend.',
+        'Availability multiplies along a chain of dependencies, so removing hard dependencies helps most.',
+        'Retries help with brief glitches but amplify real outages. Use backoff with jitter and retry at one layer.',
+        'Circuit breakers, bulkheads, and load shedding stop one failure from spreading.',
+        'Most outages start with a change, so roll out gradually and roll back automatically.',
+      ]} />
+      <p>In interviews, this is where you show you have been on call.</p>
 
       <H2 id="slos">SLIs, SLOs, SLAs and error budgets</H2>
+      <p>
+        These four terms turn “be reliable” into numbers that teams can agree on and act on. They build on each other.
+      </p>
       <CompareTable
         columns={['What it is', 'Example']}
         rows={[
@@ -41,9 +52,12 @@ export default function ReliabilityChapter() {
       />
       <p>
         The error budget turns reliability into a <strong>shared decision</strong>. While budget remains, ship fast.
-        When it is spent, freeze risky launches and invest in reliability. Alert on <strong>burn rate</strong> (how fast the budget
-        is being consumed), not on raw error spikes. A common pattern pages when about 2% of a 30-day budget burns in an hour
-        (a burn rate of roughly 14×), and opens a ticket for slow burns.
+        When it is spent, freeze risky launches and invest in reliability.
+      </p>
+      <p>
+        Alert on <strong><Term def="How fast you are spending the error budget, relative to spending it evenly over the whole window.">burn rate</Term></strong>,
+        not on raw error spikes. A common pattern pages when about 2% of a 30-day budget burns in an hour (a burn
+        rate of roughly 14×). Slow burns open a ticket instead.
       </p>
       <Callout kind="tip">
         Measure SLIs as close to the user as you can: at the load balancer or with client telemetry, not from server CPU.
@@ -51,6 +65,10 @@ export default function ReliabilityChapter() {
       </Callout>
 
       <H2 id="availability-math">Availability math: dependencies multiply</H2>
+      <p>
+        If a request needs every service in a chain, it fails when any one of them fails. Build a chain below and
+        watch the total drop.
+      </p>
       <ReliabilityAvailabilityComposerDemo />
       <ul>
         <li><strong>Serial</strong> hard dependencies multiply: five 99.9% services in a chain give ≈ 99.5%. Your SLO can't exceed the product of your critical path.</li>
@@ -60,9 +78,14 @@ export default function ReliabilityChapter() {
 
       <H2 id="timeouts-retries">Timeouts, retries and backoff</H2>
       <p>
-        Every network call needs a <strong>timeout</strong>, derived from the caller's own latency budget rather than a default of 30 s.
-        Retries recover from transient faults but <strong>multiply load</strong> during real ones. Five layers each retrying
-        three times means 3⁵ = 243 attempts at the bottom of the stack.
+        Every network call needs a <strong>timeout</strong>. Derive it from the caller's own latency budget, not a
+        default of 30 s.
+      </p>
+      <p>
+        Retries recover from brief faults but <strong>multiply load</strong> during real ones. Five layers each
+        retrying three times means 3⁵ = 243 attempts at the bottom of the stack. Adding{' '}
+        <Term def="Random extra delay before each retry, so many clients don’t retry at the same instant.">jitter</Term>{' '}
+        spreads retries out.
       </p>
       <ReliabilityRetryStormDemo />
       <CodeBlock lang="ts" title="retry with capped exponential backoff + full jitter" code={`
@@ -84,6 +107,11 @@ async function withRetry<T>(fn: () => Promise<T>, { attempts = 3, baseMs = 100, 
       </ul>
 
       <H2 id="circuit-breakers">Circuit breakers, bulkheads and load shedding</H2>
+      <p>
+        These patterns stop one failing part from dragging down everything else. A{' '}
+        <Term def="A switch that stops calling a failing dependency for a while, then tests it with a few trial calls.">circuit breaker</Term>{' '}
+        is the best known.
+      </p>
       <ReliabilityCircuitBreakerDemo />
       <CompareTable
         columns={['Protects against', 'Mechanism']}
@@ -102,6 +130,10 @@ async function withRetry<T>(fn: () => Promise<T>, { attempts = 3, baseMs = 100, 
       </Callout>
 
       <H2 id="observability">Observability: metrics, logs, traces</H2>
+      <p>
+        You can only fix what you can see. The three signal types answer different questions, and a mature system uses
+        all three.
+      </p>
       <Tabs items={[
         { label: 'Signals', content: <CompareTable
           columns={['Best at', 'Cost / pitfall']}
@@ -146,6 +178,7 @@ await tracer.startActiveSpan('charge-card', async (span) => {
       </ul>
 
       <H2 id="staff">Staff-level lens</H2>
+      <p>At staff level, reliability is a budget and a set of trade-offs you negotiate with product and other teams.</p>
       <Callout kind="staff">
         <ul>
           <li><strong>Reliability is a product decision.</strong> Ask what each extra nine costs and who pays. 99.99% for an internal dashboard wastes a team.</li>

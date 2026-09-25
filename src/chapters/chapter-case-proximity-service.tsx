@@ -1,6 +1,6 @@
 import {
   ApiSpec, ArchitectureDiagram, Callout, CodeBlock, CompareTable, EstimationTable, H2, InterviewQuestion,
-  KeyTakeaways, References, Requirements,
+  KeyTakeaways, References, Requirements, TLDR, Term,
 } from '../components/ui'
 import type { ArchEdge, ArchNode, Reference } from '../components/ui'
 import { GeoGeohashExplorer } from './demos/geo-geohash-explorer'
@@ -43,14 +43,27 @@ const EDGES: ArchEdge[] = [
 export default function ProximityServiceChapter() {
   return (
     <>
+      <TLDR items={[
+        'Find businesses near a point, fast, for a read-heavy workload.',
+        'Ordinary indexes are one-dimensional; the trick is mapping 2D location onto something an index can answer.',
+        'Geohash turns nearby points into shared string prefixes; always search the cell and its 8 neighbors.',
+        'For static businesses the whole index fits in memory, so replicate it instead of sharding.',
+        'Moving objects (drivers, friends) need a different, write-heavy design.',
+      ]} />
+
       <p>
-        “Find restaurants within 2 km” looks like a database query, but ordinary indexes are one-dimensional and
-        location is two-dimensional. The whole problem comes down to <strong>turning 2D proximity into something an
-        index can answer</strong>: a string prefix (geohash), a tree (quadtree), or a space-filling curve (S2/H3).
-        Once that is in place, the rest is a read-heavy service that caches easily.
+        “Find restaurants within 2 km” looks like a database query. But ordinary indexes are one-dimensional, and
+        location is two-dimensional.
+      </p>
+      <p>
+        The whole problem comes down to <strong>turning 2D proximity into something an index can answer</strong>: a
+        string prefix (geohash), a tree (quadtree), or a{' '}
+        <Term def="A path that visits every cell of a 2D grid in one line, so nearby cells mostly get nearby numbers. S2 and H3 build on this idea.">space-filling curve</Term>{' '}
+        (S2/H3). Once that is in place, the rest is a read-heavy service that caches easily.
       </p>
 
       <H2 id="requirements">1 · Clarify requirements</H2>
+      <p>Agree on the search features, and ask whether the objects move. That one answer changes the design.</p>
       <Requirements
         functional={['Return businesses near (lat, lon) within a radius', 'Filter by category / open now; sort by distance or rating', 'Business owners add or update listings', 'View a business’s details']}
         nonFunctional={['100M DAU (illustrative)', 'Search p99 < 200 ms', 'High availability for reads', 'Listing updates visible within hours (not seconds)', 'Privacy of user location']}
@@ -63,6 +76,7 @@ export default function ProximityServiceChapter() {
       </Callout>
 
       <H2 id="estimation">2 · Back-of-the-envelope</H2>
+      <p>Estimate search load and the size of the index.</p>
       <EstimationTable
         assumptions={['100M DAU, ~5 searches each per day', '200M businesses', 'Index entry ≈ 24 B (geohash + id + overhead)']}
         rows={[
@@ -73,9 +87,13 @@ export default function ProximityServiceChapter() {
           { label: 'Business details', math: '200M × ~1 KB', result: '≈ 200 GB (DB + cache)' },
         ]}
       />
-      <p>A 5 GB index fits in RAM on one machine, so <strong>replicate rather than shard</strong>. Read QPS scales linearly with replicas, and writes are rare enough to rebuild.</p>
+      <p>
+        A 5 GB index fits in RAM on one machine, so <strong>replicate rather than shard</strong>. Read QPS scales
+        linearly with replicas, and writes are rare enough to rebuild the index.
+      </p>
 
       <H2 id="api">3 · API</H2>
+      <p>One search call serves users; separate calls let owners manage listings.</p>
       <ApiSpec endpoints={[
         { method: 'GET', path: '/v1/search/nearby', desc: 'Businesses within a radius, paginated.', body: '?lat=&lon=&radius=2000&category=cafe&cursor=', returns: '{ results: [{ id, name, distanceM, rating }], nextCursor }' },
         { method: 'GET', path: '/v1/businesses/{id}', desc: 'Business details (cacheable).', returns: '{ id, name, address, lat, lon, hours, … }' },
@@ -83,6 +101,7 @@ export default function ProximityServiceChapter() {
       ]} />
 
       <H2 id="high-level">4 · High-level design</H2>
+      <p>A location service answers searches from an in-memory geo index. A separate business service handles the rare listing updates.</p>
       <ArchitectureDiagram nodes={NODES} edges={EDGES} height={380}
         caption="Read path (search) is separate from the rare write path (listings)"
         flows={[
@@ -92,11 +111,18 @@ export default function ProximityServiceChapter() {
 
       <H2 id="geohash">5 · Deep dive: geohash</H2>
       <p>
-        Geohash repeatedly halves the world, alternating longitude and latitude bits, and encodes the result in base32.
-        <strong> Nearby points usually share a prefix</strong>, so “everything in this cell” becomes{' '}
-        <code>WHERE geohash LIKE '9q8yy%'</code> on an ordinary B-tree index.
+        <Term def="A string that encodes a rectangular cell on the map; longer strings mean smaller cells.">Geohash</Term>{' '}
+        repeatedly halves the world, alternating longitude and latitude bits. It encodes the result in{' '}
+        <Term def="An alphabet of 32 characters, so each character carries 5 bits.">base32</Term>.
+      </p>
+      <p>
+        <strong>Nearby points usually share a prefix</strong>. So “everything in this cell” becomes{' '}
+        <code>WHERE geohash LIKE '9q8yy%'</code> on an ordinary{' '}
+        <Term def="The standard sorted index in relational databases; it supports fast range and prefix scans.">B-tree</Term>{' '}
+        index. Click the map to explore.
       </p>
       <GeoGeohashExplorer />
+      <p>Precision decides the cell size. Pick it from the search radius:</p>
       <CompareTable
         columns={['Cell size (approx. at equator)', 'Good for radius']}
         rows={[
@@ -115,7 +141,12 @@ export default function ProximityServiceChapter() {
       </Callout>
 
       <H2 id="quadtree">6 · Deep dive: quadtree & alternatives</H2>
+      <p>
+        A <Term def="A tree where each node covers a square and splits into four children once it holds too many points.">quadtree</Term>{' '}
+        adapts cell size to density: dense cities get small cells, empty regions stay large. Add points to watch it split.
+      </p>
       <GeoQuadtreeDemo />
+      <p>How the three indexing approaches compare:</p>
       <CompareTable
         columns={['Geohash', 'Quadtree', 'S2 / H3']}
         rows={[
@@ -128,6 +159,7 @@ export default function ProximityServiceChapter() {
       />
 
       <H2 id="data-model">7 · Data model & scaling</H2>
+      <p>The geo index is one table keyed by geohash. The service computes the covering cells, then filters by exact distance.</p>
       <CodeBlock lang="ts" title="geo index + business table" code={`
 -- geo index: one row per (cell, business). Precompute several precisions if needed.
 CREATE TABLE geo_index (

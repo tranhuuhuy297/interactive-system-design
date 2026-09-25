@@ -1,5 +1,5 @@
 import {
-  ArchitectureDiagram, Callout, CodeBlock, CompareTable, FlowDiagram, H2, InterviewQuestion, KeyTakeaways, References, Tabs,
+  ArchitectureDiagram, Callout, CodeBlock, CompareTable, FlowDiagram, H2, InterviewQuestion, KeyTakeaways, References, TLDR, Tabs, Term,
 } from '../components/ui'
 import type { ArchEdge, ArchNode, Reference } from '../components/ui'
 import { MqDeliverySemanticsDemo } from './demos/mq-delivery-semantics-demo'
@@ -35,13 +35,23 @@ export default function QueuesStreamsChapter() {
   return (
     <>
       <p>
-        Asynchronous messaging decouples <strong>who produces work</strong> from <strong>who does it, and when</strong>.
-        It absorbs traffic spikes, isolates failures and lets new consumers subscribe without changing producers.
-        The price is a new class of bugs: duplicates, reordering, poison messages and invisible lag. Interviewers
-        probe exactly those.
+        Asynchronous messaging separates <strong>who produces work</strong> from <strong>who does it, and when</strong>.
+        It absorbs traffic spikes, isolates failures, and lets new consumers subscribe without changing producers.
+      </p>
+      <TLDR items={[
+        'Use a queue for commands (“do this job”). Use a log like Kafka for facts many teams read (“this happened”).',
+        'The partition key sets ordering: events with the same key stay in order.',
+        'Assume duplicates. Make consumers idempotent so processing twice has no extra effect.',
+        'Move messages that keep failing to a dead-letter queue instead of blocking the stream.',
+        'Use the outbox pattern to save data and publish its event without them getting out of sync.',
+      ]} />
+      <p>
+        The price is a new class of bugs: duplicates, reordering, messages that always fail, and invisible lag.
+        Interviewers probe exactly those.
       </p>
 
       <H2 id="queue-vs-log">Queue vs log: two different tools</H2>
+      <p>People often say “queue” for both, but they behave very differently once a message is read.</p>
       <CompareTable
         columns={['Message queue (SQS, RabbitMQ)', 'Distributed log (Kafka, Kinesis, Pulsar)']}
         rows={[
@@ -60,21 +70,31 @@ export default function QueuesStreamsChapter() {
 
       <H2 id="partitions">Partitions, keys and consumer groups</H2>
       <p>
-        A topic is split into <strong>partitions</strong>, and each is an ordered log. The producer picks a partition by
-        hashing the message key, so <strong>all events for one key land in one partition, in order</strong>.
-        Within a consumer group, each partition is owned by exactly one consumer at a time. Parallelism is therefore capped at the
-        partition count, and consumers beyond that sit idle.
+        A topic is split into <strong>partitions</strong>, and each is an ordered log. The producer picks a partition
+        by hashing the message key, so <strong>all events for one key land in one partition, in order</strong>.
+      </p>
+      <p>
+        Within a{' '}
+        <Term def="A set of consumers that share the work of reading a topic; each partition goes to one member.">consumer group</Term>,
+        each partition is owned by exactly one consumer at a time. Parallelism is therefore capped at the partition
+        count, and extra consumers sit idle.
       </p>
       <MqKafkaConsumerGroupDemo />
       <ul>
         <li><strong>Choose the key by the ordering you need</strong>: <code>orderId</code> for order lifecycle events, <code>accountId</code> for balance changes. Ordering across keys is never guaranteed.</li>
         <li><strong>Hot keys</strong> put one partition behind while the others sit idle. Split hot keys with a suffix only if you can give up their ordering.</li>
-        <li><strong>Rebalances</strong> pause the group. Incremental cooperative rebalancing and static membership reduce the pause, and Kafka 4.x's broker-driven consumer protocol (KIP-848) shrinks it further, but deploys still cause them.</li>
+        <li><strong><Term def="Reassigning partitions among consumers when one joins, leaves, or crashes.">Rebalances</Term></strong> pause the group. Incremental cooperative rebalancing and static membership reduce the pause, and Kafka 4.x's broker-driven consumer protocol (KIP-848) shrinks it further, but deploys still cause them.</li>
         <li><strong>Queue semantics on a log</strong>: Kafka's newer share groups (KIP-932, “queues for Kafka”) let many consumers pull from one partition with per-message acks, trading per-key ordering for parallelism beyond the partition count.</li>
         <li>Plan partition counts for peak throughput and future consumers. Adding partitions later changes the key → partition mapping and breaks per-key ordering across the change.</li>
       </ul>
 
       <H2 id="semantics">Delivery semantics</H2>
+      <p>
+        Crashes happen between reading a message and finishing the work. Where you record progress decides whether
+        you lose messages or process some twice. Only{' '}
+        <Term def="An operation you can safely repeat: doing it twice has the same effect as doing it once.">idempotent</Term>{' '}
+        consumers make duplicates harmless.
+      </p>
       <MqDeliverySemanticsDemo />
       <CompareTable
         columns={['How', 'Failure outcome', 'Use for']}
@@ -92,6 +112,12 @@ export default function QueuesStreamsChapter() {
       </Callout>
 
       <H2 id="failures">Poison messages, DLQs and backpressure</H2>
+      <p>
+        A <Term def="A message that fails every time it is processed, often because of bad data or a bug.">poison message</Term>{' '}
+        can stall a whole partition. A{' '}
+        <Term def="Dead-letter queue: a side queue where failed messages are parked for inspection and later replay.">DLQ</Term>{' '}
+        keeps the main stream moving.
+      </p>
       <FlowDiagram steps={[
         { label: 'Consume', sub: 'attempt 1' },
         { label: 'Retry', sub: 'backoff, N attempts' },
@@ -108,14 +134,21 @@ export default function QueuesStreamsChapter() {
       <H2 id="outbox">The dual-write problem and the outbox</H2>
       <p>
         “Save the order, then publish OrderPlaced” is two writes to two systems. A crash between them leaves the
-        database and the event stream disagreeing forever. The <strong>transactional outbox</strong> writes the event
-        into the same database transaction and publishes it afterwards.
+        database and the event stream disagreeing forever.
+      </p>
+      <p>
+        The <strong>transactional outbox</strong> writes the event into the same database transaction as the order.
+        A separate process publishes it afterwards.
       </p>
       <ArchitectureDiagram nodes={OUTBOX_NODES} edges={OUTBOX_EDGES} height={280}
         caption="Transactional outbox + CDC: atomic locally, eventually published"
         flows={[{ name: 'Place order', path: ['api', 'db', 'relay', 'kafka', 'pay'], steps: ['INSERT order + INSERT outbox in one txn', 'CDC reads the committed outbox row', 'Publish to the order-events topic', 'Payment consumes (idempotently)'] }]} />
 
       <H2 id="sagas">Sagas: transactions across services</H2>
+      <p>
+        Services don’t share a database, so one transaction can’t span them. A saga runs a sequence of local steps
+        and undoes earlier ones with compensating actions if a later step fails.
+      </p>
       <Tabs items={[
         { label: 'Choreography', content: <>
           <p>Each service reacts to events and emits its own. There is no central coordinator.</p>
@@ -141,13 +174,16 @@ async function placeOrder(o: Order) {
         </> },
       ]} />
       <p>
-        <strong>Event sourcing</strong> goes further: the event log <em>is</em> the source of truth, and current state is a
-        projection rebuilt by replaying events. It gives a full audit trail and time travel, but schema evolution and
-        rebuilding projections are real costs. Reach for it when audit history is a core requirement (ledgers),
-        not by default.
+        <strong>Event sourcing</strong> goes further: the event log <em>is</em> the source of truth. Current state is a
+        projection rebuilt by replaying events.
+      </p>
+      <p>
+        It gives a full audit trail and time travel, but schema evolution and rebuilding projections are real costs.
+        Reach for it when audit history is a core requirement (ledgers), not by default.
       </p>
 
       <H2 id="staff">Staff-level lens</H2>
+      <p>Event-driven systems fail in organizational ways as often as technical ones.</p>
       <Callout kind="staff">
         <ul>
           <li><strong>Events are APIs.</strong> Use a schema registry (Avro or Protobuf) with compatibility rules, versioned topics, and named owners. Most event-driven pain in practice is organizational: nobody knows who consumes <code>user-updated</code>.</li>

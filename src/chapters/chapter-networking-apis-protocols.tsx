@@ -1,5 +1,5 @@
 import {
-  ApiSpec, Callout, CodeBlock, CompareTable, FlowDiagram, H2, InterviewQuestion, KeyTakeaways, References, Tabs,
+  ApiSpec, Callout, CodeBlock, CompareTable, FlowDiagram, H2, InterviewQuestion, KeyTakeaways, References, Tabs, TLDR, Term,
 } from '../components/ui'
 import type { Reference } from '../components/ui'
 import { NetworkHandshakeTimeline } from './demos/network-handshake-timeline'
@@ -22,12 +22,27 @@ export default function NetworkingApisProtocolsChapter() {
   return (
     <>
       <p>
-        Every box on a system design diagram is connected by a network, and the network is where latency,
-        failures, and most surprises live. You don't need to recite RFCs. You do need to know what a request
-        costs, which protocol fits which traffic pattern, and how API design choices ripple into scalability.
+        Every box on a system design diagram is connected by a network. The network is where latency, failures,
+        and most surprises live.
+      </p>
+      <TLDR items={[
+        'A fresh HTTPS request pays for DNS, a connection handshake, and TLS before any data flows. Reuse connections.',
+        'HTTP/3 runs on QUIC over UDP, which avoids TCP’s head-of-line blocking and survives network switches.',
+        'A common split: REST or GraphQL for clients, gRPC between internal services.',
+        'Pick a real-time transport by direction: SSE for server push, WebSockets for two-way traffic.',
+        'Cursor pagination, idempotency keys, and additive versioning keep APIs scalable.',
+      ]} />
+      <p>
+        You don't need to recite RFCs. You do need to know what a request costs, which protocol fits which traffic
+        pattern, and how API choices ripple into scalability.
       </p>
 
       <H2 id="lifecycle">The life of a request</H2>
+      <p>
+        Before your server sees a single byte, the client pays several{' '}
+        <Term def="Round-trip time: how long a message takes to go to the other side and come back.">round trips (RTTs)</Term>{' '}
+        to find the server and set up a secure connection.
+      </p>
       <FlowDiagram steps={[
         { label: 'DNS', sub: 'name → IP (cached at many layers)' },
         { label: 'TCP / QUIC', sub: 'connection handshake' },
@@ -42,6 +57,11 @@ export default function NetworkingApisProtocolsChapter() {
       </Callout>
 
       <H2 id="http-versions">HTTP/1.1 vs HTTP/2 vs HTTP/3</H2>
+      <p>
+        Each HTTP version mainly fixes how many requests can share one connection, and what happens when a packet
+        is lost. The key problem is{' '}
+        <Term def="When one slow or lost item at the front of a queue stalls everything behind it.">head-of-line blocking</Term>.
+      </p>
       <CompareTable columns={['HTTP/1.1', 'HTTP/2', 'HTTP/3']} rows={[
         { label: 'Transport', cells: ['TCP', 'TCP', 'QUIC over UDP'] },
         { label: 'Concurrency', cells: ['One request at a time per connection (browsers open ~6)', 'Many multiplexed streams on one connection', 'Multiplexed streams, independent at the transport layer'] },
@@ -51,6 +71,7 @@ export default function NetworkingApisProtocolsChapter() {
       ]} />
 
       <H2 id="api-styles">REST vs gRPC vs GraphQL</H2>
+      <p>These three styles solve different problems. Pick by who the client is and how it fetches data.</p>
       <CompareTable columns={['REST (JSON/HTTP)', 'gRPC (Protobuf/HTTP/2)', 'GraphQL']} rows={[
         { label: 'Best for', cells: ['Public APIs, resource CRUD, cacheable reads', 'Internal service-to-service, streaming, low latency', 'Client-driven aggregation across many resources'] },
         { label: 'Contract', cells: ['OpenAPI (optional)', 'Strict .proto schema, codegen', 'Strongly typed schema'] },
@@ -60,11 +81,17 @@ export default function NetworkingApisProtocolsChapter() {
       ]} />
       <p>
         A common production shape uses <strong>REST or GraphQL at the edge</strong> for clients and <strong>gRPC
-        internally</strong> between services, with an API gateway or BFF (backend-for-frontend) translating between
-        them.
+        internally</strong> between services. An API gateway or{' '}
+        <Term def="Backend-for-frontend: a thin API layer built for one client type (web, iOS, TV) that aggregates internal services for it.">BFF</Term>{' '}
+        translates between them.
       </p>
 
       <H2 id="realtime">Real-time: polling, long polling, SSE, WebSockets</H2>
+      <p>
+        When the server has news, how does the client find out? The options range from asking repeatedly to holding
+        a connection open. <Term def="Server-Sent Events: a standard way for a server to stream messages to a browser over one long HTTP response.">SSE</Term>{' '}
+        and WebSockets keep a connection open; polling does not.
+      </p>
       <NetworkRealtimeTransportSimulator />
       <CompareTable columns={['Direction', 'Good for', 'Scaling concern']} rows={[
         { label: 'Short polling', cells: ['Client pull', 'Rare updates, simple infra', 'Wasted requests grow with client count'] },
@@ -75,6 +102,7 @@ export default function NetworkingApisProtocolsChapter() {
       ]} />
 
       <H2 id="api-design">API design that scales</H2>
+      <p>Three API choices are hard to change once clients depend on them: pagination, retries, and versioning.</p>
       <Tabs items={[
         { label: 'Pagination', content: (
           <>
@@ -113,13 +141,17 @@ curl -X POST https://api.example.com/v1/payments \\
 
       <H2 id="gateway">API gateways and the edge</H2>
       <p>
-        An API gateway centralizes cross-cutting concerns such as TLS termination, authentication, rate limiting,
-        request routing, and observability, so services don't each reimplement them. The trade-offs are an extra hop
-        and a shared component that must be highly available. Keep business logic out of it, or it becomes a
-        distributed monolith's bottleneck.
+        An API gateway handles concerns every service needs: TLS termination, authentication, rate limiting, request
+        routing, and observability. Services then don't each reimplement them.
+      </p>
+      <p>
+        The costs are an extra hop and a shared component that must be highly available. Keep business logic out of
+        it, or it becomes the bottleneck of a{' '}
+        <Term def="Services that are deployed separately but so tightly coupled that they must change together.">distributed monolith</Term>.
       </p>
 
       <H2 id="staff">Staff lens</H2>
+      <p>At staff level, protocol and API choices are judged by what they cost to operate for years.</p>
       <Callout kind="staff">
         <ul>
           <li><strong>Protocol choice is an operational choice.</strong> WebSockets turn a stateless fleet into a stateful one. Plan connection draining on deploy, per-node connection limits, and reconnect jitter to avoid thundering herds.</li>
@@ -134,7 +166,8 @@ curl -X POST https://api.example.com/v1/payments \\
         senior={<p>WebSockets give real-time updates with low latency. Polling wastes requests, and SSE is also an option since updates flow one way.</p>}
         staff={<>
           <p>Traffic is <strong>one-directional and fan-out heavy</strong>, with millions of viewers of the same match. So I'd pick <strong>SSE</strong>: plain HTTP, it works through proxies and CDNs that support streaming, reconnects automatically, and needs no bidirectional protocol handling. WebSockets add stateful complexity for no benefit here.</p>
-          <p>The harder part is fan-out: a pub/sub layer (for example Redis or Kafka feeding edge connection servers) that sends each score change to every connection holder. I'd also keep a short-poll fallback against a CDN-cached JSON endpoint with a 1–2s TTL for clients that can't stream. That is often a cheaper way to reach millions of passive viewers.</p>
+          <p>The harder part is fan-out: a pub/sub layer (for example Redis or Kafka feeding edge connection servers) that sends each score change to every connection holder.</p>
+          <p>I'd also keep a short-poll fallback against a CDN-cached JSON endpoint with a 1–2s TTL for clients that can't stream. That is often a cheaper way to reach millions of passive viewers.</p>
         </>}
         followUps={['How do you handle 5M concurrent connections?', 'What happens to connections during a deploy?']}
       />

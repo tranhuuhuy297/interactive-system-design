@@ -1,6 +1,6 @@
 import {
   ApiSpec, ArchitectureDiagram, Callout, CodeBlock, CompareTable, EstimationTable, H2, InterviewQuestion,
-  KeyTakeaways, References, Requirements,
+  KeyTakeaways, References, Requirements, TLDR, Term,
 } from '../components/ui'
 import type { ArchEdge, ArchNode, Reference } from '../components/ui'
 import { VideoAbrSim } from './demos/video-abr-sim'
@@ -45,13 +45,26 @@ const EDGES: ArchEdge[] = [
 export default function VideoStreamingChapter() {
   return (
     <>
+      <TLDR items={[
+        'Two systems: an upload pipeline that turns one big file into many small ones, and a delivery path that streams them.',
+        'Bandwidth out to viewers (egress) is the dominant cost, so most design choices are cost choices.',
+        'Uploads go straight to storage in resumable parts; app servers never touch the bytes.',
+        'Transcoding is a graph of small parallel tasks producing several resolutions and codecs.',
+        'Players switch quality per segment (adaptive bitrate), served from CDN edges.',
+      ]} />
+
       <p>
         Video platforms are really <strong>two systems</strong>. The upload side is a batch pipeline that turns one
         large file into hundreds of small ones. The watch side is a content-delivery problem whose main cost is
-        bandwidth. Strong answers keep the two separate, and put the numbers where the money is: <strong>egress</strong>.
+        bandwidth.
+      </p>
+      <p>
+        Strong answers keep the two separate. They also put the numbers where the money is:{' '}
+        <strong><Term def="Data sent out of your network to users. Cloud providers and CDNs bill for it per gigabyte.">egress</Term></strong>.
       </p>
 
       <H2 id="requirements">1 · Clarify requirements</H2>
+      <p>Confirm the devices, the quality targets and what is out of scope, such as live streaming.</p>
       <Requirements
         functional={['Upload videos (up to a few GB)', 'Watch on web, mobile, TV with smooth playback', 'Multiple resolutions; adapt to the network', 'Basic metadata: title, thumbnail, view count']}
         nonFunctional={['50M DAU (illustrative)', 'Fast start: < 2 s to first frame', 'Minimal rebuffering', 'Publish within minutes of upload', 'Cost-efficient at petabyte scale']}
@@ -59,6 +72,7 @@ export default function VideoStreamingChapter() {
       />
 
       <H2 id="estimation">2 · Back-of-the-envelope</H2>
+      <p>Estimate storage and, above all, the bandwidth sent to viewers.</p>
       <EstimationTable
         assumptions={['50M DAU, 5 videos watched each, ~10 min per view', 'Average delivered bitrate ~3 Mbps', '500K uploads/day, ~300 MB raw each', 'All numbers illustrative']}
         rows={[
@@ -77,6 +91,7 @@ export default function VideoStreamingChapter() {
       </Callout>
 
       <H2 id="api">3 · API</H2>
+      <p>The API starts uploads, reports progress, and hands players a manifest to stream from.</p>
       <ApiSpec endpoints={[
         { method: 'POST', path: '/v1/videos', desc: 'Create a video record and start a resumable multipart upload.', body: '{ title, sizeBytes, contentType }', returns: '{ videoId, uploadId, partUrls[] }' },
         { method: 'POST', path: '/v1/videos/{id}/complete', desc: 'Client confirms all parts. Server verifies checksums and enqueues processing.', body: '{ uploadId, parts: [{ n, etag }] }', returns: '202 { state: "PROCESSING" }' },
@@ -85,6 +100,12 @@ export default function VideoStreamingChapter() {
       ]} />
 
       <H2 id="high-level">4 · High-level design</H2>
+      <p>
+        The upload pipeline stores the original, transcodes it, and publishes the results to storage. Viewers then
+        fetch small video segments from a{' '}
+        <Term def="Content delivery network: servers spread around the world that cache content close to users.">CDN</Term>,
+        not from our servers.
+      </p>
       <ArchitectureDiagram nodes={NODES} edges={EDGES} height={400}
         caption="Upload pipeline on top, delivery path to the viewer on the right"
         flows={[
@@ -94,6 +115,7 @@ export default function VideoStreamingChapter() {
         ]} />
 
       <H2 id="upload">5 · Deep dive: uploads that survive bad networks</H2>
+      <p>Uploads are large and networks are flaky. The goal is that a dropped connection costs one small part, not the whole file.</p>
       <ul>
         <li><strong>Direct-to-storage</strong> with pre-signed URLs. App servers never stream bytes, so they stay small and stateless.</li>
         <li><strong>Multipart and resumable</strong>: split into 5–100 MB parts, upload them in parallel, retry only failed parts, and resume after an app restart using the upload ID.</li>
@@ -104,10 +126,16 @@ export default function VideoStreamingChapter() {
       <H2 id="transcoding">6 · Deep dive: the transcoding DAG</H2>
       <p>
         One upload must become several resolutions × codecs, split into short segments (typically 2–6 s) with
-        manifests. Modeling this as a <strong>DAG of small tasks</strong> gives parallelism, retries per task, and
-        easy extension (captions, content moderation, per-title optimization).
+        manifests.
+      </p>
+      <p>
+        Model this as a{' '}
+        <strong><Term def="Directed acyclic graph: tasks connected by dependencies, with no cycles, so independent tasks can run in parallel.">DAG</Term> of small tasks</strong>.
+        That gives parallelism, retries per task, and easy extension (captions, content moderation, per-title
+        optimization).
       </p>
       <VideoTranscodeDag />
+      <p>Codec choice trades encoding compute against the bandwidth saved on every view.</p>
       <CompareTable
         columns={['H.264 / AVC', 'VP9', 'AV1']}
         rows={[
@@ -124,6 +152,11 @@ export default function VideoStreamingChapter() {
       </Callout>
 
       <H2 id="delivery">7 · Deep dive: adaptive bitrate & delivery</H2>
+      <p>
+        Network speed changes during playback. With{' '}
+        <Term def="The player measures bandwidth and picks a higher or lower quality for each next segment.">adaptive bitrate</Term>{' '}
+        streaming, the player switches quality per segment to avoid stalls. Drag the bandwidth in the simulator to see it.
+      </p>
       <VideoAbrSim />
       <ul>
         <li><strong>HLS / DASH</strong> both serve segments over plain HTTP, so any CDN can cache them. A manifest lists renditions, and the player picks one per segment.</li>
@@ -133,6 +166,7 @@ export default function VideoStreamingChapter() {
       </ul>
 
       <H2 id="data-model">8 · Data model</H2>
+      <p>The metadata record tracks each video's processing state and available renditions.</p>
       <CodeBlock lang="ts" title="video metadata" code={`
 type Video = {
   videoId: string                    // partition key

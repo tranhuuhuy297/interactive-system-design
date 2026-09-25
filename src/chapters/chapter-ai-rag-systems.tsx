@@ -1,5 +1,5 @@
 import {
-  ArchitectureDiagram, Callout, CodeBlock, CompareTable, H2, InterviewQuestion, KeyTakeaways, References,
+  ArchitectureDiagram, Callout, CodeBlock, CompareTable, H2, InterviewQuestion, KeyTakeaways, References, Term, TLDR,
 } from '../components/ui'
 import type { ArchEdge, ArchNode, Reference } from '../components/ui'
 import { AiRagAnnTradeoffDemo } from './demos/ai-rag-ann-tradeoff-demo'
@@ -38,17 +38,34 @@ const EDGES: ArchEdge[] = [
 export default function RagSystemsChapter() {
   return (
     <>
+      <TLDR items={[
+        'RAG = search your data, then paste the best passages into the prompt.',
+        'It is a search system first. Most bad answers are retrieval misses.',
+        'Chunking decides what can be found. Hybrid search (keywords + vectors) fixes exact-ID misses.',
+        'Rerank a wide candidate set with a cross-encoder for precision.',
+        'Enforce permissions inside the index, and propagate deletes first.',
+      ]} />
       <p>
         Retrieval-augmented generation (RAG) answers questions from <strong>your</strong> data. It retrieves relevant
-        passages at query time and puts them into the model’s context, instead of hoping the facts are in the weights. It is
-        the default architecture for private, fresh, or citable knowledge, and it is a search system first and an LLM feature second.
+        passages at query time and puts them into the model’s{' '}
+        <Term def="The text the model can see for this request: instructions, retrieved passages, and the conversation.">context</Term>,
+        instead of hoping the facts are in the weights. Think of an open-book exam: the model is only as good as the
+        pages you hand it.
+      </p>
+      <p>
+        RAG is the default architecture for private, fresh, or citable knowledge. It is a search system first and an
+        LLM feature second.
       </p>
       <Callout kind="tip">
         Most bad RAG answers are retrieval failures. If the right passage never reaches the prompt, no model can use it.
-        Measure retrieval (recall@k) separately from generation.
+        Measure retrieval (recall@k: did the right passage appear in the top k?) separately from generation.
       </Callout>
 
       <H2 id="pipeline">Two pipelines: ingest and query</H2>
+      <p>
+        A RAG system is two pipelines. One runs offline and keeps the indexes fresh. The other runs per question and
+        must be fast.
+      </p>
       <ArchitectureDiagram nodes={NODES} edges={EDGES} height={400}
         caption="Offline ingestion keeps indexes fresh; the online path retrieves, fuses, reranks, and generates"
         flows={[
@@ -58,6 +75,10 @@ export default function RagSystemsChapter() {
         ]} />
 
       <H2 id="chunking">Chunking decides what can be found</H2>
+      <p>
+        Search returns{' '}<Term def="A passage cut from a document; the unit you embed, index, and paste into the prompt.">chunks</Term>,
+        not documents. How you cut documents sets the ceiling on what retrieval can ever find.
+      </p>
       <CompareTable
         columns={['Fixed-size', 'Recursive / structural', 'Semantic']}
         rows={[
@@ -67,25 +88,33 @@ export default function RagSystemsChapter() {
         ]}
       />
       <p>
-        Small chunks match queries precisely but lose surrounding context; large chunks carry context but dilute
-        similarity and waste prompt tokens. Two practical fixes: <strong>overlap</strong> windows so answers aren’t split, and
-        prepend a short <strong>context header</strong> to each chunk (document title, section, or an LLM-written one-line
-        summary) before embedding and indexing.
+        Small chunks match queries precisely but lose surrounding context. Large chunks carry context but dilute
+        similarity and waste prompt tokens.
+      </p>
+      <p>
+        Two practical fixes. Use <strong>overlap</strong> windows so answers aren’t split. And prepend a short{' '}
+        <strong>context header</strong> to each chunk (document title, section, or an LLM-written one-line summary)
+        before embedding and indexing.
       </p>
 
       <H2 id="embeddings">Embeddings and similarity</H2>
+      <p>Embeddings turn “similar meaning” into “nearby numbers”, which is what makes semantic search possible.</p>
       <ul>
-        <li>An embedding model maps text to a vector; similar meaning should land nearby. Retrieval compares the query vector to chunk vectors.</li>
-        <li><strong>Cosine vs dot product</strong>: identical when vectors are L2-normalized, which most pipelines do. Use whatever metric the model was trained for.</li>
+        <li>An{' '}<Term def="A model that turns text into a list of numbers (a vector) so similar texts get nearby vectors.">embedding model</Term>{' '}maps text to a vector; similar meaning should land nearby. Retrieval compares the query vector to chunk vectors.</li>
+        <li><strong>Cosine vs dot product</strong>: identical when vectors are{' '}<Term def="Scaled to length 1, so only direction matters.">L2-normalized</Term>, which most pipelines do. Use whatever metric the model was trained for.</li>
         <li><strong>Queries and documents differ</strong>: short questions vs long passages. Many models expect different prefixes or encoders for each.</li>
         <li><strong>Version your vectors.</strong> A new embedding model means re-embedding everything. Plan dual indexes and a cutover like any data migration.</li>
       </ul>
 
       <H2 id="hybrid">Hybrid search: lexical + semantic</H2>
       <p>
-        Embeddings capture meaning but blur exact tokens: error codes, SKUs, names, rare jargon. BM25 is the reverse. Running
-        both and fusing the ranked lists is cheap and robust. <strong>Reciprocal rank fusion</strong> needs no score
-        calibration: each list contributes <code>1 / (k + rank)</code>.
+        Embeddings capture meaning but blur exact tokens: error codes, SKUs, names, rare jargon.{' '}
+        <Term def="A classic keyword-ranking formula that scores documents by term frequency, rarity, and length.">BM25</Term>{' '}
+        is the reverse. Running both and fusing the ranked lists is cheap and robust.
+      </p>
+      <p>
+        <strong><Term def="RRF: combine ranked lists by summing 1/(k + rank) per item. Only ranks matter, not raw scores.">Reciprocal rank fusion</Term></strong>{' '}
+        needs no score calibration: each list contributes <code>1 / (k + rank)</code>. Try it on the playground below.
       </p>
       <AiRagRetrievalPlaygroundDemo />
       <CodeBlock lang="ts" title="reciprocal rank fusion" code={`
@@ -98,20 +127,29 @@ function rrf(lists: string[][], k = 60): [string, number][] {
 
       <H2 id="ann">Vector indexes at scale</H2>
       <p>
-        Exact nearest-neighbor search scans every vector. Approximate indexes trade a little recall for orders-of-magnitude
-        speed. <strong>HNSW</strong> navigates a layered proximity graph: excellent recall and latency, but RAM-hungry.
-        <strong> IVF-PQ</strong> clusters vectors and compresses them into short codes: small and fast, at a recall cost.
+        Exact nearest-neighbor search scans every vector. That is too slow for millions of chunks. Approximate indexes
+        trade a little recall for orders-of-magnitude speed.
       </p>
+      <ul>
+        <li><strong><Term def="Hierarchical Navigable Small World: a layered graph index; search hops from coarse to fine layers toward the nearest vectors.">HNSW</Term></strong>{' '}navigates a layered proximity graph: excellent recall and latency, but RAM-hungry.</li>
+        <li><strong><Term def="Inverted File + Product Quantization: cluster vectors, then compress each into a short code.">IVF-PQ</Term></strong>{' '}clusters vectors and compresses them into short codes: small and fast, at a recall cost.</li>
+      </ul>
+      <p>Move the slider to see how recall, latency, and memory trade off.</p>
       <AiRagAnnTradeoffDemo />
 
       <H2 id="rerank">Reranking and query rewriting</H2>
+      <p>Fast retrieval is approximate. Two cheap steps, one before search and one after, recover most of the lost precision.</p>
       <ul>
-        <li><strong>Rerank</strong>: a cross-encoder reads query and passage together and scores relevance precisely. Retrieve ~50 cheaply, rerank to ~5. This is usually the single biggest quality lever after hybrid search.</li>
+        <li><strong>Rerank</strong>: a{' '}<Term def="A model that reads the query and a passage together and outputs one relevance score. Precise but slow.">cross-encoder</Term>{' '}reads query and passage together and scores relevance precisely. Retrieve ~50 cheaply, rerank to ~5. This is usually the single biggest quality lever after hybrid search.</li>
         <li><strong>Rewrite</strong>: turn a follow-up (“what about for annual plans?”) into a standalone query using chat history; split multi-part questions into sub-queries.</li>
         <li><strong>HyDE-style expansion</strong>: have the model draft a hypothetical answer and search with <em>its</em> embedding, which can sit closer to real answers than the question does.</li>
       </ul>
 
       <H2 id="acl-freshness">Permissions, freshness, and citations</H2>
+      <p>
+        Company data has{' '}<Term def="Access control lists: who may read each document.">ACLs</Term>. The retriever must
+        respect them, stay fresh, and show its sources.
+      </p>
       <CompareTable
         columns={['Filter before / during search', 'Filter after search']}
         rows={[
@@ -121,16 +159,24 @@ function rrf(lists: string[][], k = 60): [string, number][] {
         ]}
       />
       <p>
-        Treat index freshness like replication lag. Stream source changes (webhooks, CDC) into incremental re-indexing, and
-        propagate <strong>deletes and permission changes first</strong>: a stale answer is a bug, a leaked document is an
+        Treat index freshness like replication lag. Stream source changes (webhooks,{' '}
+        <Term def="Change data capture: streaming row-level changes out of a database.">CDC</Term>) into incremental
+        re-indexing.
+      </p>
+      <p>
+        Propagate <strong>deletes and permission changes first</strong>. A stale answer is a bug; a leaked document is an
         incident. Return chunk IDs with every answer so the UI can cite sources and users can verify.
       </p>
 
       <H2 id="long-context">Long context vs RAG, and common failures</H2>
       <p>
-        Million-token context windows don’t make retrieval obsolete. Stuffing everything costs tokens and latency on every
-        request, and models use information in the middle of long contexts less reliably than at the edges. Long context
-        shines for a <em>single</em> large document per request. RAG shines for large, changing corpora with access control.
+        Million-token{' '}<Term def="The maximum number of tokens a model can read in one request.">context windows</Term>{' '}
+        don’t make retrieval obsolete. Stuffing everything costs tokens and latency on every request. Models also use
+        information in the middle of long contexts less reliably than at the edges.
+      </p>
+      <p>
+        Long context shines for a <em>single</em> large document per request. RAG shines for large, changing corpora
+        with access control. The usual failures:
       </p>
       <ul>
         <li>Right document, wrong chunk (answer split by chunking).</li>

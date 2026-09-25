@@ -1,6 +1,6 @@
 import {
   ApiSpec, ArchitectureDiagram, Callout, CodeBlock, CompareTable, EstimationTable, H2, InterviewQuestion,
-  KeyTakeaways, References, Requirements,
+  KeyTakeaways, References, Requirements, TLDR, Term,
 } from '../components/ui'
 import type { ArchEdge, ArchNode, Reference } from '../components/ui'
 import { CrawlerBloomCalculator } from './demos/crawler-bloom-calculator'
@@ -46,14 +46,26 @@ const EDGES: ArchEdge[] = [
 export default function WebCrawlerChapter() {
   return (
     <>
+      <TLDR items={[
+        'Fetch billions of pages, extract links, and feed new URLs back in, in a continuous loop.',
+        'The URL frontier is the heart: priority queues pick what matters, per-host queues keep you polite.',
+        'Partition hosts across crawler nodes so each host’s rate limit lives in one process.',
+        'Normalize URLs and use a Bloom filter to skip what you have already seen; fingerprints catch near-duplicates.',
+        'Defend against spider traps, and recrawl pages based on how often they actually change.',
+      ]} />
+
       <p>
-        A crawler looks like a BFS over a graph, and in an interview it is easy to treat it that way. The hard
-        parts are elsewhere: <strong>being polite</strong> to billions of servers you don't own,
-        <strong> not drowning in duplicates and traps</strong>, and choosing <em>which</em> pages matter, because you
-        will never fetch them all.
+        A crawler looks like a breadth-first search over a graph, and in an interview it is easy to treat it that
+        way. The hard parts are elsewhere.
+      </p>
+      <p>
+        You must <strong>be polite</strong> to billions of servers you don't own. You must{' '}
+        <strong>not drown in duplicates and traps</strong>. And you must choose <em>which</em> pages matter, because
+        you will never fetch them all.
       </p>
 
       <H2 id="requirements">1 · Clarify requirements</H2>
+      <p>Pin down the scale, what content counts, and what the crawl is for.</p>
       <Requirements
         functional={['Crawl HTML pages from seed URLs', 'Extract links and discover new pages', 'Store content for a search indexer', 'Recrawl pages based on how often they change']}
         nonFunctional={['~2B pages / month', 'Politeness: never overload a host', 'Robust to traps, malformed HTML, slow servers', 'Horizontally scalable; extensible to new content types']}
@@ -65,6 +77,7 @@ export default function WebCrawlerChapter() {
       </Callout>
 
       <H2 id="estimation">2 · Back-of-the-envelope</H2>
+      <p>Estimate fetch rate, bandwidth and storage to see where the real limits are.</p>
       <EstimationTable
         assumptions={['2B pages / month (illustrative target)', 'Average HTML page ≈ 100 KB raw, ~5× compression', 'Keep 3 years of snapshots']}
         rows={[
@@ -77,8 +90,8 @@ export default function WebCrawlerChapter() {
         ]}
       />
       <p>
-        Throughput is modest per machine, since async I/O on one node handles hundreds of pages per second. The real limits are <strong>per-host
-        politeness</strong>, <strong>DNS latency</strong>, and <strong>storage growth</strong>.
+        Throughput is modest per machine: async I/O on one node handles hundreds of pages per second. The real limits
+        are <strong>per-host politeness</strong>, <strong>DNS latency</strong> and <strong>storage growth</strong>.
       </p>
 
       <H2 id="api">3 · Interfaces</H2>
@@ -90,6 +103,12 @@ export default function WebCrawlerChapter() {
       ]} />
 
       <H2 id="high-level">4 · High-level design</H2>
+      <p>
+        The crawler is one loop. The{' '}
+        <Term def="The queue of URLs waiting to be fetched, organized by priority and by host.">frontier</Term>{' '}
+        hands out URLs, fetchers download pages, parsers extract links, and deduplication decides which links go back
+        into the frontier.
+      </p>
       <ArchitectureDiagram nodes={NODES} edges={EDGES} height={360}
         caption="The crawl loop: frontier → fetch → parse → extract → dedup → frontier"
         flows={[
@@ -101,9 +120,10 @@ export default function WebCrawlerChapter() {
 
       <H2 id="frontier">5 · Deep dive: the URL frontier</H2>
       <p>
-        A single FIFO queue fails in two ways. It hammers whichever host has the most links in a row, and it treats a
-        spam page the same as a front page. The standard fix (from the Mercator crawler design) splits the frontier into two stages:
+        The frontier decides what to fetch next and when. A single first-in, first-out queue fails in two ways. It
+        hammers whichever host has the most links in a row. And it treats a spam page the same as a front page.
       </p>
+      <p>The standard fix, from the Mercator crawler design, splits the frontier into two stages:</p>
       <ul>
         <li><strong>Front queues = priority.</strong> A prioritizer scores each URL (link-based importance, domain quality, change frequency) and places it in one of <em>F</em> queues. A biased selector draws more from high-priority queues without starving low ones.</li>
         <li><strong>Back queues = politeness.</strong> Each back queue holds URLs for exactly one host. A min-heap keyed by <em>“earliest time this host may be hit”</em> tells workers which queue is ready.</li>
@@ -116,6 +136,14 @@ export default function WebCrawlerChapter() {
       </Callout>
 
       <H2 id="dedup">6 · Deep dive: duplicates, near-duplicates, and the “seen” set</H2>
+      <p>
+        Much of the web repeats itself. We need cheap checks for URLs we have already queued and pages we have already
+        stored. A{' '}
+        <Term def="A compact bit array that answers “definitely not seen” or “probably seen”. It never misses a seen item, but has a small false-positive rate.">Bloom filter</Term>{' '}
+        handles the URL check; content fingerprints such as{' '}
+        <Term def="A hash where similar documents get similar fingerprints, so near-duplicates differ in only a few bits.">SimHash</Term>{' '}
+        catch near-duplicate pages.
+      </p>
       <CompareTable
         columns={['What', 'Technique', 'Cost']}
         rows={[
@@ -125,6 +153,10 @@ export default function WebCrawlerChapter() {
         ]}
       />
       <CrawlerBloomCalculator />
+      <p>
+        Normalize every URL before the seen-check. Otherwise the same page reached through different spellings looks
+        new each time.
+      </p>
       <CodeBlock lang="ts" title="URL normalization (before the seen-check)" code={`
 function normalize(raw: string, base: string): string | null {
   const u = new URL(raw, base)                 // resolve relative links
@@ -139,6 +171,11 @@ function normalize(raw: string, base: string): string | null {
 }`} />
 
       <H2 id="robustness">7 · Deep dive: politeness, traps, and freshness</H2>
+      <p>
+        A crawler runs for months against hostile and fragile servers. These rules keep it welcome, keep it out of{' '}
+        <Term def="Pages that generate endless new URLs, such as infinite calendars, trapping a crawler forever.">spider traps</Term>,
+        and keep its copy fresh.
+      </p>
       <ul>
         <li><strong>robots.txt</strong>: fetch once per host, cache it (RFC 9309 suggests no longer than about a day), and obey <code>Allow</code>/<code>Disallow</code>. <code>Crawl-delay</code> is not part of the standard, but honor it where given. Identify yourself with a user agent that has a contact URL.</li>
         <li><strong>Adaptive delay</strong>: back off when response time or 429/503 rates rise. Treat a slow host as a signal, not an obstacle.</li>
@@ -147,6 +184,7 @@ function normalize(raw: string, base: string): string | null {
       </ul>
 
       <H2 id="data-model">8 · Data model</H2>
+      <p>One metadata record per URL tracks fetch history, fingerprints and how often the page changes.</p>
       <CodeBlock lang="ts" title="page metadata (wide-column, key = urlHash)" code={`
 type PageRecord = {
   urlHash: string          // partition key: hash(normalizedUrl)

@@ -1,6 +1,6 @@
 import {
   ApiSpec, ArchitectureDiagram, Callout, CodeBlock, CompareTable, EstimationTable, H2, InterviewQuestion,
-  KeyTakeaways, References, Requirements,
+  KeyTakeaways, References, Requirements, TLDR, Term,
 } from '../components/ui'
 import type { ArchEdge, ArchNode, Reference } from '../components/ui'
 import { PayIdempotencyDemo } from './demos/pay-idempotency-demo'
@@ -48,14 +48,29 @@ const EDGES: ArchEdge[] = [
 export default function PaymentSystemChapter() {
   return (
     <>
+      <TLDR items={[
+        'Charge customers through a payment provider and pay sellers out, with no double charges and no lost money.',
+        'Traffic is modest; correctness under failure is the whole interview.',
+        'Idempotency keys turn at-least-once retries into an exactly-once effect.',
+        'A strict state machine with conditional updates makes late or duplicate webhooks harmless.',
+        'An append-only double-entry ledger plus daily reconciliation catches every bug you did not predict.',
+      ]} />
+
       <p>
         Payments look like a small CRUD problem: the traffic is modest and the objects are simple. What makes the
-        problem hard is that <strong>every bug is somebody's money</strong>. The interview is about correctness under
-        failure: timeouts that hide whether a charge happened, retries that duplicate it, webhooks that arrive twice
-        or out of order, and a ledger that must balance to the cent years later.
+        problem hard is that <strong>every bug is somebody's money</strong>.
+      </p>
+      <p>
+        The interview is about correctness under failure. Timeouts hide whether a charge happened. Retries duplicate
+        it. <Term def="HTTP callbacks a provider sends to your server when something happens, such as a payment succeeding.">Webhooks</Term>{' '}
+        arrive twice or out of order. And the ledger must balance to the cent years later.
       </p>
 
       <H2 id="requirements">1 · Clarify requirements</H2>
+      <p>
+        Scope the money flows first: charging buyers (pay-in) and settling to sellers (pay-out), all through a{' '}
+        <Term def="Payment service provider, such as Stripe or Adyen: the company that actually talks to card networks and banks.">PSP</Term>.
+      </p>
       <Requirements
         functional={['Pay-in: charge a customer for an order via a PSP', 'Pay-out: settle funds to sellers', 'Refunds and partial refunds', 'Payment status query + webhooks to the order service']}
         nonFunctional={['No double charges, no lost payments (correctness over availability)', 'Full audit trail, retained for years', 'p99 checkout call < 2 s excluding the PSP', 'PCI DSS scope kept minimal']}
@@ -68,6 +83,7 @@ export default function PaymentSystemChapter() {
       </Callout>
 
       <H2 id="estimation">2 · Back-of-the-envelope</H2>
+      <p>Size the load quickly, mainly to show that throughput is not the hard part.</p>
       <EstimationTable
         assumptions={['10M payments/day (illustrative, large marketplace)', 'Peak = 10× average (sales events)', '~3 ledger entries per payment, ~200 B each']}
         rows={[
@@ -77,9 +93,13 @@ export default function PaymentSystemChapter() {
           { label: 'Ledger growth', math: '30M × 200 B × 365', result: '≈ 2.2 TB/yr' },
         ]}
       />
-      <p>One well-tuned relational primary handles this write rate. <strong>Throughput is not the problem</strong>. Say so explicitly and spend your time on the failure modes.</p>
+      <p>
+        One well-tuned relational primary handles this write rate. <strong>Throughput is not the problem</strong>.
+        Say so explicitly, and spend your time on the failure modes.
+      </p>
 
       <H2 id="api">3 · API</H2>
+      <p>Every call that moves money carries an idempotency key, so retries are always safe.</p>
       <ApiSpec endpoints={[
         { method: 'POST', path: '/v1/payments', desc: <>Create and execute a payment. Requires an <code>Idempotency-Key</code> header.</>, body: '{ orderId, amount: 5000, currency: "USD", paymentMethodToken }', returns: '201 { paymentId, status }' },
         { method: 'GET', path: '/v1/payments/{id}', desc: 'Current state, used by clients after an ambiguous timeout.', returns: '{ status: pending | succeeded | failed | refunded }' },
@@ -92,6 +112,11 @@ export default function PaymentSystemChapter() {
       </Callout>
 
       <H2 id="high-level">4 · High-level design</H2>
+      <p>
+        The synchronous path ends at the PSP call. Everything after it, such as ledger writes and notifying the order
+        service, runs on events through an{' '}
+        <Term def="A table written in the same transaction as the business change; a relay later publishes its rows as events, so the two never diverge.">outbox</Term>.
+      </p>
       <ArchitectureDiagram nodes={NODES} edges={EDGES} height={420}
         caption="The synchronous path stops at the PSP. Everything after is event-driven and idempotent."
         flows={[
@@ -102,10 +127,14 @@ export default function PaymentSystemChapter() {
 
       <H2 id="idempotency">5 · Deep dive: idempotency, exactly-once effect</H2>
       <p>
-        Exactly-once <em>delivery</em> is impossible over an unreliable network. What you build instead is
-        <strong> at-least-once delivery + idempotent processing = exactly-once effect</strong>. The client generates a
-        key per logical payment attempt, and the server stores the key with the request fingerprint and the final
-        response.
+        The first deep dive stops double charges. Exactly-once <em>delivery</em> is impossible over an unreliable
+        network. What you build instead is{' '}
+        <strong>at-least-once delivery + idempotent processing = exactly-once effect</strong>.
+      </p>
+      <p>
+        The client generates a key per logical payment attempt. The server stores that key with a{' '}
+        <Term def="A hash of the request body, used to detect the same key being reused for a different request.">request fingerprint</Term>{' '}
+        and the final response. Retry a timed-out payment in the demo to see why this matters.
       </p>
       <PayIdempotencyDemo />
       <CodeBlock lang="ts" title="idempotency middleware (sketch)" code={`
@@ -128,6 +157,7 @@ async function withIdempotency(key: string, fingerprint: string, run: () => Prom
       </Callout>
 
       <H2 id="state-machine">6 · Deep dive: the payment state machine</H2>
+      <p>Next, make status changes safe. A payment may only move along legal transitions, enforced in the database.</p>
       <CodeBlock lang="ts" title="legal transitions only" code={`
 const transitions: Record<Status, Status[]> = {
   CREATED:    ['PENDING'],
@@ -140,14 +170,19 @@ const transitions: Record<Status, Status[]> = {
 // UPDATE payments SET status = $next, version = version + 1
 //  WHERE id = $id AND status = $expected AND version = $v   -- optimistic guard`} />
       <p>
-        The conditional <code>UPDATE … WHERE status = $expected</code> makes out-of-order webhooks harmless. A late
-        <code> payment.failed</code> after <code>SUCCEEDED</code> simply matches zero rows and gets logged for review.
+        The conditional <code>UPDATE … WHERE status = $expected</code> makes out-of-order webhooks harmless. A late{' '}
+        <code>payment.failed</code> after <code>SUCCEEDED</code> simply matches zero rows and gets logged for review.
       </p>
 
       <H2 id="ledger">7 · Deep dive: the double-entry ledger & reconciliation</H2>
       <p>
-        Each business event produces entries whose debits equal their credits. Nothing is ever updated or deleted.
-        Mistakes are fixed with reversing entries, and the audit trail comes for free.
+        Finally, record where the money is. In a{' '}
+        <Term def="Bookkeeping where every transaction is recorded as equal debits and credits across accounts, so the books always balance.">double-entry ledger</Term>,
+        each business event produces entries whose debits equal their credits.
+      </p>
+      <p>
+        Nothing is ever updated or deleted. Mistakes are fixed with reversing entries, and the audit trail comes for
+        free.
       </p>
       <PayLedgerDemo />
       <CompareTable
@@ -160,11 +195,13 @@ const transitions: Record<Status, Status[]> = {
         ]}
       />
       <p>
-        Reconciliation is the safety net for every bug you didn't anticipate. Compare the internal ledger with the
-        PSP settlement file and the bank statement, and route every mismatch to a queue with an owner.
+        <Term def="Comparing your own records with an external source, such as the provider’s settlement file, to find mismatches.">Reconciliation</Term>{' '}
+        is the safety net for every bug you didn't anticipate. Compare the internal ledger with the PSP settlement file
+        and the bank statement. Route every mismatch to a queue with an owner.
       </p>
 
       <H2 id="data-model">8 · Data model</H2>
+      <p>Four tables hold the state: payments, idempotency keys, ledger entries and the outbox.</p>
       <CodeBlock lang="ts" title="core tables (SQL)" code={`
 // payments(id PK, order_id, amount_minor BIGINT, currency CHAR(3),
 //          status, psp_ref UNIQUE, version INT, created_at, updated_at)

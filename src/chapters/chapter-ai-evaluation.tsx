@@ -1,5 +1,5 @@
 import {
-  Callout, CodeBlock, CompareTable, FlowDiagram, H2, InterviewQuestion, KeyTakeaways, References,
+  Callout, CodeBlock, CompareTable, FlowDiagram, H2, InterviewQuestion, KeyTakeaways, References, Term, TLDR,
 } from '../components/ui'
 import type { Reference } from '../components/ui'
 import { AiEvalHarnessDemo } from './demos/ai-eval-harness-demo'
@@ -17,13 +17,26 @@ const REFS: Reference[] = [
 export default function EvaluationChapter() {
   return (
     <>
+      <TLDR items={[
+        'For LLM features, the eval suite is the spec. It defines what “good” means.',
+        'Use the cheapest metric that catches the failure. Save LLM judges for what code can’t check.',
+        'LLM judges are biased: run both answer orders and calibrate against humans.',
+        'Small eval sets are noisy. Compare versions on the same items and report an interval.',
+        'Gate changes in CI, then confirm with a canary and live metrics.',
+      ]} />
       <p>
-        In traditional software, tests check code against a spec. With LLMs, the eval suite <strong>is</strong> the spec. It is the only
-        precise statement of what “good” means for a probabilistic system. Teams with strong evals ship prompt, model, and
-        retrieval changes weekly. Teams without them freeze, or ship regressions and learn from users.
+        In traditional software, tests check code against a spec. With LLMs, the{' '}
+        <Term def="Evaluation: a set of test inputs plus a way to score outputs, run on every change.">eval</Term>{' '}
+        suite <strong>is</strong> the spec. It is the only precise statement of what “good” means for a probabilistic
+        system.
+      </p>
+      <p>
+        Teams with strong evals ship prompt, model, and retrieval changes weekly. Teams without them freeze, or ship
+        regressions and learn from users.
       </p>
 
       <H2 id="spec">Evals are the product spec</H2>
+      <p>Without evals, every change is a guess. With them, it is a measurement.</p>
       <ul>
         <li>Every model upgrade, prompt edit, or retrieval tweak is a behavior change across thousands of inputs. You need a way to see all of it at once.</li>
         <li>Evals turn debates (“the new prompt feels better”) into numbers with uncertainty.</li>
@@ -31,6 +44,11 @@ export default function EvaluationChapter() {
       </ul>
 
       <H2 id="datasets">Building the eval set</H2>
+      <p>
+        An eval is only as good as its examples. A{' '}
+        <Term def="A curated set of inputs with known-good answers or labels, used as the fixed benchmark.">golden set</Term>{' '}
+        usually mixes four sources.
+      </p>
       <CompareTable
         columns={['Source', 'Strength', 'Watch out for']}
         rows={[
@@ -41,12 +59,17 @@ export default function EvaluationChapter() {
         ]}
       />
       <p>
-        Stratify by segment (language, customer tier, task type) and report per-slice scores: an average can hide a
-        collapse in one segment. Version the dataset, keep a held-out slice nobody tunes against, and add every production
-        incident as a new case.
+        Split results by segment (language, customer tier, task type) and report a score per{' '}
+        <Term def="A subset of the eval set, such as one language or one customer tier.">slice</Term>.
+        An average can hide a collapse in one segment.
+      </p>
+      <p>
+        Version the dataset. Keep a{' '}<Term def="Examples nobody looks at while tuning, so they give an honest final check.">held-out</Term>{' '}
+        slice nobody tunes against. Add every production incident as a new case.
       </p>
 
       <H2 id="metrics">Choosing metrics</H2>
+      <p>Metrics range from cheap and strict to flexible and costly. Pick per failure type.</p>
       <CompareTable
         columns={['Type', 'Examples', 'Cost / reliability']}
         rows={[
@@ -64,20 +87,31 @@ export default function EvaluationChapter() {
 
       <H2 id="judges">LLM-as-judge: useful, biased, calibratable</H2>
       <p>
-        Strong models agree with human raters surprisingly often on many tasks, but they have systematic biases. They
-        favor the answer in a particular <strong>position</strong>, prefer <strong>longer</strong> answers, and can
-        favor outputs resembling <strong>their own</strong> style. Mitigate with specific rubrics, pairwise comparisons
-        run in both orders, length-controlled comparisons, and a regularly refreshed human-labeled sample to measure judge
-        agreement.
+        An{' '}<Term def="Using a strong model with a scoring rubric to grade another model’s outputs.">LLM judge</Term>{' '}
+        grades outputs so humans don’t have to. Strong models agree with human raters surprisingly often on many tasks.
+        But they have systematic biases:
+      </p>
+      <ul>
+        <li>They favor the answer in a particular <strong>position</strong> (first or second).</li>
+        <li>They prefer <strong>longer</strong> answers.</li>
+        <li>They can favor outputs resembling <strong>their own</strong> style.</li>
+      </ul>
+      <p>
+        Mitigate with specific rubrics, pairwise comparisons run in both orders, and length-controlled comparisons.
+        Keep a regularly refreshed human-labeled sample to measure judge agreement. The demo shows the swap trick.
       </p>
       <AiEvalJudgeBiasDemo />
 
       <H2 id="statistics">Is the difference real? Sample size and uncertainty</H2>
       <p>
-        A score on 100 examples is a noisy estimate. At a 70% pass rate, a single score on 100 items carries roughly ±9 points
-        of 95% uncertainty. Compare versions <strong>paired on the same items</strong> and report an interval, not just two
-        numbers. A bootstrap (resample items with replacement, recompute the difference, take percentiles) needs no
-        distributional assumptions.
+        A score on 100 examples is a noisy estimate. At a 70% pass rate, a single score on 100 items carries roughly ±9
+        points of 95% uncertainty.
+      </p>
+      <p>
+        Compare versions <strong>paired on the same items</strong> and report an interval, not just two numbers. A{' '}
+        <Term def="Estimate uncertainty by resampling your data with replacement many times and recomputing the metric.">bootstrap</Term>{' '}
+        (resample items with replacement, recompute the difference, take percentiles) needs no distributional
+        assumptions.
       </p>
       <AiEvalHarnessDemo />
       <Callout kind="warn">
@@ -86,6 +120,7 @@ export default function EvaluationChapter() {
       </Callout>
 
       <H2 id="ci-gates">Regression gates in CI</H2>
+      <p>Evals pay off when they run automatically on every change and can block a bad release.</p>
       <FlowDiagram steps={[
         { label: 'Change', sub: 'prompt, model, retriever, code' },
         { label: 'Offline suite', sub: 'deterministic + judge metrics' },
@@ -107,6 +142,7 @@ export const gate = {
 }`} />
 
       <H2 id="online">Online evaluation</H2>
+      <p>Offline evals decide whether to try a change. Live traffic decides whether to keep it.</p>
       <ul>
         <li><strong>A/B tests</strong> on product outcomes (resolution rate, retention), with guardrail metrics: latency, cost, safety flags, complaint rate.</li>
         <li><strong>Implicit feedback</strong>: regenerate clicks, copy events, edits to drafts, and abandonment are cheaper and more plentiful than thumbs ratings.</li>
@@ -116,9 +152,13 @@ export const gate = {
 
       <H2 id="tracing">Traces make failures debuggable</H2>
       <p>
-        For RAG and agent systems, record every step for a request: rewritten query, retrieved chunk IDs and scores,
-        final prompt, tool calls, model output, latency, and tokens. When an eval case fails, the trace shows whether
-        retrieval, the prompt, the model, or a tool was at fault. Without it, teams guess. See <a href="#/ai-rag">RAG Systems</a> and <a href="#/ai-agents">Agents &amp; Tool Use</a>.
+        For RAG and agent systems, record every step of a request: rewritten query, retrieved chunk IDs and scores,
+        final prompt, tool calls, model output, latency, and tokens.
+      </p>
+      <p>
+        When an eval case fails, the{' '}<Term def="A step-by-step record of everything that happened for one request.">trace</Term>{' '}
+        shows whether retrieval, the prompt, the model, or a tool was at fault. Without it, teams guess. See{' '}
+        <a href="#/ai-rag">RAG Systems</a> and <a href="#/ai-agents">Agents &amp; Tool Use</a>.
       </p>
 
       <Callout kind="staff">

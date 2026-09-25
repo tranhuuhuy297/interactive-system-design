@@ -1,5 +1,5 @@
 import {
-  ArchitectureDiagram, Callout, CompareTable, EstimationTable, H2, InterviewQuestion, KeyTakeaways, References,
+  ArchitectureDiagram, Callout, CompareTable, EstimationTable, H2, InterviewQuestion, KeyTakeaways, References, Term, TLDR,
 } from '../components/ui'
 import type { ArchEdge, ArchNode, Reference } from '../components/ui'
 import { AiParPlannerDemo } from './demos/ai-par-planner-demo'
@@ -34,14 +34,25 @@ const EDGES: ArchEdge[] = [
 export default function AiParallelismMoeChapter() {
   return (
     <>
+      <TLDR items={[
+        'Big models don’t fit on one GPU, so one “replica” is a group of GPUs splitting the work.',
+        'Tensor parallelism talks inside every layer: keep it on fast NVLink within a node.',
+        'Pipeline parallelism spans nodes; replicas add throughput beyond that.',
+        'MoE models need memory for all experts but compute for only a few per token.',
+        'Autoscale on queue time and KV usage, and plan for slow cold starts.',
+      ]} />
       <p>
-        A 70B model in 16-bit weights is about 140 GB, and the largest open models are several times that. None fit on
-        a single 80 GB GPU with room left for KV cache. So a serving “replica” is really a small distributed system: a
-        group of GPUs that split each forward pass among themselves and talk constantly. Which split you choose sets
-        latency, cost, and how you scale.
+        A 70B model in 16-bit weights is about 140 GB. The largest open models are several times that. None fit on a
+        single 80 GB GPU with room left for{' '}<Term def="Per-conversation attention state kept in GPU memory during generation.">KV cache</Term>.
+      </p>
+      <p>
+        So a serving{' '}<Term def="One complete, independently serving copy of the model, which may span several GPUs.">replica</Term>{' '}
+        is really a small distributed system: a group of GPUs that split each forward pass and talk constantly. The
+        split you choose sets latency, cost, and how you scale.
       </p>
 
       <H2 id="menu">The parallelism menu</H2>
+      <p>There are five ways to split the work. Each cuts along a different axis and pays a different communication bill.</p>
       <CompareTable
         columns={['What is split', 'Communication', 'Use in inference']}
         rows={[
@@ -55,10 +66,16 @@ export default function AiParallelismMoeChapter() {
 
       <H2 id="comms">Why communication decides the layout</H2>
       <p>
-        Tensor parallelism splits every matrix multiply, so GPUs must combine partial results inside every transformer
-        layer. Megatron-LM’s layout needs two all-reduces per layer in the forward pass. That is fine over NVLink
-        (900 GB/s per H100) but painful over the data-center network, which is roughly an order of magnitude slower per
-        GPU. Hence the rule of thumb: <strong>tensor parallel within a node, pipeline across nodes, replicas beyond that.</strong>
+        Tensor parallelism splits every matrix multiply. So GPUs must combine partial results inside every transformer
+        layer. Megatron-LM’s layout needs two{' '}
+        <Term def="A collective operation where every GPU contributes a partial result and every GPU receives the combined sum.">all-reduces</Term>{' '}
+        per layer in the forward pass.
+      </p>
+      <p>
+        That is fine over{' '}<Term def="NVIDIA’s high-speed GPU-to-GPU link inside one server.">NVLink</Term>{' '}
+        (900 GB/s per H100). It is painful over the data-center network, which is roughly an order of magnitude slower
+        per GPU. Hence the rule of thumb: <strong>tensor parallel within a node, pipeline across nodes, replicas beyond
+        that.</strong>
       </p>
       <EstimationTable
         assumptions={['70B dense model, 16-bit weights (≈ 140 GB)', '8-GPU nodes, 80 GB each, ~30% kept for KV cache']}
@@ -70,26 +87,33 @@ export default function AiParallelismMoeChapter() {
         ]}
       />
       <p>
-        More GPUs per replica means more pooled bandwidth, so lower per-token latency, but also more all-reduce
-        overhead and fewer replicas for the same budget. Pick TP for the latency SLO, then add replicas for throughput.
+        More GPUs per replica means more pooled bandwidth, so lower per-token latency. It also means more all-reduce
+        overhead and fewer replicas for the same budget. Pick TP for the latency SLO. Then add replicas for throughput.
       </p>
 
       <H2 id="planner">Plan a layout</H2>
+      <p>Try it: pick a model and a GPU, and see the smallest layout that fits with room for KV cache.</p>
       <AiParPlannerDemo />
 
       <H2 id="moe">Serving mixture-of-experts models</H2>
       <p>
-        In a mixture-of-experts (MoE) model, each token is routed to a few “expert” feed-forward blocks out of many.
-        Mixtral 8×7B holds 47B parameters but uses 13B per token. DeepSeek-V3 holds 671B but activates 37B per token. For
-        serving, that means <strong>memory scales with total parameters, compute scales with active ones.</strong>
+        In a{' '}<Term def="A model with many specialized sub-networks (experts); a small router picks a few experts per token.">mixture-of-experts (MoE)</Term>{' '}
+        model, each token goes to a few “expert”{' '}
+        <Term def="The dense multi-layer block after attention in each transformer layer; most of a model’s parameters live here.">feed-forward blocks</Term>{' '}
+        out of many. Think of a hospital: every patient sees two specialists, but all specialists must be on staff.
+      </p>
+      <p>
+        Mixtral 8×7B holds 47B parameters but uses 13B per token. DeepSeek-V3 holds 671B but activates 37B per token.
+        For serving: <strong>memory scales with total parameters, compute scales with active ones.</strong>
       </p>
       <ul>
-        <li><strong>Expert parallelism</strong> places different experts on different GPUs. Every MoE layer then does an all-to-all: send each token to its experts’ GPUs, compute, send results back.</li>
+        <li><strong>Expert parallelism</strong> places different experts on different GPUs. Every MoE layer then does an{' '}<Term def="A collective where every GPU sends a different slice of data to every other GPU.">all-to-all</Term>: send each token to its experts’ GPUs, compute, send results back.</li>
         <li><strong>Load imbalance</strong> is the core problem. Popular experts become hot spots while others idle. Training-time balancing losses and capacity limits (as in Switch Transformers) help, but serving still sees skew by traffic type.</li>
         <li><strong>Batch size matters more:</strong> with many experts, each one sees only a slice of the batch, so small batches leave expert matmuls memory-bound and inefficient.</li>
       </ul>
 
       <H2 id="fleet">From one replica to a fleet</H2>
+      <p>Once one replica works, throughput comes from running many and scaling them on the right signals.</p>
       <ArchitectureDiagram nodes={NODES} edges={EDGES} height={330}
         caption="Replicas scale throughput; each replica is itself a tensor-parallel group"
         flows={[
@@ -125,7 +149,8 @@ export default function AiParallelismMoeChapter() {
         senior={<p>405B in 16-bit is about 810 GB, so it needs more than one node. Use tensor parallelism across 8 GPUs and pipeline parallelism across nodes, or quantize to FP8 to fit on one node.</p>}
         staff={<>
           <p>At 16-bit, weights alone (~810 GB) exceed a node’s 640 GB, so it needs TP=8 inside each node and at least 2–3 pipeline stages across nodes. Every token then crosses the network between stages, and the pipeline needs several micro-batches in flight to avoid idle stages. That is acceptable for throughput, bad for latency.</p>
-          <p>With FP8 weights (~405 GB) it fits in one node at TP=8 with about a third of memory left for KV cache. That removes cross-node hops entirely, and on Hopper FP8 has hardware support. I’d validate quality with task evals, then scale out with single-node replicas. If memory is still tight for long contexts, I’d look at FP8 KV cache or higher-memory GPUs before adding pipeline stages.</p>
+          <p>With FP8 weights (~405 GB) it fits in one node at TP=8 with about a third of memory left for KV cache. That removes cross-node hops entirely, and on Hopper FP8 has hardware support.</p>
+          <p>I’d validate quality with task evals, then scale out with single-node replicas. If memory is still tight for long contexts, I’d look at FP8 KV cache or higher-memory GPUs before adding pipeline stages.</p>
         </>}
         followUps={['How many replicas for 5,000 requests per minute?', 'What changes for a 671B MoE model?']}
       />

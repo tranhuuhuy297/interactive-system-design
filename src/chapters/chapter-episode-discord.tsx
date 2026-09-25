@@ -1,8 +1,9 @@
 import {
-  References,
   ArchitectureDiagram, Callout, CompareTable, EpisodePlayer, EstimationTable, H2, InterviewQuestion, KeyTakeaways,
+  References, TLDR, Term,
 } from '../components/ui'
-import type { ArchEdge, ArchNode, Reference } from '../components/ui'
+import type { ArchEdge, ArchNode } from '../components/ui'
+import { DISCORD_REFS } from './demos/episode-discord-sources'
 import { EpisodeDiscordCoalescingDemo } from './demos/episode-discord-coalescing-demo'
 import { DISCORD_STAGES } from './demos/episode-discord-stages'
 
@@ -23,30 +24,46 @@ const SEND_EDGES: ArchEdge[] = [
   { from: 'api', to: 'guild', async: true }, { from: 'guild', to: 'gw' }, { from: 'gw', to: 'recv' },
 ]
 
-// Primary public sources behind the “In the real world” notes.
-const REFS: Reference[] = [
-  { title: "How Discord Stores Billions of Messages", source: "Discord Engineering", year: 2017, url: "https://discord.com/blog/how-discord-stores-billions-of-messages", kind: "blog", note: "MongoDB → Cassandra, (channel, bucket) keys" },
-  { title: "How Discord Stores Trillions of Messages", source: "Discord Engineering", year: 2023, url: "https://discord.com/blog/how-discord-stores-trillions-of-messages", kind: "blog", note: "177 Cassandra → 72 ScyllaDB nodes; Rust data services" },
-  { title: "How Discord Scaled Elixir to 5,000,000 Concurrent Users", source: "Discord Engineering", year: 2017, url: "https://discord.com/blog/how-discord-scaled-elixir-to-5-000-000-concurrent-users", kind: "blog" },
-  { title: "Maxjourney: Pushing Discord’s Limits with a Million+ Online Users in a Single Server", source: "Discord Engineering", year: 2023, url: "https://discord.com/blog/maxjourney-pushing-discords-limits-with-a-million-plus-online-users-in-a-single-server", kind: "blog" },
-  { title: "How Discord Handles Two and Half Million Concurrent Voice Users using WebRTC", source: "Discord Engineering", year: 2018, url: "https://discord.com/blog/how-discord-handles-two-and-half-million-concurrent-voice-users-using-webrtc", kind: "blog" },
-  { title: "Gateway", source: "Discord Developer Docs", url: "https://discord.com/developers/docs/events/gateway", kind: "docs" },
+const TIMELINE = [
+  { year: '2015', what: 'Launch; one MongoDB replica set' },
+  { year: '2015–17', what: 'Elixir gateway + guild processes; messages move to Cassandra' },
+  { year: '2017', what: 'Search on many small Elasticsearch clusters; cheaper fan-out' },
+  { year: '2018', what: 'Voice on a homegrown C++ SFU fleet' },
+  { year: '2019', what: 'Lazy member lists with a Rust NIF' },
+  { year: '2020', what: 'Read States rewritten from Go to Rust' },
+  { year: '2022', what: 'Rust data services + ScyllaDB; “super-disks”' },
+  { year: '2023', what: 'Relays and passive sessions for million-online servers' },
 ]
 
 export default function DiscordEpisode() {
   return (
     <>
+      <TLDR items={[
+        'Discord is two systems: a real-time fan-out engine and a message archive.',
+        'Gateways hold sockets; one process per server (“guild”) owns its state.',
+        'Messages live in a wide-column store keyed by channel and time bucket.',
+        'Hot channels are tamed by routing each channel to one place and merging duplicate reads.',
+        'Huge servers work because only people actually looking get live updates.',
+      ]} />
       <p>
-        Discord looks like a chat app, but it is really two hard systems stitched together. One is a
-        <strong> real-time fan-out engine</strong> holding millions of open sockets. The other is a
-        <strong> message archive</strong> that must return the latest page of any channel instantly, even when a
-        channel is on fire. This episode grows both from a single server.
+        Discord looks like a chat app. Underneath are two hard systems. One is a <strong>fan-out engine</strong> that
+        holds millions of open sockets. The other is a <strong>message archive</strong> that must return the latest
+        page of any channel instantly, even when that channel is on fire.
+      </p>
+      <p>
+        This episode grows both from a single server, in the order Discord actually hit each wall. Along the way you
+        will meet <Term def="A server-side unit that forwards each speaker’s media stream to listeners without mixing it.">SFUs</Term>,{' '}
+        <Term def="Merging identical in-flight requests so the database answers once and everyone waiting gets the result.">request coalescing</Term>,
+        and <Term def="A partition key that receives far more traffic than others, overloading the replicas that hold it.">hot partitions</Term>.
       </p>
       <Callout kind="info" title="How to watch this episode">
-        At each stage, ask yourself: <em>who owns this piece of state, and how many copies of each event get made?</em>{' '}
-        Almost every decision here is an answer to one of those two questions.
+        At each stage, ask two questions. <em>Who owns this piece of state?</em> And <em>how many copies of each event
+        get made?</em> Open “Go deeper” for the step-by-step flow, numbers, and sources.
       </Callout>
       <p className="muted"><em>This episode is an independent reconstruction from public sources. It is not affiliated with or endorsed by Discord; all trademarks belong to their owners.</em></p>
+
+      <H2 id="timeline">Timeline at a glance</H2>
+      <CompareTable columns={['What changed']} rows={TIMELINE.map((t) => ({ label: t.year, cells: [t.what] }))} />
 
       <H2 id="the-build">The build, stage by stage</H2>
       <EpisodePlayer stages={DISCORD_STAGES} height={400} />
@@ -63,8 +80,8 @@ export default function DiscordEpisode() {
         ]}
       />
       <p>
-        Writes are modest. <strong>Fan-out and hot reads</strong> are the real multipliers, which is why the two
-        biggest redesigns in this story (lazy delivery and data services) attack those, not raw write throughput.
+        Writes are modest. <strong>Fan-out and hot reads</strong> are the real multipliers. That is why the biggest
+        redesigns in this story (lazy delivery, relays, data services) attack those, not raw write throughput.
       </p>
 
       <H2 id="send-a-message">What happens when you hit Enter</H2>
@@ -77,10 +94,12 @@ export default function DiscordEpisode() {
 
       <H2 id="coalescing">Deep dive: surviving a hot channel</H2>
       <p>
-        When a huge server posts an announcement, thousands of clients request the <em>same</em> channel history
-        within a second. Without protection, each one is a database query against the same partition. A data-service
-        tier that routes by channel can keep <strong>one query in flight per channel</strong> and hand the result to
-        everyone waiting. That only works if every request for that channel reaches the same instance.
+        A huge server posts an announcement. Within a second, thousands of clients request the <em>same</em> channel
+        history. Without protection, each request is a database query on the same partition.
+      </p>
+      <p>
+        A data-service tier that routes by channel can keep <strong>one query in flight per channel</strong>. Everyone
+        waiting gets that one result. This only works if every request for the channel reaches the same instance.
       </p>
       <EpisodeDiscordCoalescingDemo />
       <Callout kind="pitfall">
@@ -131,7 +150,7 @@ export default function DiscordEpisode() {
       />
 
       <H2 id="references">Sources</H2>
-      <References items={REFS} />
+      <References items={DISCORD_REFS} />
 
       <KeyTakeaways items={[
         'Separate socket holding (gateways) from state ownership (one process per guild).',
@@ -140,6 +159,7 @@ export default function DiscordEpisode() {
         'Model storage on the dominant query: latest messages per channel, partitioned by (channel, time bucket).',
         'Hot keys need affinity + request coalescing, not just more cache.',
         'Voice is a separate SFU fleet placed by latency.',
+        'Million-member servers need passive sessions and relays that split fan-out across machines.',
       ]} />
     </>
   )

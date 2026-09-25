@@ -64,13 +64,19 @@ export function ArchitectureDiagram({ nodes, edges, flows = [], height = 380, ca
   useLayoutEffect(() => {
     const el = wrapRef.current
     if (!el) return
+    // Measure synchronously so the first paint uses the real width, not the fallback.
+    setWidth(el.getBoundingClientRect().width)
     const ro = new ResizeObserver(([e]) => setWidth(e.contentRect.width))
     ro.observe(el)
     return () => ro.disconnect()
   }, [])
 
   const byId = useMemo(() => Object.fromEntries(nodes.map((n) => [n.id, n])), [nodes])
-  const px = (n: ArchNode) => ({ x: (n.x / 100) * width, y: (n.y / 100) * height })
+  // Clamp centres so fixed-width nodes never spill past the canvas edge, whatever the data says.
+  const px = (n: ArchNode) => ({
+    x: clamp((n.x / 100) * width, HALF_W + 4, width - HALF_W - 4),
+    y: clamp((n.y / 100) * height, HALF_H + 6, height - HALF_H - 6),
+  })
   const flow = flows.find((f) => f.name === flowName)
 
   const onFlow = new Set<string>()
@@ -132,7 +138,7 @@ export function ArchitectureDiagram({ nodes, edges, flows = [], height = 380, ca
           return (
             <button key={n.id} className={`arch__node arch__node--${n.kind} ${selected === n.id ? 'is-selected' : ''} ${dim ? 'is-dim' : ''} ${added.includes(n.id) ? 'is-new' : ''}`}
               style={{ left: p.x, top: p.y }} onClick={() => setSelected(selected === n.id ? null : n.id)}
-              aria-pressed={selected === n.id}>
+              aria-pressed={selected === n.id} title={n.sub ? `${n.label} — ${n.sub}` : n.label}>
               <Icon size={16} />
               <span className="arch__label">{n.label}{n.sub && <small>{n.sub}</small>}</span>
             </button>
@@ -154,7 +160,7 @@ export function ArchitectureDiagram({ nodes, edges, flows = [], height = 380, ca
 
 type Pt = { x: number; y: number }
 // Approximate node half-size; keeps arrowheads at the node border instead of hidden under it.
-const HALF_W = 52
+const HALF_W = 62
 const HALF_H = 20
 
 function clipToBoxes(a: Pt, b: Pt): [Pt, Pt] {
@@ -179,3 +185,5 @@ function FlowSteps({ steps, hops, animate }: { steps: string[]; hops: number; an
     </ol>
   )
 }
+
+const clamp = (v: number, lo: number, hi: number) => Math.min(hi, Math.max(lo, v))

@@ -1,5 +1,5 @@
 import {
-  Callout, CodeBlock, CompareTable, FlowDiagram, H2, InterviewQuestion, KeyTakeaways, References, Tabs,
+  Callout, CodeBlock, CompareTable, FlowDiagram, H2, InterviewQuestion, KeyTakeaways, References, TLDR, Tabs, Term,
 } from '../components/ui'
 import type { Reference } from '../components/ui'
 import { ConsensusQuorumPlaygroundDemo } from './demos/consensus-quorum-playground-demo'
@@ -23,13 +23,24 @@ export default function ConsistencyChapter() {
   return (
     <>
       <p>
-        Replication keeps copies of data on several machines for durability, availability and read scale. As
-        soon as there are copies, you have to decide <strong>what a reader is allowed to see</strong> and
-        <strong> who gets to decide the order of writes</strong>. This chapter covers the models, the maths of
-        quorums, and how consensus protocols like Raft keep a cluster agreeing on one leader and one history.
+        Replication keeps copies of data on several machines for durability, availability, and read scale. Once
+        there are copies, you must decide <strong>what a reader is allowed to see</strong> and{' '}
+        <strong>who decides the order of writes</strong>.
+      </p>
+      <TLDR items={[
+        'Three layouts: one leader, many leaders, or no leader. Each handles conflicts and failover differently.',
+        'Async replicas cause visible bugs, like users not seeing their own changes. There are standard fixes.',
+        'During a network split you choose consistency or availability. Day to day you trade latency for consistency.',
+        'Quorums (R + W > N) make reads overlap writes, but that is still weaker than true linearizability.',
+        'Raft lets a majority agree on one leader and one log, and prevents split brain.',
+      ]} />
+      <p>
+        This chapter covers the models, the maths of quorums, and how consensus protocols like Raft keep a cluster
+        agreeing on one leader and one history.
       </p>
 
       <H2 id="replication">Replication topologies</H2>
+      <p>The first choice is which replicas may accept writes. Everything else, including conflicts and failover, follows from it.</p>
       <CompareTable
         columns={['Single-leader', 'Multi-leader', 'Leaderless']}
         rows={[
@@ -51,8 +62,10 @@ export default function ConsistencyChapter() {
 
       <H2 id="lag">Replication lag anomalies</H2>
       <p>
-        With async read replicas, “eventually consistent” shows up as very concrete bugs. Users see their own
-        change disappear, or a page flips between old and new data on refresh.
+        With async read replicas,{' '}
+        <Term def="Replicas may disagree for a while, but they all converge to the same value once writes stop.">eventually consistent</Term>{' '}
+        shows up as very concrete bugs. Users see their own change disappear, or a page flips between old and new
+        data on refresh.
       </p>
       <ConsensusReplicationLagDemo />
       <ul>
@@ -62,6 +75,11 @@ export default function ConsistencyChapter() {
       </ul>
 
       <H2 id="models">Consistency models</H2>
+      <p>
+        A consistency model is a promise about what reads can return. The strongest,{' '}
+        <Term def="Every read returns the latest completed write, as if there were one copy and operations happened in real-time order.">linearizability</Term>,
+        behaves like a single copy. Each step weaker is cheaper and more surprising.
+      </p>
       <FlowDiagram steps={[
         { label: 'Linearizable', sub: 'one copy, real-time order' },
         { label: 'Sequential', sub: 'one global order, not real-time' },
@@ -77,14 +95,16 @@ export default function ConsistencyChapter() {
 
       <H2 id="cap">CAP and PACELC</H2>
       <p>
-        <strong>CAP</strong>: during a network <strong>partition</strong>, a replicated system must choose between
-        <strong> consistency</strong> (linearizability, refusing some requests) and <strong>availability</strong>{' '}
-        (answering from any reachable node, possibly stale). Partitions are not optional, so the real choice is CP
-        or AP <em>when things break</em>.
+        <strong>CAP</strong>: during a network <strong>partition</strong> (nodes can’t reach each other), a
+        replicated system must choose. It can keep <strong>consistency</strong> (linearizability, refusing some
+        requests) or <strong>availability</strong> (answering from any reachable node, possibly stale).
       </p>
       <p>
-        <strong>PACELC</strong> completes the picture: if Partition, choose A or C; <strong>E</strong>lse (normal
-        operation), choose <strong>L</strong>atency or <strong>C</strong>onsistency. This is the trade-off you pay
+        Partitions are not optional, so the real choice is CP or AP <em>when things break</em>.
+      </p>
+      <p>
+        <strong>PACELC</strong> completes the picture. If Partition, choose A or C. <strong>E</strong>lse (normal
+        operation), choose <strong>L</strong>atency or <strong>C</strong>onsistency. You pay this second trade-off
         every day, not just during rare partitions.
       </p>
       <CompareTable
@@ -99,9 +119,12 @@ export default function ConsistencyChapter() {
 
       <H2 id="quorums">Quorums: N, R, W</H2>
       <p>
-        In leaderless systems each key is stored on N replicas. A write waits for W acks and a read queries R
-        replicas and takes the newest version. If <strong>R + W &gt; N</strong>, every read set overlaps every write
-        set in at least one replica, so the read sees the latest <em>acknowledged</em> write.
+        In leaderless systems each key is stored on N replicas. A write waits for W acknowledgements. A read
+        queries R replicas and takes the newest version.
+      </p>
+      <p>
+        If <strong>R + W &gt; N</strong>, every read set overlaps every write set in at least one replica. The read
+        then sees the latest <em>acknowledged</em> write.
       </p>
       <ConsensusQuorumPlaygroundDemo />
       <Callout kind="warn">
@@ -113,8 +136,9 @@ export default function ConsistencyChapter() {
       <H2 id="consensus">Consensus with Raft</H2>
       <p>
         Consensus lets a group of nodes agree on a sequence of values even when some crash, as long as a majority
-        is up. It is what makes leader election safe (no split brain) and underpins etcd, Consul, CockroachDB,
-        TiKV and Kafka's KRaft mode.
+        is up. It makes leader election safe, with no{' '}
+        <Term def="Two nodes both believe they are the leader and accept conflicting writes.">split brain</Term>.
+        It underpins etcd, Consul, CockroachDB, TiKV, and Kafka’s KRaft mode.
       </p>
       <ConsensusRaftElectionDemo />
       <ul>
@@ -126,6 +150,7 @@ export default function ConsistencyChapter() {
       </ul>
 
       <H2 id="conflicts">Conflicts, clocks & distributed transactions</H2>
+      <p>When more than one node accepts writes, you need a way to detect and resolve conflicting updates.</p>
       <Tabs items={[
         { label: 'Version vectors', content: <>
           <p className="muted">Wall clocks drift, so last-write-wins by timestamp silently drops writes. A <strong>version vector</strong> keeps a counter per replica. If one vector dominates the other, it wins. If neither does, the writes were <em>concurrent</em>, and the system keeps both as siblings and asks the app or a merge function to resolve.</p>
@@ -149,6 +174,7 @@ function compare(a: VV, b: VV): 'before' | 'after' | 'equal' | 'concurrent' {
       ]} />
 
       <H2 id="staff">Staff-level lens</H2>
+      <p>Strong consistency is expensive, so staff answers spend it only where the business needs it.</p>
       <Callout kind="staff">
         <ul>
           <li><strong>Choose consistency per operation, not per system.</strong> Payment debits are linearizable; like counts are eventual; the profile page is read-your-writes. Mixed consistency is normal and cheaper.</li>
@@ -164,7 +190,8 @@ function compare(a: VV, b: VV): 'before' | 'after' | 'equal' | 'concurrent' {
         senior={<p>When there's a network partition, you choose consistency or availability. Payments choose CP, social feeds choose AP. You can't have all three.</p>}
         staff={<>
           <p>CAP only constrains behaviour <em>during a partition</em>, and “C” there means linearizability, a narrow definition. The more useful framing is PACELC: in normal operation we trade latency against consistency all the time.</p>
-          <p>For concrete design I'd pick per operation. Wallet balance changes go through a single leader per account with synchronous replication, so they refuse writes if the leader loses quorum (CP). The activity feed is served from async replicas and caches (AP/EL), with read-your-writes for the author. Then I'd say what users actually see during a regional partition, which is the part interviewers want.</p>
+          <p>For concrete design I'd pick per operation. Wallet balance changes go through a single leader per account with synchronous replication, so they refuse writes if the leader loses quorum (CP). The activity feed is served from async replicas and caches (AP/EL), with read-your-writes for the author.</p>
+          <p>Then I'd say what users actually see during a regional partition, which is the part interviewers want.</p>
         </>}
         followUps={['What does “C” in CAP mean vs “C” in ACID?', 'How would you give read-your-writes across regions?', 'Is Cassandra CP or AP?']}
       />

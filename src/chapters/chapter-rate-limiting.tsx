@@ -1,5 +1,5 @@
 import {
-  ArchitectureDiagram, Callout, CodeBlock, CompareTable, H2, InterviewQuestion, KeyTakeaways, References, Requirements, Tabs,
+  ArchitectureDiagram, Callout, CodeBlock, CompareTable, H2, InterviewQuestion, KeyTakeaways, References, Requirements, TLDR, Tabs, Term,
 } from '../components/ui'
 import type { ArchEdge, ArchNode, Reference } from '../components/ui'
 import { RateLimitRaceDemo } from './demos/ratelimit-race-demo'
@@ -38,10 +38,20 @@ export default function RateLimitingChapter() {
   return (
     <>
       <p>
-        A rate limiter decides, for every request, <strong>“may this caller do this now?”</strong> It protects capacity,
-        enforces commercial quotas, keeps one noisy tenant from starving the rest, and blunts abuse such as
-        credential stuffing. The algorithm is the easy part. The hard parts are <strong>where</strong> to enforce the limit,
-        <strong> shared state</strong> across many gateway nodes, and <strong>what to do</strong> when the limiter
+        A rate limiter answers one question for every request: <strong>“may this caller do this now?”</strong> It
+        protects capacity, enforces paid quotas, keeps one noisy customer from starving the rest, and blunts abuse
+        such as{' '}
+        <Term def="Attackers trying leaked username/password pairs against many accounts at high speed.">credential stuffing</Term>.
+      </p>
+      <TLDR items={[
+        'Token bucket is the default: it allows short bursts and enforces an average rate.',
+        'Across many gateway nodes, the check and the update must be one atomic step, usually a Redis Lua script.',
+        'Always return 429 with Retry-After so well-behaved clients back off.',
+        'Decide up front whether a broken limiter lets traffic through (fail open) or blocks it (fail closed).',
+      ]} />
+      <p>
+        The algorithm is the easy part. The hard parts are <strong>where</strong> to enforce the limit,{' '}
+        <strong>shared state</strong> across many gateway nodes, and <strong>what to do</strong> when the limiter
         itself is slow or down.
       </p>
 
@@ -58,6 +68,12 @@ export default function RateLimitingChapter() {
       </Callout>
 
       <H2 id="algorithms">The five algorithms, raced live</H2>
+      <p>
+        All five algorithms see the same request stream below. Watch how they differ on bursts and at window
+        boundaries. The{' '}
+        <Term def="A bucket fills with tokens at a steady rate up to a cap; each request spends one token or is rejected.">token bucket</Term>{' '}
+        is the most common choice.
+      </p>
       <RateLimitRaceDemo />
       <CompareTable
         columns={['Memory / key', 'Allows bursts?', 'Accuracy', 'Notes']}
@@ -76,6 +92,7 @@ export default function RateLimitingChapter() {
       </Callout>
 
       <H2 id="placement">Where the limiter lives</H2>
+      <p>Most systems limit in layers: a coarse check at the edge, business rules at the gateway, and self-protection in each service.</p>
       <ArchitectureDiagram nodes={NODES} edges={EDGES} height={300}
         caption="Defense in depth: coarse limits at the edge, business limits at the gateway, self-protection in each service"
         flows={[
@@ -85,9 +102,12 @@ export default function RateLimitingChapter() {
 
       <H2 id="distributed">Distributed counters without races</H2>
       <p>
-        With 50 gateway replicas, a naive <code>GET</code> → compare → <code>SET</code> is a race: two nodes read
-        “4 of 5”, and both allow the request. The fix is to make check-and-update <strong>one atomic operation</strong> on
-        the counter store, usually a Lua script in Redis (or <code>INCR</code> + <code>EXPIRE</code> for a fixed window).
+        With 50 gateway replicas, a naive <code>GET</code> → compare → <code>SET</code> is a race. Two nodes both read
+        “4 of 5”, and both allow the request.
+      </p>
+      <p>
+        The fix is to make check-and-update <strong>one atomic operation</strong> on the counter store. That is usually
+        a Lua script in Redis, or <code>INCR</code> + <code>EXPIRE</code> for a fixed window.
       </p>
       <Tabs items={[
         { label: 'Token bucket (Lua)', content: <CodeBlock lang="text" title="token_bucket.lua — KEYS[1]=bucket, ARGV: capacity, refill_per_ms, now_ms" code={`
@@ -124,9 +144,12 @@ Content-Type: application/problem+json`} /> },
       ]} />
       <p>
         Use the server's clock, or Redis <code>TIME</code>, rather than each gateway's local clock. Shard counters by
-        limit key so one hot tenant lands on one shard. For extreme QPS, a <strong>local-then-sync</strong> hybrid works:
-        each node spends a small local allowance and reconciles with the central store every few hundred
-        milliseconds. That trades a bounded overshoot for a much lower latency and load cost.
+        limit key so one hot tenant lands on one shard.
+      </p>
+      <p>
+        For extreme QPS, a <strong>local-then-sync</strong> hybrid works. Each node spends a small local allowance and
+        reconciles with the central store every few hundred milliseconds. You accept a small, bounded overshoot in
+        exchange for much lower latency and load.
       </p>
       <Callout kind="tip">
         The <code>RateLimit</code> / <code>RateLimit-Policy</code> header fields come from an IETF HTTPAPI working-group
@@ -135,6 +158,7 @@ Content-Type: application/problem+json`} /> },
       </Callout>
 
       <H2 id="failure">When the limiter fails</H2>
+      <p>The limiter depends on a counter store. When that store is down, you need a decision made in advance.</p>
       <CompareTable
         columns={['Fail open', 'Fail closed']}
         rows={[
@@ -144,20 +168,22 @@ Content-Type: application/problem+json`} /> },
         ]}
       />
       <p>
-        A good middle ground is to fail over to <strong>local, per-node limits</strong> (the global limit divided by the
-        node count) with a short timeout on the counter-store call. You degrade to “approximately right” instead of
-        “wide open” or “fully down”.
+        A good middle ground: put a short timeout on the counter-store call, and fall back to{' '}
+        <strong>local, per-node limits</strong> (the global limit divided by the node count). You degrade to
+        “approximately right” instead of “wide open” or “fully down”.
       </p>
 
       <H2 id="fairness">Multi-tier limits and fairness</H2>
+      <p>Real APIs combine several limits, so no single customer or request type can crowd out the rest.</p>
       <ul>
         <li><strong>Stack rules</strong>: 20/s burst, 1,000/min sustained, 100K/day quota. A request must pass all of them. Evaluate them in one Lua call to avoid several round trips.</li>
         <li><strong>Per-tenant and global</strong>: a global concurrency cap protects the service, and per-tenant limits share the capacity fairly. A weighted fair queue lets paying tiers win under contention.</li>
         <li><strong>Cost-based limits</strong>: weight requests by cost (a search costs 10 units, a GET costs 1), as GitHub's GraphQL API does with point budgets.</li>
-        <li><strong>Adaptive limits</strong>: let the service lower limits automatically when its latency or queue depth rises, using TCP-style AIMD concurrency limits.</li>
+        <li><strong>Adaptive limits</strong>: let the service lower limits automatically when its latency or queue depth rises, using TCP-style <Term def="Additive increase, multiplicative decrease: raise the limit slowly while healthy, cut it sharply on trouble.">AIMD</Term> concurrency limits.</li>
       </ul>
 
       <H2 id="staff">Staff-level lens</H2>
+      <p>A limit affects three groups at once, and a good design serves all of them.</p>
       <Callout kind="staff">
         <p>Strong candidates ask what problem the limit solves, then design for three stakeholders at once:</p>
         <ul>

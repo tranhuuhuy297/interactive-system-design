@@ -1,6 +1,6 @@
 import {
   ApiSpec, ArchitectureDiagram, Callout, CodeBlock, CompareTable, EstimationTable, H2, InterviewQuestion,
-  KeyTakeaways, References, Requirements,
+  KeyTakeaways, References, Requirements, TLDR, Term,
 } from '../components/ui'
 import type { ArchEdge, ArchNode, Reference } from '../components/ui'
 import { UrlBase62EncoderDemo } from './demos/url-base62-encoder-demo'
@@ -22,11 +22,11 @@ const NODES: ArchNode[] = [
     detail: 'Validates the URL, checks an optional custom alias, takes the next ID from its locally leased range, and base62-encodes it.' },
   { id: 'read', label: 'Redirect API', sub: 'stateless', kind: 'service', x: 52, y: 40,
     detail: 'Hot path: look up the code in cache, fall back to the DB, return 301/302. Emit a click event asynchronously and never block the redirect on analytics.' },
-  { id: 'ids', label: 'ID range allocator', sub: 'ZK / etcd / DB row', kind: 'external', x: 75, y: 88,
+  { id: 'ids', label: 'ID range allocator', sub: 'ZK / etcd / DB row', kind: 'external', x: 70, y: 90,
     detail: 'Hands each writer a block of e.g. 10,000 IDs. Writers allocate locally with no coordination per request. A crash wastes at most one block, which is fine.' },
   { id: 'cache', label: 'Cache', sub: 'Redis, LRU', kind: 'cache', x: 75, y: 18,
     detail: 'Reads are heavily skewed toward recent and popular links, so a modest cache absorbs most traffic. Use a TTL plus LRU eviction.' },
-  { id: 'db', label: 'URL store', sub: 'KV / wide-column', kind: 'db', x: 90, y: 78,
+  { id: 'db', label: 'URL store', sub: 'KV / wide-column', kind: 'db', x: 90, y: 70,
     detail: 'Access is by key only, so a KV or wide-column store (DynamoDB, Cassandra) partitioned by code scales linearly. A relational DB also works at moderate scale.' },
   { id: 'q', label: 'Click stream', sub: 'Kafka', kind: 'queue', x: 75, y: 50,
     detail: 'Click events feed an analytics pipeline off the critical path.' },
@@ -42,14 +42,25 @@ const EDGES: ArchEdge[] = [
 export default function UrlShortenerChapter() {
   return (
     <>
+      <TLDR items={[
+        'Turn a long URL into a 7-character code, and redirect the code back to the URL.',
+        'Reads dominate writes, so the redirect path is a cache-first key lookup.',
+        'The hard part is generating unique codes across many servers without a single bottleneck.',
+        'Leasing ID ranges to each writer gives collision-free codes with almost no coordination.',
+        'Staff depth: abuse, hot keys, multi-region, and storage cost at 180 TB.',
+      ]} />
+
       <p>
-        The URL shortener is the “hello world” of system design, and that is exactly why it is dangerous. Everyone
-        knows the base62 trick, so <strong>interviewers grade you on what comes after</strong>: how you generate
-        IDs without a bottleneck, how you keep redirects fast under a 100:1 read skew, and what you trade away when
-        you choose 301 over 302.
+        The URL shortener is the “hello world” of system design. That is exactly why it is dangerous. Everyone
+        knows the base62 trick, so <strong>interviewers grade you on what comes after</strong>.
+      </p>
+      <p>
+        They want to hear how you generate IDs without a bottleneck, how you keep redirects fast when reads outnumber
+        writes 100 to 1, and what you give up when you choose a 301 over a 302 redirect.
       </p>
 
       <H2 id="requirements">1 · Clarify requirements</H2>
+      <p>First, pin down what the service must do and how big it must get. These answers drive every later choice.</p>
       <Requirements
         functional={['Given a long URL, return a short one', 'Redirect short → long', 'Optional custom alias', 'Optional expiry']}
         nonFunctional={['100M new URLs/day', 'Redirect p99 < 50 ms', '99.99% availability on redirects', 'Codes should not be guessable in sequence (nice-to-have)']}
@@ -61,6 +72,7 @@ export default function UrlShortenerChapter() {
       </Callout>
 
       <H2 id="estimation">2 · Back-of-the-envelope</H2>
+      <p>Next, size the system. We need rough traffic and storage numbers, and we need to know how long the code must be.</p>
       <EstimationTable
         assumptions={['100M writes/day, reads 10× writes', 'Retain for 10 years', '~500 bytes per record (URL + metadata)']}
         rows={[
@@ -72,15 +84,24 @@ export default function UrlShortenerChapter() {
           { label: 'Code space', math: '62⁷', result: '≈ 3.5T ≫ 365B' },
         ]}
       />
-      <p>Seven base62 characters are enough, with about 10× headroom. The storage is large but simple, so this is a <strong>partitioned KV</strong> problem, not a relational one.</p>
+      <p>
+        Seven <Term def="An alphabet of 62 characters: digits 0–9, lowercase a–z and uppercase A–Z. Each character encodes about 6 bits.">base62</Term> characters
+        are enough, with about 10× headroom. The storage is large but simple, so this is a <strong>partitioned KV</strong> problem,
+        not a relational one.
+      </p>
 
       <H2 id="api">3 · API</H2>
+      <p>The public contract is tiny: one call creates a short link, and one call follows it.</p>
       <ApiSpec endpoints={[
         { method: 'POST', path: '/v1/urls', desc: 'Create a short URL. Idempotent per (user, long URL) if you want de-duplication.', body: '{ longUrl, alias?, expiresAt? }', returns: '201 { code, shortUrl }' },
         { method: 'GET', path: '/{code}', desc: 'Redirect to the long URL.', returns: '301 | 302 Location: longUrl · 404 · 410 if expired' },
       ]} />
 
       <H2 id="high-level">4 · High-level design</H2>
+      <p>
+        Now sketch the boxes. The key move is to split the busy read path (redirects) from the quiet write path
+        (shortening), so each can scale and fail on its own. Pick a flow below to trace a request.
+      </p>
       <ArchitectureDiagram nodes={NODES} edges={EDGES} height={400}
         caption="Reads and writes are split into separate services so each scales on its own"
         flows={[
@@ -90,7 +111,12 @@ export default function UrlShortenerChapter() {
         ]} />
 
       <H2 id="id-generation">5 · Deep dive: generating the code</H2>
+      <p>
+        Every short link needs a unique code. The question is how many servers can hand out codes at once without
+        colliding or waiting on each other. Try the two main strategies below.
+      </p>
       <UrlBase62EncoderDemo />
+      <p>The table compares all three common strategies side by side.</p>
       <CompareTable
         columns={['Counter + base62', 'Hash + truncate', 'Random + check']}
         rows={[
@@ -101,6 +127,11 @@ export default function UrlShortenerChapter() {
           { label: 'Write cost', cells: ['1 write', '1 read + 1 write, more on collision', '1 read + 1 write'] },
         ]}
       />
+      <p>
+        The counter wins if we remove its bottleneck. Instead of asking a central store for every ID, each writer
+        leases a block of IDs and hands them out locally. A strongly consistent store such as <Term def="A distributed key-value store that uses the Raft consensus algorithm, often used for coordination data like locks and counters.">etcd</Term> or
+        a single database row tracks which blocks are taken.
+      </p>
       <CodeBlock lang="ts" title="range-leased counter (per writer process)" code={`
 class IdRange {
   private next = 0n
@@ -123,6 +154,10 @@ class IdRange {
       </Callout>
 
       <H2 id="redirects">6 · Deep dive: 301 vs 302 and the read path</H2>
+      <p>
+        The redirect status code decides whether browsers come back to you on repeat clicks. That choice trades server
+        load against analytics.
+      </p>
       <CompareTable
         columns={['301 Moved Permanently', '302 Found / 307']}
         rows={[
@@ -133,13 +168,21 @@ class IdRange {
         ]}
       />
       <p>
-        If clicks are the product, every click must reach you: use <strong>302/307</strong>, or a 301 with a short
-        <code>Cache-Control: max-age</code> so browsers only cache it briefly. Keep the redirect path
-        lean: cache → DB fallback → respond, with the click event emitted <em>asynchronously</em> to a stream. Add a
-        <strong> negative cache</strong> for unknown codes so scanners can't hammer the DB.
+        If clicks are the product, every click must reach you. Use <strong>302/307</strong>, or a 301 with a short{' '}
+        <code>Cache-Control: max-age</code> so browsers only cache it briefly.
+      </p>
+      <p>
+        Keep the redirect path lean: cache, then database fallback, then respond. Emit the click event{' '}
+        <em>asynchronously</em> to a stream so analytics never slows a redirect. Add a{' '}
+        <strong><Term def="Caching the fact that a key does not exist, so repeated lookups for missing keys skip the database.">negative cache</Term></strong>{' '}
+        for unknown codes so scanners can't hammer the database.
       </p>
 
       <H2 id="data-model">7 · Data model & partitioning</H2>
+      <p>
+        Every lookup is by code, so the code is the <Term def="The field a distributed database hashes to decide which node stores a record.">partition key</Term>.
+        That spreads records evenly and makes each lookup a single-node read.
+      </p>
       <CodeBlock lang="ts" title="record (KV / wide-column)" code={`
 // partition key = code  → uniform spread, O(1) lookup
 type UrlRecord = {
@@ -151,6 +194,7 @@ type UrlRecord = {
 }`} />
 
       <H2 id="staff">8 · Going beyond: staff-level extensions</H2>
+      <p>The working design is done. What separates levels is spotting what will hurt once it runs in production.</p>
       <Callout kind="staff">
         <p>Seniors finish the diagram. Staff candidates raise the problems that will actually hurt in production:</p>
         <ul>
@@ -167,7 +211,8 @@ type UrlRecord = {
         senior={<p>Use a distributed ID generator such as Snowflake, or a counter service, then base62-encode the result. Alternatively hash the URL and handle collisions by retrying with a salt.</p>}
         staff={<>
           <p>I'd lease ID ranges: a strongly consistent store such as etcd or a single DB row hands out blocks of about 10K IDs, and each writer allocates locally. Coordination drops to one call per 10K writes, a crash wastes at most one block, and codes never collide.</p>
-          <p>If sequential codes are a concern for enumeration or leaking volume, I'd pass the counter through a keyed bijective permutation (e.g. a Feistel network over a 41-bit space, since 2⁴¹ ≈ 2.2T values all fit in 7 base62 characters) before encoding. It stays collision-free but no longer looks sequential. I'd also note that Snowflake's 64-bit IDs encode to 11 characters, which is too long for this product.</p>
+          <p>If sequential codes are a concern for enumeration or leaking volume, I'd pass the counter through a keyed bijective permutation (e.g. a Feistel network over a 41-bit space, since 2⁴¹ ≈ 2.2T values all fit in 7 base62 characters) before encoding. It stays collision-free but no longer looks sequential.</p>
+          <p>I'd also note that Snowflake's 64-bit IDs encode to 11 characters, which is too long for this product.</p>
         </>}
         followUps={['What happens if the allocator is down?', 'How would you support custom aliases safely?', 'How do you expire links at 365B-record scale?']}
       />

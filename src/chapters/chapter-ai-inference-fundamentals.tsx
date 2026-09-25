@@ -1,5 +1,5 @@
 import {
-  Callout, CodeBlock, CompareTable, FlowDiagram, H2, InterviewQuestion, KeyTakeaways, References,
+  Callout, CodeBlock, CompareTable, FlowDiagram, H2, InterviewQuestion, KeyTakeaways, References, Term, TLDR,
 } from '../components/ui'
 import type { Reference } from '../components/ui'
 import { AiInferRooflineDemo } from './demos/ai-infer-roofline-demo'
@@ -17,15 +17,34 @@ const REFS: Reference[] = [
 export default function AiInferenceFundamentalsChapter() {
   return (
     <>
+      <TLDR items={[
+        'Every request has two phases: prefill reads the prompt, decode writes the answer one token at a time.',
+        'Prefill is limited by GPU compute. Decode is limited by memory bandwidth.',
+        'Per-user speed ≈ memory bandwidth ÷ bytes read per step (weights + KV cache).',
+        'Batching raises total throughput cheaply, until a knee where every user gets slower.',
+        'Set targets on time-to-first-token and time-per-token, then maximize throughput within them.',
+      ]} />
       <p>
-        Every LLM request runs in two very different phases, and almost every serving decision follows from that split.
-        {' '}<strong>Prefill</strong> reads the whole prompt in one parallel pass. <strong>Decode</strong> then produces one
-        token at a time, and each step has to stream the model’s weights and the conversation’s KV cache from GPU memory.
-        If you know which phase is the bottleneck and why, you can reason about latency, batching, cost, and hardware
+        Every LLM request runs in two very different phases. Almost every serving decision follows from that split.
+      </p>
+      <p>
+        <strong><Term def="The first pass over the prompt. All prompt tokens are processed in parallel and their attention state is stored.">Prefill</Term></strong>{' '}
+        reads the whole prompt in one parallel pass.{' '}
+        <strong><Term def="The generation loop. Each step produces one new token per sequence, reusing stored state from earlier tokens.">Decode</Term></strong>{' '}
+        then produces one token at a time. Each decode step streams the model’s weights and the conversation’s{' '}
+        <Term def="Key/value cache: the attention keys and values for every token so far, kept in GPU memory so they are not recomputed each step.">KV cache</Term>{' '}
+        from GPU memory.
+      </p>
+      <p>
+        Know which phase is the bottleneck, and why. Then you can reason about latency, batching, cost, and hardware
         without memorizing any benchmark.
       </p>
 
       <H2 id="two-phases">Two phases, two bottlenecks</H2>
+      <p>
+        The two phases stress different parts of the GPU, so they need different fixes. Think of the KV cache as
+        notes the model keeps so it never re-reads the whole conversation.
+      </p>
       <FlowDiagram steps={[
         { label: 'Tokenize', sub: 'text → token ids' },
         { label: 'Prefill', sub: 'all prompt tokens in parallel · compute-bound' },
@@ -45,19 +64,26 @@ export default function AiInferenceFundamentalsChapter() {
       />
 
       <H2 id="metrics">The metrics that matter</H2>
+      <p>You can’t tune what you don’t measure. These five numbers describe how an LLM endpoint feels and what it costs.</p>
       <ul>
         <li><strong>TTFT</strong> (time to first token): queueing + prefill + first decode step. It dominates how fast chat <em>feels</em>.</li>
-        <li><strong>TPOT</strong> (time per output token), also measured as <strong>ITL</strong> (inter-token latency, the gap between streamed tokens). It sets reading speed. Humans read roughly 4–8 tokens/s, so beyond some point faster decode stops improving perceived UX.</li>
+        <li><strong>TPOT</strong> (time per output token), also measured as <strong>ITL</strong> (inter-token latency, the gap between streamed tokens). It sets reading speed. Humans read roughly 4–8 tokens/s. Past that point, faster decode stops improving how the product feels.</li>
         <li><strong>End-to-end latency</strong> ≈ TTFT + TPOT × (output tokens − 1). Long answers are decode-dominated.</li>
         <li><strong>Throughput</strong>: total tokens/s across all users. This is what drives cost per token.</li>
-        <li><strong>Goodput</strong>: requests/s that <em>meet</em> both the TTFT and TPOT SLOs. Raw throughput that blows the SLO is worthless for interactive products.</li>
+        <li><strong>Goodput</strong>: requests/s that <em>meet</em> both the TTFT and TPOT{' '}<Term def="Service level objective: a target such as “95% of requests get a first token within 1 second”.">SLOs</Term>. Throughput that misses the SLO is worthless for interactive products.</li>
       </ul>
 
       <H2 id="memory-bound">Why decode is memory-bound</H2>
       <p>
-        In one decode step, each weight is read once and used for about one multiply-add <em>per sequence in the batch</em>.
-        At batch 1 with 16-bit weights, that is ~2 FLOPs per 2 bytes read. An H100 can do roughly 300 FLOPs in the time
-        it reads one byte, so the tensor cores sit idle waiting on memory. That gives a simple lower bound:
+        This is the single most useful fact about LLM serving. In one decode step, each weight is read once. It is used
+        for about one multiply-add <em>per sequence in the batch</em>.
+      </p>
+      <p>
+        At batch 1 with 16-bit weights, that is ~2{' '}<Term def="Floating-point operations: multiplies and adds.">FLOPs</Term>{' '}
+        per 2 bytes read. An H100 can do roughly 300 FLOPs in the time it reads one byte. So the{' '}
+        <Term def="The GPU units that do matrix multiplication; most of a GPU’s compute lives here.">tensor cores</Term>{' '}
+        sit idle, waiting on{' '}<Term def="High-bandwidth memory: the GPU’s main memory, where weights and the KV cache live.">HBM</Term>.
+        That gives a simple lower bound:
       </p>
       <CodeBlock lang="ts" title="decode step: back-of-the-envelope" code={`
 // bytes streamed per decode step
@@ -79,17 +105,21 @@ aggregateTokensPerSec ≈ batch / stepTime
 
       <H2 id="roofline">The roofline, live</H2>
       <p>
-        The roofline model plots attainable performance against <strong>arithmetic intensity</strong> (FLOPs per byte
-        moved). Left of the ridge point you are limited by bandwidth; right of it, by compute. Grow the batch and watch the
-        point slide right. Then grow the context and watch the KV cache drag it back left.
+        The roofline model plots attainable performance against{' '}
+        <strong><Term def="How much math you do per byte moved from memory. Low intensity means memory is the bottleneck.">arithmetic intensity</Term></strong>{' '}
+        (FLOPs per byte moved). Left of the ridge point, bandwidth limits you. Right of it, compute does.
+      </p>
+      <p>
+        Grow the batch and watch the point slide right. Then grow the context and watch the KV cache drag it back left.
       </p>
       <AiInferRooflineDemo />
 
       <H2 id="batching">Batching buys throughput with latency</H2>
       <p>
-        Batching reuses each weight read across many sequences, so aggregate throughput climbs almost for free at first.
-        Each step still gets slower, though, and it also has to read every sequence’s KV cache. With the demo’s
-        assumptions (8B, BF16, one H100, 4K context), the bound moves like this:
+        Batching reuses each weight read across many sequences. Aggregate throughput climbs almost for free at first.
+        But each step gets slower, because it must also read every sequence’s KV cache. With the demo’s assumptions
+        (8B,{' '}<Term def="A 16-bit number format common for model weights: 2 bytes per parameter.">BF16</Term>, one H100, 4K context),
+        the bound moves like this:
       </p>
       <CompareTable
         columns={['Step time', 'Per-user tok/s', 'Aggregate tok/s']}
@@ -102,13 +132,17 @@ aggregateTokensPerSec ≈ batch / stepTime
         ]}
       />
       <p>
-        Two lessons follow. First, there is a <strong>knee</strong>: past it, extra batch adds little throughput but
-        keeps hurting every user’s TPOT. Second, at long contexts the KV cache, not the weights, dominates bytes per step.
-        That is why KV-cache techniques (<a href="#/ai-kv-cache">next chapter</a>) matter as much as weight tricks. How
-        batches are formed each step is covered in <a href="#/ai-batching">Batching &amp; Speculative Decoding</a>.
+        Two lessons follow. First, there is a <strong>knee</strong>. Past it, extra batch adds little throughput but
+        keeps hurting every user’s TPOT.
+      </p>
+      <p>
+        Second, at long contexts the KV cache dominates bytes per step, not the weights. That is why KV-cache
+        techniques (<a href="#/ai-kv-cache">next chapter</a>) matter as much as weight tricks. How batches are formed
+        each step is covered in <a href="#/ai-batching">Batching &amp; Speculative Decoding</a>.
       </p>
 
       <H2 id="slos">Designing SLOs for LLM endpoints</H2>
+      <p>Different traffic needs different targets. Chat cares about the first token; offline jobs care about cost.</p>
       <CompareTable
         columns={['Interactive chat', 'Agent / tool loop', 'Offline batch']}
         rows={[
@@ -119,8 +153,8 @@ aggregateTokensPerSec ≈ batch / stepTime
         ]}
       />
       <p>
-        Separate SLO classes let one fleet serve both kinds of traffic: interactive requests get priority and tight
-        batch caps, while batch jobs soak up leftover capacity. This is the same idea as the priority tiers in the{' '}
+        Separate SLO classes let one fleet serve both kinds of traffic. Interactive requests get priority and tight
+        batch caps. Batch jobs soak up leftover capacity. This is the same idea as the priority tiers in the{' '}
         <a href="#/ep-chatgpt">ChatGPT episode</a> and the platform view in the <a href="#/llm-serving">LLM inference platform</a> case study.
       </p>
 

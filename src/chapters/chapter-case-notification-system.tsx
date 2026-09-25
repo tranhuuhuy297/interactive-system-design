@@ -1,6 +1,6 @@
 import {
   ApiSpec, ArchitectureDiagram, Callout, CodeBlock, CompareTable, EstimationTable, H2, InterviewQuestion,
-  KeyTakeaways, References, Requirements,
+  KeyTakeaways, References, Requirements, TLDR, Term,
 } from '../components/ui'
 import type { ArchEdge, ArchNode, Reference } from '../components/ui'
 import { NotifPipelineSimulatorDemo } from './demos/notif-pipeline-simulator-demo'
@@ -16,9 +16,9 @@ const REFS: Reference[] = [
 ]
 
 const NODES: ArchNode[] = [
-  { id: 'svc', label: 'Product services', sub: 'orders, auth, social', kind: 'client', x: 7, y: 30,
+  { id: 'svc', label: 'Product services', sub: 'orders, auth, social', kind: 'client', x: 10, y: 30,
     detail: 'Producers publish intents ("order shipped for user 42") and never call providers directly. The notification platform owns channels, preferences, and retries.' },
-  { id: 'camp', label: 'Campaign scheduler', sub: 'bulk / cron', kind: 'worker', x: 7, y: 75,
+  { id: 'camp', label: 'Campaign scheduler', sub: 'bulk / cron', kind: 'worker', x: 10, y: 75,
     detail: 'Expands an audience segment into per-user requests in paged batches, throttled so it can\'t swamp transactional traffic.' },
   { id: 'api', label: 'Notification API', sub: 'validate · dedupe', kind: 'service', x: 26, y: 52,
     detail: 'Validates the payload, rejects repeated idempotency keys (Redis SETNX with TTL), assigns a notificationId, and writes a PENDING row before enqueueing.' },
@@ -26,9 +26,9 @@ const NODES: ArchNode[] = [
     detail: 'Per-user channel opt-ins, quiet hours, and frequency caps, cached aggressively. It\'s read on every notification and changes rarely.' },
   { id: 'tpl', label: 'Templates', sub: 'i18n rendering', kind: 'service', x: 44, y: 86,
     detail: 'Renders a template ID + params into per-channel, per-locale content. Keep this out of producers so copy changes don\'t need deploys.' },
-  { id: 'q', label: 'Channel queues', sub: 'Kafka topic per channel × priority', kind: 'queue', x: 60, y: 52,
+  { id: 'q', label: 'Channel queues', sub: 'Kafka topic per channel × priority', kind: 'queue', x: 58, y: 52,
     detail: 'Separate topics for push/sms/email, each with high and low priority. An OTP never waits behind a 20M-email campaign.' },
-  { id: 'w', label: 'Channel workers', sub: 'retry w/ backoff', kind: 'worker', x: 76, y: 52,
+  { id: 'w', label: 'Channel workers', sub: 'retry w/ backoff', kind: 'worker', x: 77, y: 52,
     detail: 'Call the provider, record the outcome, and retry transient failures with exponential backoff and jitter. Permanent failures (invalid token) are not retried.' },
   { id: 'prov', label: 'Providers', sub: 'APNs · FCM · SMS · email', kind: 'external', x: 93, y: 30,
     detail: 'External and rate-limited, and they fail in their own ways. Keep a secondary provider for SMS/email and route on health.' },
@@ -47,14 +47,26 @@ const EDGES: ArchEdge[] = [
 export default function NotificationSystemChapter() {
   return (
     <>
+      <TLDR items={[
+        'Send push, SMS and email reliably, triggered by events and by big marketing campaigns.',
+        'Separate queues per channel and priority, so a one-time code never waits behind a campaign.',
+        'Exactly-once delivery through an external provider is impossible; aim for at-least-once plus deduplication.',
+        'An idempotency key at ingress stops duplicate sends, which matters because SMS costs real money.',
+        'Frequency caps, quiet hours and digests protect users from fatigue.',
+      ]} />
+
       <p>
         A notification system is a <strong>reliability and fairness</strong> problem dressed up as a messaging
-        problem. Sending one push is trivial. The hard parts are guaranteeing that a password-reset code arrives in
-        seconds while a 20-million-recipient campaign is draining, never sending the same “your order shipped”
-        twice, and never messaging someone who opted out.
+        problem. Sending one push is trivial.
+      </p>
+      <p>
+        The hard parts are elsewhere. A password-reset code must arrive in seconds while a 20-million-recipient
+        campaign is draining. The same “your order shipped” must never go out twice. And nobody who opted out may
+        receive a message.
       </p>
 
       <H2 id="requirements">1 · Clarify requirements</H2>
+      <p>List the channels and triggers, then separate urgent messages from bulk ones.</p>
       <Requirements
         functional={['Push (iOS/Android), SMS, email', 'Triggered by events and by scheduled campaigns', 'Per-user preferences, opt-out, quiet hours', 'Templates with localization', 'Delivery status tracking']}
         nonFunctional={['~50M push, 2M SMS, 20M email per day', 'Transactional: delivered within seconds', 'No user-visible duplicates', 'At-least-once; nothing silently lost']}
@@ -67,6 +79,7 @@ export default function NotificationSystemChapter() {
       </Callout>
 
       <H2 id="estimation">2 · Back-of-the-envelope</H2>
+      <p>Estimate the steady load, the campaign bursts, and the cost of SMS.</p>
       <EstimationTable
         assumptions={['Daily volumes above; a campaign may target 10M users in a 10-minute window', 'SMS priced at roughly $0.005–0.01 per message (varies by country and provider)']}
         rows={[
@@ -78,12 +91,16 @@ export default function NotificationSystemChapter() {
         ]}
       />
       <p>
-        The average load is small. <strong>Bursts</strong> and <strong>money</strong> dominate: a
-        duplicated SMS campaign is a five-figure mistake. That's why dedup and rate limiting are first-class
-        components rather than afterthoughts.
+        The average load is small. <strong>Bursts</strong> and <strong>money</strong> dominate: a duplicated SMS
+        campaign is a five-figure mistake. That is why deduplication and rate limiting are first-class components,
+        not afterthoughts.
       </p>
 
       <H2 id="api">3 · API</H2>
+      <p>
+        Producers ask for a notification; the platform decides how to deliver it. Every request carries an{' '}
+        <Term def="A unique key the caller sends with a request, so the server can recognize and ignore retries of the same request.">idempotency key</Term>.
+      </p>
       <ApiSpec endpoints={[
         { method: 'POST', path: '/v1/notifications', desc: 'Request a notification. The idempotency key is required; the platform picks channels from preferences unless overridden.', body: '{ userId, templateId, params, priority, idempotencyKey, channels? }', returns: '202 { notificationId }' },
         { method: 'PUT', path: '/v1/users/{id}/preferences', desc: 'Channel opt-ins, categories, quiet hours.', body: '{ channels, categories, quietHours, tz }', returns: '204' },
@@ -92,6 +109,13 @@ export default function NotificationSystemChapter() {
       ]} />
 
       <H2 id="high-level">4 · High-level design</H2>
+      <p>
+        Requests pass deduplication and preference checks, then land on a queue per channel and priority. Workers
+        drain each queue and call the external providers such as{' '}
+        <Term def="Apple Push Notification service and Firebase Cloud Messaging: the gateways Apple and Google run for push to their devices.">APNs and FCM</Term>.
+        Failures that exhaust retries go to a{' '}
+        <Term def="Dead-letter queue: where messages go after repeated failures, so they can be inspected and replayed.">DLQ</Term>.
+      </p>
       <ArchitectureDiagram nodes={NODES} edges={EDGES} height={420}
         caption="Producers express intent; the platform owns delivery"
         flows={[
@@ -104,6 +128,10 @@ export default function NotificationSystemChapter() {
         ]} />
 
       <H2 id="reliability">5 · Deep dive: reliability without duplicates</H2>
+      <p>
+        The first deep dive is correctness: never lose a notification, and never send one twice. Play with failures
+        and replays in the simulator.
+      </p>
       <NotifPipelineSimulatorDemo />
       <p>
         True exactly-once delivery across an external provider is impossible. If APNs times out, you can't know
@@ -130,6 +158,7 @@ async function deliver(msg: QueuedNotification) {
 }`} />
 
       <H2 id="isolation">6 · Deep dive: priority, isolation, and user fatigue</H2>
+      <p>The second deep dive is fairness: how queue layout keeps urgent messages fast during bursts and outages.</p>
       <CompareTable
         columns={['One shared queue', 'Queue per channel', 'Queue per channel × priority']}
         rows={[
@@ -140,12 +169,16 @@ async function deliver(msg: QueuedNotification) {
         ]}
       />
       <p>
-        Fatigue controls protect users <em>and</em> the business, since over-notifying drives uninstalls:
-        per-category frequency caps, quiet hours in the user's time zone, and <strong>digesting</strong> (collapse
-        “5 people liked your post” into one notification over a short window).
+        Fatigue controls protect users <em>and</em> the business, because over-notifying drives uninstalls. Use
+        per-category frequency caps and quiet hours in the user's time zone.
+      </p>
+      <p>
+        Also use <strong>digesting</strong>: collapse “5 people liked your post” into one notification over a short
+        window.
       </p>
 
       <H2 id="data-model">7 · Data model</H2>
+      <p>Three tables carry the state: a log of every notification and its attempts, device push tokens, and user preferences.</p>
       <CodeBlock lang="ts" title="core tables" code={`
 type NotificationLog = {
   notificationId: string       // PK
@@ -162,6 +195,7 @@ type DeviceToken = { userId: string; deviceId: string; platform: 'ios' | 'androi
 type Preferences = { userId: string; channels: Record<string, boolean>; categories: Record<string, boolean>; quietHours?: [string, string]; tz: string }`} />
 
       <H2 id="staff">8 · Going beyond: staff-level extensions</H2>
+      <p>The platform works. Staff candidates then cover provider failover, compliance, cost guardrails and observability.</p>
       <Callout kind="staff">
         <ul>
           <li><strong>Multi-provider failover</strong> for SMS and email: route on health and cost per country, with circuit breakers per provider.</li>

@@ -1,0 +1,40 @@
+import type { ArchEdge, ArchNode } from '../../components/ui'
+
+// One fixed position per component so the diagram stays stable while stages add and retire nodes.
+export const SN = {
+  merchant: { id: 'merchant', label: 'Merchant server', kind: 'client', x: 10, y: 50 },
+  platform: { id: 'merchant', label: 'Platform', sub: 'marketplace', kind: 'client', x: 10, y: 50 },
+  sellers: { id: 'sellers', label: 'Connected sellers', kind: 'client', x: 10, y: 80 },
+  newint: { id: 'newint', label: 'New integration', sub: 'latest version', kind: 'client', x: 10, y: 80 },
+  browser: { id: 'browser', label: 'Shopper browser', sub: 'Stripe.js', kind: 'client', x: 10, y: 20 },
+  api: { id: 'api', label: 'Payments API', sub: 'stateless', kind: 'service', x: 30, y: 50 },
+  apiIdem: { id: 'api', label: 'Payments API', sub: 'idempotent', kind: 'service', x: 30, y: 50 },
+  apiPeak: { id: 'api', label: 'Payments API', sub: 'autoscaled + shedding', kind: 'service', x: 30, y: 50 },
+  idem: { id: 'idem', label: 'Idempotency store', sub: 'key → response', kind: 'cache', x: 30, y: 20 },
+  vault: { id: 'vault', label: 'Token vault', sub: 'PCI zone', kind: 'storage', x: 30, y: 20 },
+  compat: { id: 'compat', label: 'Version modules', sub: 'old ⇄ current shape', kind: 'service', x: 30, y: 20 },
+  hooks: { id: 'hooks', label: 'Webhook sender', sub: 'signed, retried', kind: 'worker', x: 30, y: 86 },
+  db: { id: 'db', label: 'Payments DB', sub: 'state machine', kind: 'db', x: 50, y: 20 },
+  dbIntent: { id: 'db', label: 'PaymentIntents', sub: 'state machine', kind: 'db', x: 50, y: 20 },
+  dbSharded: { id: 'db', label: 'Payments DB', sub: 'sharded', kind: 'db', x: 50, y: 20 },
+  risk: { id: 'risk', label: 'Risk scoring', sub: 'ms budget', kind: 'service', x: 50, y: 50 },
+  events: { id: 'events', label: 'Event log', kind: 'queue', x: 50, y: 86 },
+  eventsHooks: { id: 'events', label: 'Events → webhooks', kind: 'queue', x: 50, y: 86 },
+  ledger: { id: 'ledger', label: 'Ledger', sub: 'double-entry', kind: 'db', x: 70, y: 20 },
+  dbnew: { id: 'dbnew', label: 'New data model', kind: 'db', x: 70, y: 20 },
+  router: { id: 'router', label: 'Processor router', kind: 'service', x: 70, y: 50 },
+  migrate: { id: 'migrate', label: 'Migration jobs', sub: 'backfill', kind: 'worker', x: 70, y: 50 },
+  payouts: { id: 'payouts', label: 'Payouts', kind: 'worker', x: 70, y: 86 },
+  payoutsBank: { id: 'payouts', label: 'Payouts', sub: 'to bank rails', kind: 'worker', x: 70, y: 86 },
+  recon: { id: 'recon', label: 'Reconciliation', sub: 'daily', kind: 'worker', x: 90, y: 20 },
+  psp: { id: 'psp', label: 'Card processor A', sub: 'card networks', kind: 'external', x: 90, y: 40 },
+  psp2: { id: 'psp2', label: 'Card processor B', kind: 'external', x: 90, y: 64 },
+  acs: { id: 'acs', label: 'Issuer 3DS', sub: 'customer’s bank', kind: 'external', x: 90, y: 64 },
+  bank: { id: 'bank', label: 'Bank rails', kind: 'external', x: 90, y: 86 },
+  grouter: { id: 'grouter', label: 'Account router', sub: 'global, thin', kind: 'lb', x: 35, y: 50 },
+  cellUS: { id: 'cellUS', label: 'Cell · US', sub: 'full stack', kind: 'service', x: 70, y: 20 },
+  cellEU: { id: 'cellEU', label: 'Cell · EU', sub: 'full stack', kind: 'service', x: 70, y: 50 },
+  cellIN: { id: 'cellIN', label: 'Cell · India', sub: 'data stays in-country', kind: 'service', x: 70, y: 80 },
+} satisfies Record<string, ArchNode>
+
+export const se = (from: string, to: string, extra: Partial<ArchEdge> = {}): ArchEdge => ({ from, to, ...extra })

@@ -28,3 +28,10 @@
   .spf-start__dot { display: block; width: 10px; height: 10px; border-radius: 3px; }
   @media (max-width: 720px) { .spf-start { grid-template-columns: 1fr; } }
 }
+
+@layer components {
+  .spf-timeline { list-style: none; padding: 0 !important; margin: 0; display: grid; gap: 1px; border: 1px solid var(--border); border-radius: var(--radius-lg); overflow: hidden; background: var(--border); }
+  .spf-timeline li { display: grid; grid-template-columns: 92px 1fr; gap: var(--space-3); margin: 0 !important; padding: var(--space-2) var(--space-4); background: var(--surface); font-size: var(--text-sm); color: var(--text-muted); }
+  .spf-timeline strong { font-family: var(--font-mono); font-size: var(--text-xs); color: var(--text); padding-top: 2px; }
+  @media (max-width: 480px) { .spf-timeline li { grid-template-columns: 1fr; gap: 2px; } }
+}

@@ -1,8 +1,9 @@
 import {
-  References,
   ArchitectureDiagram, Callout, CompareTable, EpisodePlayer, EstimationTable, H2, InterviewQuestion, KeyTakeaways,
+  References, TLDR, Term,
 } from '../components/ui'
-import type { ArchEdge, ArchNode, Reference } from '../components/ui'
+import type { ArchEdge, ArchNode } from '../components/ui'
+import { IG_REFS } from './demos/episode-instagram-sources'
 import { EpisodeInstagramIdDemo } from './demos/episode-instagram-id-demo'
 import { INSTAGRAM_STAGES } from './demos/episode-instagram-stages'
 
@@ -23,32 +24,45 @@ const POST_EDGES: ArchEdge[] = [
   { from: 'web', to: 'q', async: true }, { from: 'q', to: 'workers' }, { from: 'workers', to: 'feeds' }, { from: 'workers', to: 'media' },
 ]
 
-// Primary public sources behind the “In the real world” notes.
-const REFS: Reference[] = [
-  { title: "What Powers Instagram: Hundreds of Instances, Dozens of Technologies", source: "Instagram Engineering", year: 2011, url: "https://instagram-engineering.com/what-powers-instagram-hundreds-of-instances-dozens-of-technologies-adf2e22da2ad", kind: "blog" },
-  { title: "Sharding & IDs at Instagram", source: "Instagram Engineering", year: 2011, url: "https://instagram-engineering.com/sharding-ids-at-instagram-1cf5a71e5a5c", kind: "blog" },
-  { title: "See Posts You Care About First in Your Feed", source: "Instagram", year: 2016, url: "https://about.instagram.com/blog/announcements/see-posts-you-care-about-first-in-your-feed", kind: "blog" },
-  { title: "Introducing Instagram Stories", source: "Instagram", year: 2016, url: "https://about.instagram.com/blog/announcements/introducing-instagram-stories", kind: "blog" },
-  { title: "Introducing Instagram Reels", source: "Instagram", year: 2020, url: "https://about.instagram.com/blog/announcements/introducing-instagram-reels-announcement", kind: "blog" },
-  { title: "How Facebook encodes your videos", source: "Engineering at Meta", year: 2021, url: "https://engineering.fb.com/2021/04/05/video-engineering/how-facebook-encodes-your-videos/", kind: "blog" },
-  { title: "Instagram Migrates from Amazon’s Cloud into Facebook Data Centers", source: "Data Center Knowledge", year: 2014, url: "https://www.datacenterknowledge.com/cloud/instagram-migrates-from-amazon-s-cloud-into-facebook-data-centers", kind: "blog", note: "secondary source" },
-  { title: "How Instagram is scaling its infrastructure across the ocean", source: "Opensource.com (Instagram engineer)", year: 2018, url: "https://opensource.com/article/18/10/instagram-scaled-infrastructure", kind: "blog" },
+const TIMELINE = [
+  { year: '2010', what: 'Launch: Django + one PostgreSQL database' },
+  { year: '2011', what: 'Load balancer, S3 + CloudFront, Redis feeds, async workers, sharded Postgres' },
+  { year: '2012', what: 'Acquired by Facebook; Cassandra for write-heavy data' },
+  { year: '2013–14', what: 'Live migration from AWS into Facebook data centers' },
+  { year: '2015–16', what: 'Three data centers; ranked feed; Stories' },
+  { year: '2017', what: 'Python runtime tuning and full move to Python 3' },
+  { year: '2018', what: 'Data centers in Europe with regional partitions' },
+  { year: '2020–21', what: 'Reels and watch-time-driven encoding' },
 ]
 
 export default function InstagramEpisode() {
   return (
     <>
+      <TLDR items={[
+        'Instagram scaled far on boring tools: Django, PostgreSQL, Redis, and memcached.',
+        'Photo bytes go to object storage and a CDN; slow work goes to background workers.',
+        'Postgres is split into thousands of logical shards; each shard mints its own sortable IDs.',
+        'Feeds are precomputed lists, later ranked by a model.',
+        'Growth forced a live move into Facebook’s data centers, then multiple regions.',
+      ]} />
       <p>
-        Instagram’s core loop is simple: post a photo, see your friends’ photos. The engineering story is about
-        three growth walls hit in quick succession: <strong>media bytes</strong>, a <strong>database</strong> that
-        can’t stay on one machine, and a <strong>feed</strong> that must feel instant for hundreds of millions of
-        people. It is also a classic example of a small team getting very far with boring, well-understood tools.
+        Instagram’s core loop is simple: post a photo, see friends’ photos. The engineering story is three growth
+        walls in quick succession: <strong>media bytes</strong>, a <strong>database</strong> that outgrew one
+        machine, and a <strong>feed</strong> that must feel instant.
+      </p>
+      <p>
+        It is also a classic example of a small team going far with well-understood tools. Watch for{' '}
+        <Term def="Split data into many fixed buckets (logical shards) and map buckets to fewer servers, so growth moves buckets instead of re-keying rows.">logical sharding</Term>{' '}
+        and <Term def="Pushing a new post ID into each follower’s feed list at write time, so reading the feed is cheap.">fan-out on write</Term>.
       </p>
       <Callout kind="info" title="How to watch this episode">
-        Notice how many stages are solved by <em>moving work out of the request</em>: to a CDN, a queue, or a
-        precomputed list. Spotting that move is half of most system design interviews.
+        Notice how many stages <em>move work out of the request</em>: to a CDN, a queue, or a precomputed list.
+        Spotting that move is half of most system design interviews. Open “Go deeper” on any stage for details.
       </Callout>
-      <p className="muted"><em>This episode is an independent reconstruction from public sources. It is not affiliated with or endorsed by Instagram; all trademarks belong to their owners.</em></p>
+      <p className="muted"><em>This episode is an independent reconstruction from public sources. It is not affiliated with or endorsed by Instagram or Meta; all trademarks belong to their owners.</em></p>
+
+      <H2 id="timeline">Timeline at a glance</H2>
+      <CompareTable columns={['What changed']} rows={TIMELINE.map((t) => ({ label: t.year, cells: [t.what] }))} />
 
       <H2 id="the-build">The build, stage by stage</H2>
       <EpisodePlayer stages={INSTAGRAM_STAGES} height={400} />
@@ -65,8 +79,8 @@ export default function InstagramEpisode() {
         ]}
       />
       <p>
-        Metadata writes are small. <strong>Media volume</strong> and <strong>feed reads</strong> dominate, which is why
-        the answers are object storage + CDN and precomputed feeds, not a faster database.
+        Metadata writes are small. <strong>Media volume</strong> and <strong>feed reads</strong> dominate. So the
+        answers are object storage, a CDN, and precomputed feeds, not a faster database.
       </p>
 
       <H2 id="post-a-photo">What happens when you tap Share</H2>
@@ -80,10 +94,12 @@ export default function InstagramEpisode() {
 
       <H2 id="ids">Deep dive: IDs that encode time and location</H2>
       <p>
-        Once posts live on many databases, auto-increment IDs collide and a central ticket server becomes a
-        dependency on every write. Instagram’s published answer generates the ID <em>in the shard itself</em>:
-        milliseconds since a custom epoch, then the logical shard ID, then a per-shard sequence. IDs sort by time,
-        and the shard is readable from the ID with no lookup.
+        Once posts live on many databases, auto-increment IDs collide. A central ticket server would add a dependency
+        to every write.
+      </p>
+      <p>
+        Instagram’s published answer builds the ID <em>inside the shard</em>: milliseconds since a custom epoch, then
+        the logical shard ID, then a per-shard sequence. IDs sort by time, and the shard is readable from the ID.
       </p>
       <EpisodeInstagramIdDemo />
       <Callout kind="tip">
@@ -135,7 +151,7 @@ export default function InstagramEpisode() {
       />
 
       <H2 id="references">Sources</H2>
-      <References items={REFS} />
+      <References items={IG_REFS} />
 
       <KeyTakeaways items={[
         'Move bytes to object storage + CDN and heavy work to async queues early; it keeps the request path small.',
@@ -143,6 +159,7 @@ export default function InstagramEpisode() {
         'Generate IDs inside the shard: time | shard | sequence gives uniqueness, time order, and routing in one integer.',
         'Feeds are precomputed for the common case and pulled for huge accounts, then ranked.',
         'Ephemeral content belongs in memory with TTLs; let expiry delete for you.',
+        'Going multi-region means classifying data as global or local and giving users a home region for writes.',
       ]} />
     </>
   )
