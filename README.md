@@ -1,5 +1,7 @@
 # Blueprint — The System Design Handbook
 
+**Live site:** https://tranhuuhuy297.github.io/interactive-system-design/
+
 Interactive system design handbook for staff-engineer interview prep. It covers the topics of the classic
 system-design interview books with original content, adding live simulations, animated architecture
 diagrams, and senior-vs-staff model answers.
