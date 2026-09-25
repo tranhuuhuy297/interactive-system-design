@@ -1,0 +1,23 @@
+@layer components {
+  .acl__controls { display: flex; flex-wrap: wrap; gap: var(--space-3); align-items: flex-end; }
+  .acl__k { min-width: 180px; flex: 1; }
+  .acl__query { margin: var(--space-4) 0 var(--space-3); font-size: var(--text-sm); color: var(--text-muted); }
+  .acl__grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(220px, 1fr)); gap: var(--space-3); }
+  .acl__user { display: grid; grid-template-rows: auto 1fr auto; border: 1px solid var(--border); border-radius: var(--radius-lg); background: var(--surface); overflow: hidden; }
+  .acl__user header { display: flex; flex-direction: column; gap: 2px; padding: var(--space-3); border-bottom: 1px solid var(--border); }
+  .acl__user header strong { font-size: var(--text-sm); color: var(--text); font-weight: 600; }
+  .acl__groups { font-size: var(--text-xs); color: var(--text-subtle); font-family: var(--font-mono); }
+  .acl__list { list-style: none; margin: 0; padding: var(--space-2); display: grid; gap: 4px; align-content: start; }
+  .acl__list li { display: grid; grid-template-columns: 1fr auto; gap: 2px var(--space-2); align-items: baseline; padding: 6px 8px; border-radius: var(--radius-sm); border: 1px solid var(--border); background: var(--bg-elevated); font-size: var(--text-xs); }
+  .acl__title { color: var(--text); line-height: 1.35; }
+  .acl__score { color: var(--text-subtle); font-size: 11px; }
+  .acl__list em, .acl__list i { grid-column: 1 / -1; font-style: normal; font-size: 10.5px; font-weight: 700; text-transform: uppercase; letter-spacing: 0.06em; }
+  .acl__list em { color: var(--danger); }
+  .acl__list i { color: var(--text-subtle); }
+  .acl__list li.is-leak { border-color: var(--danger); background: color-mix(in oklch, var(--danger) 8%, var(--bg-elevated)); }
+  .acl__empty { color: var(--text-subtle); text-align: center; border-style: dashed !important; }
+  .acl__stats { display: flex; flex-wrap: wrap; gap: var(--space-3); padding: var(--space-2) var(--space-3); border-top: 1px solid var(--border); font-size: var(--text-xs); color: var(--text-muted); font-family: var(--font-mono); }
+  .acl__stats .is-bad { color: var(--danger); font-weight: 600; }
+  .acl__stats .is-warn { color: var(--warning); font-weight: 600; }
+  .acl__note { margin-top: var(--space-3); font-size: var(--text-sm); color: var(--text-muted); }
+}

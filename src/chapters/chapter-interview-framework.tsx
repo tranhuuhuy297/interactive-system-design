@@ -1,8 +1,17 @@
 import {
-  Callout, CompareTable, FlowDiagram, H2, InterviewQuestion, KeyTakeaways, Requirements, Tabs,
+  Callout, CompareTable, FlowDiagram, H2, InterviewQuestion, KeyTakeaways, References, Requirements, Tabs,
 } from '../components/ui'
+import type { Reference } from '../components/ui'
 import { FrameworkOpeningCompare } from './demos/framework-opening-compare'
 import { FrameworkTimelinePlanner } from './demos/framework-timeline-planner'
+
+const REFS: Reference[] = [
+  { title: "System Design Interview – An Insider’s Guide (Vol. 1)", source: "Alex Xu", year: 2020, kind: "book", note: "Popularized the four-phase interview structure used here; time budgets, checklists and staff extensions are our own" },
+  { title: "System Design Interview – An Insider’s Guide (Vol. 2)", source: "Alex Xu & Sahn Lam", year: 2022, kind: "book" },
+  { title: "Designing Data-Intensive Applications", source: "Martin Kleppmann (O’Reilly)", year: 2017, url: "https://dataintensive.net/", kind: "book" },
+  { title: "Site Reliability Engineering (book, free online)", source: "Google", year: 2016, url: "https://sre.google/sre-book/table-of-contents/", kind: "book", note: "Framing non-functional requirements as SLOs" },
+  { title: "AWS Well-Architected Framework: Reliability Pillar", source: "Amazon Web Services", url: "https://docs.aws.amazon.com/wellarchitected/latest/reliability-pillar/welcome.html", kind: "docs" },
+]
 
 export default function InterviewFrameworkChapter() {
   return (
@@ -14,11 +23,16 @@ export default function InterviewFrameworkChapter() {
         below keeps you from the two classic failures, which are drowning in detail too early and never going
         deep at all.
       </p>
+      <p>
+        The four-phase shape below is the one most candidates learn, popularized by Alex Xu’s <em>System Design
+        Interview</em> (see References). The time budgets, checklists, board layout and staff-level extensions are
+        this handbook’s own.
+      </p>
 
       <H2 id="four-steps">The four steps</H2>
       <FlowDiagram steps={[
-        { label: '1 · Clarify & scope', sub: '~5–8 min · requirements, scale' },
-        { label: '2 · High-level design', sub: '~10–15 min · API, data flow, buy-in' },
+        { label: '1 · Frame the problem', sub: '~5–8 min · requirements, scale' },
+        { label: '2 · Sketch the architecture', sub: '~10–15 min · API, data flow, check-in' },
         { label: '3 · Deep dive', sub: '~15–20 min · bottlenecks, trade-offs' },
         { label: '4 · Wrap-up', sub: '~3–5 min · summary, evolution' },
       ]} caption="Typical 45-minute budget. Real loops vary, so ask how long you have." />
@@ -29,7 +43,7 @@ export default function InterviewFrameworkChapter() {
       </p>
       <FrameworkTimelinePlanner />
 
-      <H2 id="clarify">Step 1 · Clarify and scope</H2>
+      <H2 id="clarify">Step 1 · Frame the problem</H2>
       <p>
         Your first job is to shrink an unbounded prompt into something you can design in half an hour. Split
         requirements into what the system <em>does</em> and how <em>well</em> it must do it:
@@ -46,13 +60,13 @@ export default function InterviewFrameworkChapter() {
       </Callout>
       <FrameworkOpeningCompare />
 
-      <H2 id="high-level">Step 2 · High-level design and buy-in</H2>
+      <H2 id="high-level">Step 2 · Sketch the architecture, then check alignment</H2>
       <ul>
         <li><strong>API first.</strong> Three to five endpoints or messages define the contract and the data you must store.</li>
         <li><strong>Draw the request path end to end</strong>: client → edge → service → storage. Keep it to 6–10 boxes.</li>
         <li><strong>Walk one write and one read</strong> through the diagram out loud. This catches missing components.</li>
         <li><strong>Choose data stores deliberately</strong> and say why: access pattern, consistency need, scale.</li>
-        <li><strong>Check in</strong>: “Does this shape look reasonable before I go deeper?” Buy-in keeps you from designing the wrong system.</li>
+        <li><strong>Check in</strong>: “Does this shape look reasonable before I go deeper?” Agreeing on the shape early keeps you from designing the wrong system.</li>
       </ul>
       <Tabs items={[
         { label: 'What goes on the board', content: (
@@ -136,10 +150,13 @@ export default function InterviewFrameworkChapter() {
         followUps={['How would you migrate the live data to the new model?']}
       />
 
+      <H2 id="references">References &amp; further reading</H2>
+      <References items={REFS} />
+
       <KeyTakeaways items={[
         'Four steps (clarify, high-level, deep dive, wrap-up), budgeted roughly 7 / 12 / 18 / 5 minutes.',
         'Anchor on numbers early. Assumptions stated as numbers turn opinions into engineering.',
-        'Get buy-in on the high-level design before going deep.',
+        'Confirm the overall shape with the interviewer before going deep.',
         'Depth means quantify, compare two or more options, decide, then cover failures.',
         'Staff signal: narrate trade-offs, failure modes, evolution, cost, and operability without being asked.',
       ]} />

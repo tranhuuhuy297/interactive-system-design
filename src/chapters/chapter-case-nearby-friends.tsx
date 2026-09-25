@@ -1,8 +1,8 @@
 import {
   ApiSpec, ArchitectureDiagram, Callout, CodeBlock, CompareTable, EstimationTable, H2, InterviewQuestion,
-  KeyTakeaways, Requirements,
+  KeyTakeaways, Requirements, References,
 } from '../components/ui'
-import type { ArchEdge, ArchNode } from '../components/ui'
+import type { ArchEdge, ArchNode, Reference } from '../components/ui'
 import { NearbyFriendsSimulationDemo } from './demos/nearby-friends-simulation-demo'
 
 const NODES: ArchNode[] = [
@@ -28,6 +28,15 @@ const EDGES: ArchEdge[] = [
   { from: 'client', to: 'lb' }, { from: 'lb', to: 'ws' }, { from: 'lb', to: 'api' },
   { from: 'ws', to: 'pubsub' }, { from: 'ws', to: 'locache' }, { from: 'ws', to: 'history', async: true },
   { from: 'ws', to: 'userdb' }, { from: 'api', to: 'userdb' },
+]
+
+const REFS: Reference[] = [
+  { title: 'Redis Pub/Sub', source: 'Redis documentation', url: 'https://redis.io/docs/latest/develop/interact/pubsub/', kind: 'docs', note: 'fire-and-forget delivery; cluster propagation' },
+  { title: 'SSUBSCRIBE (sharded Pub/Sub, Redis 7+)', source: 'Redis documentation', url: 'https://redis.io/docs/latest/commands/ssubscribe/', kind: 'docs' },
+  { title: 'RFC 6455: The WebSocket Protocol', source: 'IETF', year: 2011, url: 'https://www.rfc-editor.org/rfc/rfc6455', kind: 'rfc' },
+  { title: 'startMonitoringSignificantLocationChanges()', source: 'Apple Developer Documentation', url: 'https://developer.apple.com/documentation/corelocation/cllocationmanager/startmonitoringsignificantlocationchanges()', kind: 'docs', note: 'battery-friendly location updates' },
+  { title: 'GEOSEARCH command', source: 'Redis documentation', url: 'https://redis.io/docs/latest/commands/geosearch/', kind: 'docs', note: 'geo index alternative for nearby strangers' },
+  { title: 'System Design Interview – An Insider’s Guide, Volume 2', source: 'Alex Xu & Sahn Lam', year: 2022, kind: 'book', note: 'nearby friends prompt' },
 ]
 
 export default function NearbyFriendsChapter() {
@@ -179,6 +188,9 @@ type Friendship = { userId: string; friendId: string; sharing: boolean }
         </>}
         followUps={['How do you reshard without a thundering herd?', 'What metric would you autoscale on?']}
       />
+
+      <H2 id="references">References &amp; further reading</H2>
+      <References items={REFS} />
 
       <KeyTakeaways items={[
         'Moving points plus a friend-graph audience make this a fan-out problem, closer to chat than to proximity search.',

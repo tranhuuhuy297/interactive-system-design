@@ -36,7 +36,7 @@ export const STRIPE_STAGES: EpisodeStage[] = [
     problem: <p>Accepting cards online means months of bank paperwork and a pile of processor-specific integrations. Developers just want to charge a card with one HTTP call.</p>,
     decision: <p>A thin, well-designed REST API in front of a single processor. Store every payment as a row and return the processor’s answer synchronously.</p>,
     tradeoff: <p>Fast to ship, but every network hiccup becomes a money bug, and the single processor is a single point of failure.</p>,
-    realWorld: <p>Stripe’s early pitch was famously that you could start accepting payments with a handful of lines of code. The developer experience <em>was</em> the product.</p>,
+    realWorld: <p>Stripe’s early focus on a small, well-documented API for developers is widely cited as central to its adoption. The developer experience <em>was</em> the product.</p>,
   },
   {
     title: 'v1 · Idempotency + a state machine',

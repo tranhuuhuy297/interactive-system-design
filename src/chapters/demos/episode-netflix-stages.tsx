@@ -69,7 +69,7 @@ export const NETFLIX_STAGES: EpisodeStage[] = [
     problem: <p>A single relational database and a monolith deploy train can’t keep up with hundreds of engineers or a global audience. A database corruption incident shows how fragile the single-DB design is.</p>,
     decision: <p>Rebuild the control plane as stateless microservices behind an edge gateway, on elastic cloud capacity. High-volume writes such as viewing history go to <strong>Cassandra</strong>, and a memcached-based tier absorbs reads.</p>,
     tradeoff: <p>Operational complexity explodes: service discovery, partial failures, and fan-out latency. You now need resilience engineering as a discipline.</p>,
-    realWorld: <p>Netflix publicly described migrating to AWS starting after a 2008 database outage, finishing around 2016. Its open-source stack from that era includes Zuul (gateway), Eureka (discovery), Hystrix (circuit breakers, now in maintenance), and EVCache.</p>,
+    realWorld: <p>Netflix has described starting its move to AWS after a major database corruption in August 2008 and finishing in January 2016. Its open-source stack from that era includes Zuul (gateway), Eureka (discovery), Hystrix (circuit breakers, now in maintenance), and EVCache.</p>,
   },
   {
     title: 'v4 · Build your own CDN',
@@ -82,7 +82,7 @@ export const NETFLIX_STAGES: EpisodeStage[] = [
     problem: <p>At this volume, commercial CDN bills are enormous and last-mile congestion ruins quality. Streaming traffic has a trait generic CDNs ignore: the catalog is <em>known in advance</em>.</p>,
     decision: <p>Put your own caching servers <strong>inside ISP networks</strong> and at exchange points. Pre-position popular files during off-peak hours using predicted demand. A steering service tells each device which appliances to use.</p>,
     tradeoff: <p>You become a hardware and logistics company: thousands of boxes, ISP partnerships, fill scheduling. That only pays off at massive scale.</p>,
-    realWorld: <p>This is Netflix <strong>Open Connect</strong>, announced in 2012. Its appliances are offered to ISPs, and content is filled proactively during low-traffic windows.</p>,
+    realWorld: <p>This is Netflix <strong>Open Connect</strong>, built from 2011 and announced in 2012. Its appliances are offered to ISPs, and content is filled proactively during low-traffic windows.</p>,
   },
   {
     title: 'v5 · Personalization everywhere',

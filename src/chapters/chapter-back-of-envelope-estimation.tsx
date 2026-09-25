@@ -1,9 +1,18 @@
 import {
-  Callout, CodeBlock, CompareTable, EstimationTable, H2, InterviewQuestion, KeyTakeaways,
+  Callout, CodeBlock, CompareTable, EstimationTable, H2, InterviewQuestion, KeyTakeaways, References,
 } from '../components/ui'
+import type { Reference } from '../components/ui'
 import { EstimationCapacityCalculator } from './demos/estimation-capacity-calculator'
 import { EstimationLatencyVisualizer } from './demos/estimation-latency-visualizer'
 import { EstimationNinesCalculator } from './demos/estimation-nines-calculator'
+
+const REFS: Reference[] = [
+  { title: "Teach Yourself Programming in Ten Years", source: "Peter Norvig", year: 2001, url: "https://norvig.com/21-days.html", kind: "blog", note: "Early widely shared table of approximate operation timings" },
+  { title: "Numbers Everyone Should Know (conference talks)", source: "Jeff Dean, Google", year: 2009, kind: "talk", note: "Popularized the latency table" },
+  { title: "Latency Numbers Every Programmer Should Know (interactive, by year)", source: "Colin Scott", url: "https://colin-scott.github.io/personal_website/research/interactive_latency.html", kind: "docs", note: "Extrapolated modern values" },
+  { title: "Service Level Objectives (Site Reliability Engineering, ch. 4)", source: "Google", year: 2016, url: "https://sre.google/sre-book/service-level-objectives/", kind: "book", note: "Availability targets and nines" },
+  { title: "System Design Interview – An Insider’s Guide (Vol. 1)", source: "Alex Xu", year: 2020, kind: "book", note: "Covers estimation basics; worked examples here are original" },
+]
 
 export default function EstimationChapter() {
   return (
@@ -32,7 +41,7 @@ export default function EstimationChapter() {
 
       <H2 id="latency">Latency numbers every engineer should know</H2>
       <p>
-        Originally popularized by Jeff Dean and updated by many since, these numbers explain most design choices:
+        First circulated by Peter Norvig and popularized by Jeff Dean’s talks, then updated by many since (see References), these numbers explain most design choices:
         why we cache, why we batch, and why we avoid cross-region round trips on the hot path.
       </p>
       <EstimationLatencyVisualizer />
@@ -114,6 +123,9 @@ Servers        = peak QPS / sustainable QPS per server (+ headroom for N+1 / AZ 
         </>}
         followUps={['Why does latency degrade sharply near 100% utilization?', 'How would autoscaling change this plan?']}
       />
+
+      <H2 id="references">References &amp; further reading</H2>
+      <References items={REFS} />
 
       <KeyTakeaways items={[
         '86,400 s/day ≈ 10⁵: 1M/day ≈ 12 QPS, 1B/day ≈ 12K QPS.',

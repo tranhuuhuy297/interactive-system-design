@@ -1,10 +1,20 @@
 import {
   ApiSpec, ArchitectureDiagram, Callout, CodeBlock, CompareTable, EstimationTable, H2, InterviewQuestion,
-  KeyTakeaways, Requirements,
+  KeyTakeaways, References, Requirements,
 } from '../components/ui'
-import type { ArchEdge, ArchNode } from '../components/ui'
+import type { ArchEdge, ArchNode, Reference } from '../components/ui'
 import { ChatConnectionRoutingDemo } from './demos/chat-connection-routing-demo'
 import { ChatOrderingSyncDemo } from './demos/chat-ordering-sync-demo'
+
+const REFS: Reference[] = [
+  { title: 'RFC 6455: The WebSocket Protocol', source: 'IETF', year: 2011, url: 'https://www.rfc-editor.org/rfc/rfc6455', kind: 'rfc' },
+  { title: 'Real-time Messaging', source: 'Sameera Thangundu, Engineering at Slack', year: 2023, url: 'https://slack.engineering/real-time-messaging/', kind: 'blog', note: 'gateway servers holding sockets, channel servers fanning out' },
+  { title: 'How Discord Stores Billions of Messages', source: 'Stanislav Vishnevskiy, Discord', year: 2017, url: 'https://discord.com/blog/how-discord-stores-billions-of-messages', kind: 'blog', note: '(channel, time bucket) partitions to bound partition size' },
+  { title: 'Redis Pub/Sub', source: 'Redis documentation', url: 'https://redis.io/docs/latest/develop/interact/pubsub/', kind: 'docs', note: 'per-gateway channels' },
+  { title: 'Timeouts, retries, and backoff with jitter', source: 'Marc Brooker, Amazon Builders’ Library', url: 'https://aws.amazon.com/builders-library/timeouts-retries-and-backoff-with-jitter/', kind: 'blog', note: 'reconnect storms' },
+  { title: 'Signal protocol specifications', source: 'Signal', url: 'https://signal.org/docs/', kind: 'docs', note: 'end-to-end encryption, multi-device' },
+  { title: 'System Design Interview – An Insider’s Guide, Vol. 1 (ch. “Design a Chat System”)', source: 'Alex Xu', year: 2020, kind: 'book', note: 'recommended further reading on the same prompt' },
+]
 
 const NODES: ArchNode[] = [
   { id: 'a', label: 'Sender', sub: 'app', kind: 'client', x: 6, y: 28 },
@@ -187,6 +197,9 @@ type MessageRow = {
         </>}
         followUps={['How do you deploy gateways with zero dropped connections?', 'How would you detect half-open TCP connections?']}
       />
+
+      <H2 id="references">References &amp; further reading</H2>
+      <References items={REFS} />
 
       <KeyTakeaways items={[
         'Chat is a stateful-connection problem. Keep gateways thin and put logic in stateless services.',

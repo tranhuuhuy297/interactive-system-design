@@ -1,13 +1,14 @@
 import type { ComponentType } from 'react'
 import type { LucideIcon } from 'lucide-react'
 import {
-  Camera, Car, Clapperboard, Gamepad2, House, Music, ShoppingCart, Sparkles, Wallet,
+  Code, Cpu, FileSearch, FlaskConical, Library, MemoryStick, MessageSquareCode, Router, ShieldAlert, SlidersHorizontal, Workflow,
+  Info, Camera, Car, Clapperboard, Gamepad2, House, Music, ShoppingCart, Sparkles, Wallet,
   Activity, Archive, BarChart3, Bot, BedDouble, Bell, Binary, Boxes, Brain, Calculator, Compass, CreditCard, Database,
   FolderSync, Gauge, GitMerge, Globe, Link2, ListOrdered, Map, MapPin, MessageSquare, MessagesSquare,
   MousePointerClick, Network, Newspaper, PenLine, PlayCircle, Rocket, Search, Shield, Spline, Target, Timer, TrendingUp, Trophy, Users, Zap,
 } from 'lucide-react'
 
-export type ChapterGroup = 'Foundations' | 'Building Blocks' | 'Case Studies' | 'Episodes' | 'Interview'
+export type ChapterGroup = 'Foundations' | 'Building Blocks' | 'Case Studies' | 'Episodes' | 'AI Systems' | 'Interview' | 'About'
 
 export interface Chapter {
   id: string
@@ -26,7 +27,9 @@ export const GROUPS: { name: ChapterGroup; hue: string; tagline: string }[] = [
   { name: 'Building Blocks', hue: 'var(--accent-2)', tagline: 'Every component, simulated live' },
   { name: 'Case Studies', hue: 'var(--accent-3)', tagline: 'Classic prompts, end-to-end, staff depth' },
   { name: 'Episodes', hue: 'var(--danger)', tagline: 'How real products get built, from v0 to planet scale' },
+  { name: 'AI Systems', hue: 'var(--success)', tagline: 'LLM inference, LLM engineering, and AI product systems' },
   { name: 'Interview', hue: 'var(--warning)', tagline: 'Rehearse like it is the real loop' },
+  { name: 'About', hue: 'var(--text-subtle)', tagline: 'Sources, disclaimer, and license' },
 ]
 
 export const CHAPTERS: Chapter[] = [
@@ -206,6 +209,68 @@ export const CHAPTERS: Chapter[] = [
     keywords: ['chatgpt', 'llm', 'chat', 'app', 'streaming', 'conversation', 'memory', 'rag', 'tools', 'safety'],
     load: () => import('../chapters/chapter-episode-chatgpt') },
 
+  // ── AI Systems
+  { id: 'ai-inference', title: 'LLM Inference Fundamentals', group: 'AI Systems', minutes: 20, icon: Cpu,
+    blurb: 'Prefill vs decode, why decode is memory-bound, TTFT/TPOT, and the roofline.',
+    keywords: ['llm', 'inference', 'prefill', 'decode', 'ttft', 'tpot', 'roofline', 'memory bandwidth', 'gpu'],
+    load: () => import('../chapters/chapter-ai-inference-fundamentals') },
+  { id: 'ai-kv-cache', title: 'KV Cache, Memory & Quantization', group: 'AI Systems', minutes: 20, icon: MemoryStick,
+    blurb: 'KV cache math, paged attention, prefix caching, GQA/MQA, and int8/fp8/int4 trade-offs.',
+    keywords: ['kv cache', 'paged attention', 'prefix caching', 'quantization', 'gqa', 'mqa', 'fp8', 'int4', 'memory'],
+    load: () => import('../chapters/chapter-ai-kv-cache-quantization') },
+  { id: 'ai-batching', title: 'Batching & Speculative Decoding', group: 'AI Systems', minutes: 20, icon: SlidersHorizontal,
+    blurb: 'Continuous batching, chunked prefill, prefill/decode disaggregation, speculative decoding.',
+    keywords: ['continuous batching', 'chunked prefill', 'disaggregation', 'speculative decoding', 'scheduling', 'throughput'],
+    load: () => import('../chapters/chapter-ai-batching-speculative-decoding') },
+  { id: 'ai-parallelism', title: 'Parallelism, MoE & Scaling Out', group: 'AI Systems', minutes: 20, icon: Workflow,
+    blurb: 'Tensor, pipeline, and expert parallelism; serving MoE models; multi-node and autoscaling.',
+    keywords: ['tensor parallelism', 'pipeline parallelism', 'expert parallelism', 'moe', 'multi gpu', 'nvlink', 'autoscaling'],
+    load: () => import('../chapters/chapter-ai-parallelism-moe') },
+  { id: 'ai-serving', title: 'Serving Stacks & Model Routing', group: 'AI Systems', minutes: 16, icon: Router,
+    blurb: 'vLLM, SGLang, TensorRT-LLM, TGI; multi-LoRA, model routing, and cost per token.',
+    keywords: ['vllm', 'sglang', 'tensorrt llm', 'tgi', 'triton', 'lora', 'routing', 'cost per token'],
+    load: () => import('../chapters/chapter-ai-serving-stacks-routing') },
+  { id: 'ai-prompting', title: 'Prompting & Structured Output', group: 'AI Systems', minutes: 16, icon: MessageSquareCode,
+    blurb: 'Prompt design as an API, JSON schema, constrained decoding, and function calling.',
+    keywords: ['prompt engineering', 'structured output', 'json schema', 'constrained decoding', 'function calling'],
+    load: () => import('../chapters/chapter-ai-prompting-structured-output') },
+  { id: 'ai-rag', title: 'RAG Systems', group: 'AI Systems', minutes: 24, icon: FileSearch,
+    blurb: 'Chunking, embeddings, vector indexes (HNSW/IVF), hybrid search, reranking, freshness.',
+    keywords: ['rag', 'retrieval', 'embeddings', 'vector database', 'hnsw', 'ivf', 'hybrid search', 'bm25', 'reranking', 'chunking'],
+    load: () => import('../chapters/chapter-ai-rag-systems') },
+  { id: 'ai-fine-tuning', title: 'Fine-tuning vs RAG vs Prompting', group: 'AI Systems', minutes: 16, icon: Library,
+    blurb: 'LoRA/QLoRA, distillation, preference tuning — and when not to fine-tune at all.',
+    keywords: ['fine tuning', 'lora', 'qlora', 'distillation', 'rlhf', 'dpo', 'when to fine tune'],
+    load: () => import('../chapters/chapter-ai-fine-tuning-decisions') },
+  { id: 'ai-evals', title: 'Evaluating LLM Systems', group: 'AI Systems', minutes: 20, icon: FlaskConical,
+    blurb: 'Golden sets, LLM-as-judge, RAG metrics, regression gates, and online A/B tests.',
+    keywords: ['evaluation', 'evals', 'llm as judge', 'golden set', 'regression', 'ab test', 'rag metrics'],
+    load: () => import('../chapters/chapter-ai-evaluation') },
+  { id: 'ai-agents', title: 'Agents & Tool Use', group: 'AI Systems', minutes: 22, icon: Workflow,
+    blurb: 'Agent loops, planning, tools and MCP, memory, multi-agent patterns, and failure modes.',
+    keywords: ['agents', 'tool use', 'function calling', 'mcp', 'planning', 'memory', 'multi agent', 'react'],
+    load: () => import('../chapters/chapter-ai-agents-tool-use') },
+  { id: 'ai-production', title: 'Production LLM Apps', group: 'AI Systems', minutes: 20, icon: Router,
+    blurb: 'Gateways, semantic caching, token budgets, fallbacks, streaming UX, and observability.',
+    keywords: ['llm gateway', 'semantic cache', 'token budget', 'fallback', 'streaming', 'observability', 'cost'],
+    load: () => import('../chapters/chapter-ai-production-llm-apps') },
+  { id: 'ai-safety', title: 'AI Safety & Security', group: 'AI Systems', minutes: 18, icon: ShieldAlert,
+    blurb: 'Prompt injection, data exfiltration, jailbreaks, PII, moderation, and sandboxing.',
+    keywords: ['prompt injection', 'jailbreak', 'data exfiltration', 'pii', 'moderation', 'guardrails', 'owasp llm'],
+    load: () => import('../chapters/chapter-ai-safety-security') },
+  { id: 'ai-case-rag', title: 'Design an Enterprise RAG Assistant', group: 'AI Systems', minutes: 24, icon: FileSearch,
+    blurb: 'Permissions-aware retrieval over millions of documents with citations and evals.',
+    keywords: ['enterprise', 'rag', 'assistant', 'permissions', 'acl', 'citations', 'glean'],
+    load: () => import('../chapters/chapter-ai-case-enterprise-rag') },
+  { id: 'ai-case-coding', title: 'Design an AI Coding Assistant', group: 'AI Systems', minutes: 22, icon: Code,
+    blurb: 'Low-latency completions, repo context retrieval, agentic edits, and sandboxed execution.',
+    keywords: ['coding assistant', 'copilot', 'autocomplete', 'fill in the middle', 'repo context', 'agent'],
+    load: () => import('../chapters/chapter-ai-case-coding-assistant') },
+  { id: 'ai-case-gateway', title: 'Design an LLM Gateway', group: 'AI Systems', minutes: 20, icon: Router,
+    blurb: 'One API over many models: routing, quotas, caching, failover, and cost attribution.',
+    keywords: ['llm gateway', 'routing', 'quotas', 'failover', 'cost attribution', 'multi provider'],
+    load: () => import('../chapters/chapter-ai-case-llm-gateway') },
+
   // ── Interview
   { id: 'staff-signals', title: 'Staff-Level Signals', group: 'Interview', minutes: 15, icon: Brain,
     blurb: 'What interviewers write down when they level you up — or down.',
@@ -223,6 +288,11 @@ export const CHAPTERS: Chapter[] = [
     blurb: 'Scored multiple choice with explanations. Beat your best.',
     keywords: ['quiz', 'test', 'score'],
     load: () => import('../chapters/chapter-knowledge-quiz') },
+  // ── About
+  { id: 'about', title: 'About, Sources & License', group: 'About', minutes: 4, icon: Info,
+    blurb: 'Independent educational project: how sources are cited, trademarks, and licensing.',
+    keywords: ['about', 'sources', 'references', 'license', 'copyright', 'disclaimer', 'credits'],
+    load: () => import('../chapters/chapter-about-sources-license') },
 ]
 
 export const HOME_ICON = Activity

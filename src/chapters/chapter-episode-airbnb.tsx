@@ -1,7 +1,8 @@
 import {
+  References,
   ArchitectureDiagram, Callout, CodeBlock, CompareTable, EpisodePlayer, EstimationTable, H2, InterviewQuestion, KeyTakeaways,
 } from '../components/ui'
-import type { ArchEdge, ArchNode } from '../components/ui'
+import type { ArchEdge, ArchNode, Reference } from '../components/ui'
 import { EpisodeAirbnbAvailabilityDemo } from './demos/episode-airbnb-availability-demo'
 import { AIRBNB_STAGES } from './demos/episode-airbnb-stages'
 
@@ -22,6 +23,16 @@ const FLOW_EDGES: ArchEdge[] = [
   { from: 'booking', to: 'db' }, { from: 'booking', to: 'pay' }, { from: 'db', to: 'cdc', async: true }, { from: 'cdc', to: 'index' },
 ]
 
+// Primary public sources behind the “In the real world” notes.
+const REFS: Reference[] = [
+  { title: "Airbnb’s Great Migration: From Monolith to Service-Oriented", source: "Jessica Tai, QCon San Francisco", year: 2018, url: "https://qconsf.com/sf2018/sf2018/presentation/airbnbs-great-migration-monolith-service-oriented.html", kind: "talk", note: "Rails “monorail” → SOA" },
+  { title: "Airbnb’s Great Migration (video and transcript)", source: "InfoQ", year: 2019, url: "https://www.infoq.com/presentations/airbnb-soa-migration/", kind: "talk" },
+  { title: "Applying Deep Learning to Airbnb Search", source: "Haldar et al., KDD", year: 2019, url: "https://arxiv.org/abs/1810.09591", kind: "paper" },
+  { title: "Real-time Personalization using Embeddings for Search Ranking at Airbnb", source: "Grbovic & Cheng, KDD", year: 2018, url: "https://doi.org/10.1145/3219819.3219885", kind: "paper" },
+  { title: "Range types", source: "PostgreSQL documentation", url: "https://www.postgresql.org/docs/current/rangetypes.html", kind: "docs" },
+  { title: "Constraints: exclusion constraints", source: "PostgreSQL documentation", url: "https://www.postgresql.org/docs/current/ddl-constraints.html", kind: "docs", note: "the no-overlap booking snippet" },
+]
+
 export default function AirbnbEpisode() {
   return (
     <>
@@ -35,6 +46,7 @@ export default function AirbnbEpisode() {
         Notice how the <em>same</em> fact, “is this home free on these nights?”, lives in two places: a fast,
         slightly stale copy for search and an authoritative one for booking. Most of the design is managing that gap.
       </Callout>
+      <p className="muted"><em>This episode is an independent reconstruction from public sources. It is not affiliated with or endorsed by Airbnb; all trademarks belong to their owners.</em></p>
 
       <H2 id="the-build">The build, stage by stage</H2>
       <EpisodePlayer stages={AIRBNB_STAGES} height={420} />
@@ -127,6 +139,9 @@ const ddl = \`
         </>}
         followUps={['What if payment succeeds but confirming the booking fails?', 'How long should a hold last, and who decides?']}
       />
+
+      <H2 id="references">Sources</H2>
+      <References items={REFS} />
 
       <KeyTakeaways items={[
         'Availability is the defining query: materialize nights as bits in the search index.',

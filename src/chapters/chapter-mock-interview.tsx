@@ -1,4 +1,5 @@
-import { Callout, CompareTable, H2, KeyTakeaways } from '../components/ui'
+import { Callout, CompareTable, H2, KeyTakeaways, References } from '../components/ui'
+import { INTERVIEW_FURTHER_READING } from '../data/interview-further-reading'
 import { MOCK_PROMPTS } from '../data/mock-prompts-data'
 import { MockSimulator } from './demos/mock-simulator'
 import { MOCK_PHASES } from './demos/mock-phases'
@@ -61,6 +62,9 @@ export default function MockInterviewChapter() {
         <li><strong>Think aloud about options.</strong> “I see two ways: A, which costs X, or B, which costs Y.” Interviewers can help when they can hear your reasoning.</li>
         <li><strong>Be honest about gaps.</strong> “I haven't operated Cassandra, but my understanding is…” is much better than bluffing.</li>
       </ul>
+
+      <H2 id="further-reading">Further reading</H2>
+      <References items={INTERVIEW_FURTHER_READING} />
 
       <KeyTakeaways items={[
         'Practice out loud, with a clock, and use the scratchpad like a whiteboard.',

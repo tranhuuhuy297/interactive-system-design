@@ -1,7 +1,7 @@
 import {
-  ArchitectureDiagram, Callout, CodeBlock, CompareTable, FlowDiagram, H2, InterviewQuestion, KeyTakeaways, Tabs,
+  ArchitectureDiagram, Callout, CodeBlock, CompareTable, FlowDiagram, H2, InterviewQuestion, KeyTakeaways, References, Tabs,
 } from '../components/ui'
-import type { ArchEdge, ArchNode } from '../components/ui'
+import type { ArchEdge, ArchNode, Reference } from '../components/ui'
 import { CacheEvictionSimulatorDemo } from './demos/cache-eviction-simulator-demo'
 import { CacheStampedeSimulatorDemo } from './demos/cache-stampede-simulator-demo'
 
@@ -18,6 +18,15 @@ const NODES: ArchNode[] = [
 const EDGES: ArchEdge[] = [
   { from: 'client', to: 'app' }, { from: 'app', to: 'cache' }, { from: 'app', to: 'db' },
   { from: 'cache', to: 'db' }, { from: 'cache', to: 'queue', async: true }, { from: 'queue', to: 'db', async: true },
+]
+
+const REFS: Reference[] = [
+  { title: "Scaling Memcache at Facebook", source: "Nishtala et al., NSDI", year: 2013, url: "https://www.usenix.org/conference/nsdi13/technical-sessions/presentation/nishtala", kind: "paper", note: "Leases, invalidation and thundering herds" },
+  { title: "Optimal Probabilistic Cache Stampede Prevention", source: "Vattani, Chierichetti & Lowenstein, VLDB", year: 2015, url: "https://www.vldb.org/pvldb/vol8/p886-vattani.pdf", kind: "paper", note: "Probabilistic early expiration (XFetch)" },
+  { title: "Caching challenges and strategies", source: "Amazon Builders’ Library", url: "https://aws.amazon.com/builders-library/caching-challenges-and-strategies/", kind: "blog" },
+  { title: "Key eviction", source: "Redis documentation", url: "https://redis.io/docs/latest/develop/reference/eviction/", kind: "docs" },
+  { title: "RFC 9111: HTTP Caching", source: "IETF", year: 2022, url: "https://www.rfc-editor.org/rfc/rfc9111", kind: "rfc" },
+  { title: "Space/Time Trade-offs in Hash Coding with Allowable Errors", source: "B. H. Bloom, Communications of the ACM", year: 1970, url: "https://doi.org/10.1145/362686.362692", kind: "paper", note: "Bloom filters" },
 ]
 
 export default function CachingChapter() {
@@ -166,6 +175,9 @@ function refresh(key: string): Promise<Value> {
           </ul>
         </>}
       />
+
+      <H2 id="references">References &amp; further reading</H2>
+      <References items={REFS} />
 
       <KeyTakeaways items={[
         'Cache-aside plus TTL plus delete-on-write is the default. Know its race condition and the fixes.',

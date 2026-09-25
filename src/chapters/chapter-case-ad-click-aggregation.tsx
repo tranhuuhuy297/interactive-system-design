@@ -1,8 +1,8 @@
 import {
   ApiSpec, ArchitectureDiagram, Callout, CodeBlock, CompareTable, EstimationTable, FlowDiagram, H2,
-  InterviewQuestion, KeyTakeaways, Requirements, Tabs,
+  InterviewQuestion, KeyTakeaways, Requirements, Tabs, References,
 } from '../components/ui'
-import type { ArchEdge, ArchNode } from '../components/ui'
+import type { ArchEdge, ArchNode, Reference } from '../components/ui'
 import { AdclickWindowingDemo } from './demos/adclick-windowing-demo'
 
 const NODES: ArchNode[] = [
@@ -27,6 +27,16 @@ const EDGES: ArchEdge[] = [
   { from: 'ads', to: 'raw', async: true }, { from: 'raw', to: 'agg', async: true }, { from: 'agg', to: 'aggq', async: true },
   { from: 'aggq', to: 'olap', async: true }, { from: 'raw', to: 'lake', async: true }, { from: 'lake', to: 'batch' },
   { from: 'batch', to: 'olap', label: 'overwrite' }, { from: 'olap', to: 'query' }, { from: 'query', to: 'dash' },
+]
+
+const REFS: Reference[] = [
+  { title: 'The Dataflow Model', source: 'T. Akidau et al., VLDB', year: 2015, url: 'https://www.vldb.org/pvldb/vol8/p1792-Akidau.pdf', kind: 'paper', note: 'event time, windows, watermarks, triggers' },
+  { title: 'Streaming 101: The world beyond batch', source: 'T. Akidau, O’Reilly Radar', year: 2015, url: 'https://www.oreilly.com/radar/the-world-beyond-batch-streaming-101/', kind: 'blog', note: 'event time vs processing time' },
+  { title: 'Timely stream processing (event time & watermarks)', source: 'Apache Flink documentation', url: 'https://nightlies.apache.org/flink/flink-docs-stable/docs/concepts/time/', kind: 'docs' },
+  { title: 'Checkpointing', source: 'Apache Flink documentation', url: 'https://nightlies.apache.org/flink/flink-docs-stable/docs/dev/datastream/fault-tolerance/checkpointing/', kind: 'docs', note: 'consistent offsets + state after restore' },
+  { title: 'How to beat the CAP theorem', source: 'N. Marz', year: 2011, url: 'http://nathanmarz.com/blog/how-to-beat-the-cap-theorem.html', kind: 'blog', note: 'origin of the lambda architecture' },
+  { title: 'Questioning the Lambda Architecture', source: 'J. Kreps, O’Reilly Radar', year: 2014, url: 'https://www.oreilly.com/radar/questioning-the-lambda-architecture/', kind: 'blog', note: 'the kappa alternative' },
+  { title: 'System Design Interview – An Insider’s Guide, Volume 2', source: 'Alex Xu & Sahn Lam', year: 2022, kind: 'book', note: 'ad click event aggregation prompt' },
 ]
 
 export default function AdClickAggregationChapter() {
@@ -153,6 +163,9 @@ type AdMinute = {
           <p>That covers the <em>internal</em> state. The sink is where people get burned: results emitted after the last checkpoint get emitted again on replay. Either use a transactional sink that commits on checkpoint completion (adds latency equal to the checkpoint interval), or make writes <strong>idempotent upserts keyed by window</strong>. I prefer the latter because it's simpler, and it also makes batch overwrites and backfills safe.</p>
         </>}
       />
+
+      <H2 id="references">References &amp; further reading</H2>
+      <References items={REFS} />
 
       <KeyTakeaways items={[
         'Window by event time; watermarks trade freshness for completeness.',

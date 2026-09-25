@@ -1,9 +1,20 @@
 import {
   ApiSpec, ArchitectureDiagram, Callout, CodeBlock, CompareTable, EstimationTable, FlowDiagram, H2, InterviewQuestion,
-  KeyTakeaways, Requirements,
+  KeyTakeaways, References, Requirements,
 } from '../components/ui'
-import type { ArchEdge, ArchNode } from '../components/ui'
+import type { ArchEdge, ArchNode, Reference } from '../components/ui'
 import { FeedFanoutSimulatorDemo } from './demos/feed-fanout-simulator-demo'
+
+const REFS: Reference[] = [
+  { title: 'Feeding Frenzy: Selectively Materializing Users’ Event Feeds', source: 'A. Silberstein, J. Terrace, B. F. Cooper, R. Ramakrishnan (SIGMOD)', year: 2010, url: 'https://jeffterrace.com/docs/feeding-frenzy-sigmod10-web.pdf', kind: 'paper', note: 'hybrid push/pull: materialize low-rate producers, query high-rate ones' },
+  { title: 'Timelines at Scale', source: 'Raffi Krikorian, Twitter (QCon talk, InfoQ)', year: 2013, url: 'https://www.infoq.com/presentations/Twitter-Timeline-Scalability/', kind: 'talk', note: 'fan-out on write into a Redis timeline cache' },
+  { title: 'Serving Facebook Multifeed: Efficiency, performance gains through redesign', source: 'Engineering at Meta', year: 2015, url: 'https://engineering.fb.com/2015/03/10/production-engineering/serving-facebook-multifeed-efficiency-performance-gains-through-redesign/', kind: 'blog', note: 'aggregator/leaf feed serving at read time' },
+  { title: 'TAO: Facebook’s Distributed Data Store for the Social Graph', source: 'N. Bronson et al. (USENIX ATC)', year: 2013, url: 'https://www.usenix.org/conference/atc13/technical-sessions/presentation/bronson', kind: 'paper', note: 'social graph storage and caching' },
+  { title: 'Redis sorted sets', source: 'Redis documentation', url: 'https://redis.io/docs/latest/develop/data-types/sorted-sets/', kind: 'docs', note: 'per-user feed as a capped ZSET' },
+  { title: 'Announcing Snowflake', source: 'Ryan King, Twitter Engineering', year: 2010, url: 'https://blog.x.com/engineering/en_us/a/2010/announcing-snowflake', kind: 'blog', note: 'time-sortable post IDs' },
+  { title: 'Designing Data-Intensive Applications', source: 'Martin Kleppmann', year: 2017, kind: 'book', note: 'ch. 1 uses home-timeline fan-out as its running example' },
+  { title: 'System Design Interview – An Insider’s Guide, Vol. 1 (ch. “Design a News Feed System”)', source: 'Alex Xu', year: 2020, kind: 'book', note: 'recommended further reading on the same prompt' },
+]
 
 const NODES: ArchNode[] = [
   { id: 'client', label: 'Client', sub: 'app / web', kind: 'client', x: 7, y: 50 },
@@ -174,6 +185,9 @@ type Post = { postId: bigint; authorId: string; text: string; mediaIds: string[]
           <p>With ranked feeds, scores aren't monotonic, so I'd snapshot the ranked candidate list server-side for a session (a short TTL key) and page through the snapshot. Otherwise re-ranking between requests produces duplicates.</p>
         </>}
       />
+
+      <H2 id="references">References &amp; further reading</H2>
+      <References items={REFS} />
 
       <KeyTakeaways items={[
         'The core trade-off is doing the work at write time (push) or at read time (pull). At scale the answer is a hybrid.',

@@ -36,7 +36,7 @@ export const CHATGPT_STAGES: EpisodeStage[] = [
     problem: <p>Show that a chat interface to a large model is useful. Nothing else matters yet.</p>,
     decision: <p>One server takes the prompt, calls one GPU machine running the model, and returns the full answer as a single HTTP response.</p>,
     tradeoff: <p>Users stare at a spinner for many seconds, because generation is token by token and the response waits for the last one. One box means one queue and one failure.</p>,
-    realWorld: <p>ChatGPT launched publicly as a “research preview” on 30 November 2022. Growth far outran capacity, and early users often saw “at capacity” messages.</p>,
+    realWorld: <p>ChatGPT launched publicly as a “research preview” on 30 November 2022. Demand grew far faster than expected, and capacity limits were widely reported in the early months.</p>,
   },
   {
     title: 'v1 · Streaming + conversations',
@@ -118,6 +118,6 @@ export const CHATGPT_STAGES: EpisodeStage[] = [
     problem: <p>GPU capacity is scarce, expensive, and uneven across regions. A viral launch can multiply traffic overnight.</p>,
     decision: <p>Route each request by model, region, and priority across pooled GPU capacity. Under pressure, degrade in order: queue briefly, spill to other regions, serve a smaller or cheaper model for low-priority traffic, and finally shed load for free tiers with honest messaging.</p>,
     tradeoff: <p>Cross-region routing adds latency and data-residency complexity. Silently swapping models changes answer quality, so it must be visible or policy-driven.</p>,
-    realWorld: <p>OpenAI is widely reported to have run primarily on Microsoft Azure and later added other compute providers. Its leaders have publicly said at times that launches were limited by GPU availability.</p>,
+    realWorld: <p>OpenAI’s launch post says ChatGPT was trained on Azure AI supercomputing infrastructure, and Microsoft has described Azure as OpenAI’s cloud partner. OpenAI has since announced additional compute partnerships, and its leaders have publicly pointed to GPU availability as a constraint on launches.</p>,
   },
 ]

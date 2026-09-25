@@ -13,3 +13,5 @@ export type { ArchEdge, ArchFlow, ArchKind, ArchNode } from './architecture-diag
 export { ApiSpec, EstimationTable, Requirements } from './case-study-blocks'
 export { EpisodePlayer } from './episode-player'
 export type { EpisodeStage } from './episode-player'
+export { References } from './references-list'
+export type { Reference, ReferenceKind } from './references-list'

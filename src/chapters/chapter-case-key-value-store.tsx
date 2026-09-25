@@ -1,10 +1,21 @@
 import {
   ApiSpec, ArchitectureDiagram, Callout, CodeBlock, CompareTable, EstimationTable, FlowDiagram, H2, InterviewQuestion,
-  KeyTakeaways, Requirements,
+  KeyTakeaways, References, Requirements,
 } from '../components/ui'
-import type { ArchEdge, ArchNode } from '../components/ui'
+import type { ArchEdge, ArchNode, Reference } from '../components/ui'
 import { KvDynamoClusterSim } from './demos/kv-dynamo-cluster-sim'
 import { KvMerkleDemo } from './demos/kv-merkle-demo'
+
+const REFS: Reference[] = [
+  { title: 'Dynamo: Amazon’s Highly Available Key-value Store', source: 'G. DeCandia et al. (SOSP)', year: 2007, url: 'https://www.allthingsdistributed.com/files/amazon-dynamo-sosp2007.pdf', kind: 'paper', note: 'ring, sloppy quorum, hinted handoff, vector clocks, Merkle anti-entropy' },
+  { title: 'Consistent hashing and random trees', source: 'D. Karger et al. (STOC)', year: 1997, url: 'https://doi.org/10.1145/258533.258660', kind: 'paper' },
+  { title: 'A Digital Signature Based on a Conventional Encryption Function (Merkle trees)', source: 'Ralph C. Merkle (CRYPTO ’87)', year: 1987, url: 'https://link.springer.com/chapter/10.1007/3-540-48184-2_32', kind: 'paper' },
+  { title: 'The log-structured merge-tree (LSM-tree)', source: 'P. O’Neil, E. Cheng, D. Gawlick, E. O’Neil, Acta Informatica', year: 1996, url: 'https://link.springer.com/article/10.1007/s002360050048', kind: 'paper' },
+  { title: 'Bigtable: A Distributed Storage System for Structured Data', source: 'F. Chang et al. (OSDI)', year: 2006, url: 'https://research.google/pubs/bigtable-a-distributed-storage-system-for-structured-data/', kind: 'paper', note: 'memtable + SSTables + Bloom filters' },
+  { title: 'Dynamo (architecture overview)', source: 'Apache Cassandra documentation', url: 'https://cassandra.apache.org/doc/latest/cassandra/architecture/dynamo.html', kind: 'docs', note: 'tunable consistency, gossip, repair, tombstones' },
+  { title: 'Designing Data-Intensive Applications', source: 'Martin Kleppmann', year: 2017, kind: 'book', note: 'ch. 5–6 on leaderless replication and partitioning' },
+  { title: 'System Design Interview – An Insider’s Guide, Vol. 1 (ch. “Design a Key-value Store”)', source: 'Alex Xu', year: 2020, kind: 'book', note: 'recommended further reading on the same prompt' },
+]
 
 const NODES: ArchNode[] = [
   { id: 'client', label: 'Client', sub: 'smart or thin', kind: 'client', x: 10, y: 50,
@@ -176,6 +187,9 @@ get(key):
           <p>Separate <strong>transient</strong> from <strong>permanent</strong> failures. Transient: sloppy quorum and hints, no data movement. Permanent: an operator or automation removes the node, its ranges get new owners via the ring, and streaming from surviving replicas restores N copies. Rate-limit that streaming so recovery doesn't overload the cluster and cause a cascade.</p>
         </>}
       />
+
+      <H2 id="references">References &amp; further reading</H2>
+      <References items={REFS} />
 
       <KeyTakeaways items={[
         'Consistent hashing with virtual nodes partitions data; N replicas follow the key clockwise, spread across failure domains.',

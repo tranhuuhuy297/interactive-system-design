@@ -1,7 +1,8 @@
 import {
+  References,
   ArchitectureDiagram, Callout, CompareTable, EpisodePlayer, EstimationTable, H2, InterviewQuestion, KeyTakeaways,
 } from '../components/ui'
-import type { ArchEdge, ArchNode } from '../components/ui'
+import type { ArchEdge, ArchNode, Reference } from '../components/ui'
 import { EpisodeDiscordCoalescingDemo } from './demos/episode-discord-coalescing-demo'
 import { DISCORD_STAGES } from './demos/episode-discord-stages'
 
@@ -22,6 +23,16 @@ const SEND_EDGES: ArchEdge[] = [
   { from: 'api', to: 'guild', async: true }, { from: 'guild', to: 'gw' }, { from: 'gw', to: 'recv' },
 ]
 
+// Primary public sources behind the “In the real world” notes.
+const REFS: Reference[] = [
+  { title: "How Discord Stores Billions of Messages", source: "Discord Engineering", year: 2017, url: "https://discord.com/blog/how-discord-stores-billions-of-messages", kind: "blog", note: "MongoDB → Cassandra, (channel, bucket) keys" },
+  { title: "How Discord Stores Trillions of Messages", source: "Discord Engineering", year: 2023, url: "https://discord.com/blog/how-discord-stores-trillions-of-messages", kind: "blog", note: "177 Cassandra → 72 ScyllaDB nodes; Rust data services" },
+  { title: "How Discord Scaled Elixir to 5,000,000 Concurrent Users", source: "Discord Engineering", year: 2017, url: "https://discord.com/blog/how-discord-scaled-elixir-to-5-000-000-concurrent-users", kind: "blog" },
+  { title: "Maxjourney: Pushing Discord’s Limits with a Million+ Online Users in a Single Server", source: "Discord Engineering", year: 2023, url: "https://discord.com/blog/maxjourney-pushing-discords-limits-with-a-million-plus-online-users-in-a-single-server", kind: "blog" },
+  { title: "How Discord Handles Two and Half Million Concurrent Voice Users using WebRTC", source: "Discord Engineering", year: 2018, url: "https://discord.com/blog/how-discord-handles-two-and-half-million-concurrent-voice-users-using-webrtc", kind: "blog" },
+  { title: "Gateway", source: "Discord Developer Docs", url: "https://discord.com/developers/docs/events/gateway", kind: "docs" },
+]
+
 export default function DiscordEpisode() {
   return (
     <>
@@ -35,6 +46,7 @@ export default function DiscordEpisode() {
         At each stage, ask yourself: <em>who owns this piece of state, and how many copies of each event get made?</em>{' '}
         Almost every decision here is an answer to one of those two questions.
       </Callout>
+      <p className="muted"><em>This episode is an independent reconstruction from public sources. It is not affiliated with or endorsed by Discord; all trademarks belong to their owners.</em></p>
 
       <H2 id="the-build">The build, stage by stage</H2>
       <EpisodePlayer stages={DISCORD_STAGES} height={400} />
@@ -117,6 +129,9 @@ export default function DiscordEpisode() {
         </>}
         followUps={['What consistency does a coalesced read give you?', 'How do you pick the time bucket size?', 'How would you migrate trillions of rows with zero downtime?']}
       />
+
+      <H2 id="references">Sources</H2>
+      <References items={REFS} />
 
       <KeyTakeaways items={[
         'Separate socket holding (gateways) from state ownership (one process per guild).',

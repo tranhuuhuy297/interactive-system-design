@@ -1,0 +1,30 @@
+@layer components {
+  .aip-cd { display: grid; gap: var(--space-4); }
+  .aip-cd__bar { display: flex; flex-wrap: wrap; gap: var(--space-3); align-items: center; justify-content: space-between; }
+  .aip-cd__btns { display: flex; gap: var(--space-2); }
+  .aip-cd__grid { display: grid; grid-template-columns: 1fr 1fr; gap: var(--space-5); }
+  .aip-cd .demo-label { margin-bottom: var(--space-2); }
+
+  .aip-cd__cands { list-style: none; padding: 0; margin: 0; display: grid; gap: 4px; }
+  .aip-cd__cands li { display: grid; grid-template-columns: 84px 1fr 56px; gap: var(--space-2); align-items: center; padding: 4px 8px; border-radius: var(--radius-md); border: 1px solid transparent; font-size: var(--text-sm); color: var(--text-muted); }
+  .aip-cd__cands code { font-family: var(--font-mono); font-size: 12.5px; color: var(--text); }
+  .aip-cd__cands li.is-chosen { border-color: var(--accent); background: var(--accent-soft); }
+  .aip-cd__cands li.is-masked { opacity: 0.55; }
+  .aip-cd__cands li.is-masked code { text-decoration: line-through; color: var(--danger); }
+  .aip-cd__bar-track { height: 6px; border-radius: 3px; background: var(--surface-3); overflow: hidden; }
+  .aip-cd__bar-track i { display: block; height: 100%; background: var(--text-muted); transition: width var(--dur-base) var(--ease-out); }
+  .aip-cd__cands li.is-chosen .aip-cd__bar-track i { background: var(--accent); }
+  .aip-cd__cands li.is-masked .aip-cd__bar-track i { background: var(--danger); }
+  .aip-cd__score { font-size: 11.5px; text-align: right; }
+  .aip-cd__empty { font-size: var(--text-sm); color: var(--text-subtle); }
+
+  .aip-cd__out { margin: 0; min-height: 96px; padding: var(--space-3) var(--space-4); border: 1px solid var(--border); border-radius: var(--radius-md); background: var(--code-bg); font-family: var(--font-mono); font-size: 12.5px; color: var(--text); white-space: pre-wrap; word-break: break-word; }
+  .aip-cd__caret { color: var(--accent); animation: aip-blink 1s steps(2) infinite; }
+  @keyframes aip-blink { 50% { opacity: 0; } }
+  .aip-cd__verdict { display: flex; gap: var(--space-2); align-items: baseline; margin-top: var(--space-2); font-size: var(--text-sm); color: var(--text-muted); }
+  .aip-cd__note { font-size: var(--text-xs); color: var(--text-subtle); line-height: 1.6; }
+
+  @media (max-width: 720px) {
+    .aip-cd__grid { grid-template-columns: 1fr; }
+  }
+}

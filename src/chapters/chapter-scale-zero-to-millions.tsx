@@ -1,8 +1,18 @@
 import {
-  Callout, CompareTable, H2, InterviewQuestion, KeyTakeaways, Tabs,
+  Callout, CompareTable, H2, InterviewQuestion, KeyTakeaways, References, Tabs,
 } from '../components/ui'
+import type { Reference } from '../components/ui'
 import { ScalingEvolutionStepper } from './demos/scaling-evolution-stepper'
 import { ScalingSaturationSimulator } from './demos/scaling-saturation-simulator'
+
+const REFS: Reference[] = [
+  { title: "System Design Interview – An Insider’s Guide (Vol. 1)", source: "Alex Xu", year: 2020, kind: "book", note: "Its first chapter is the classic version of this progression; the stages, bottleneck analysis and simulations here are our own" },
+  { title: "Designing Data-Intensive Applications", source: "Martin Kleppmann (O’Reilly)", year: 2017, url: "https://dataintensive.net/", kind: "book" },
+  { title: "The Twelve-Factor App: Processes (stateless services)", source: "Adam Wiggins et al.", url: "https://12factor.net/processes", kind: "docs" },
+  { title: "Caching challenges and strategies", source: "Amazon Builders’ Library", url: "https://aws.amazon.com/builders-library/caching-challenges-and-strategies/", kind: "blog" },
+  { title: "Static stability using Availability Zones", source: "Amazon Builders’ Library", url: "https://aws.amazon.com/builders-library/static-stability-using-availability-zones/", kind: "blog" },
+  { title: "RFC 9111: HTTP Caching", source: "IETF", year: 2022, url: "https://www.rfc-editor.org/rfc/rfc9111", kind: "rfc", note: "How CDNs and browsers cache" },
+]
 
 export default function ScaleZeroToMillionsChapter() {
   return (
@@ -12,6 +22,11 @@ export default function ScaleZeroToMillionsChapter() {
         but a sequence of <strong>bottlenecks</strong>, each forcing one specific change with one specific cost. If
         you can tell that story fluently, which stage, which pain, which fix, what it cost, you can reason about
         almost any design prompt from first principles.
+      </p>
+      <p>
+        This single-server-to-global progression is a classic way to teach scaling; Alex Xu’s <em>System Design
+        Interview</em> opens with a well-known version of it (see References). The stages, bottleneck analysis and
+        simulations here are this handbook’s own.
       </p>
 
       <H2 id="evolution">The evolution, stage by stage</H2>
@@ -110,6 +125,9 @@ export default function ScaleZeroToMillionsChapter() {
         </>}
         followUps={['What are RPO and RTO for your design?', 'How do you avoid split-brain during failover?']}
       />
+
+      <H2 id="references">References &amp; further reading</H2>
+      <References items={REFS} />
 
       <KeyTakeaways items={[
         'Every scaling step is forced by a specific bottleneck and has a specific cost. Tell it as a story.',

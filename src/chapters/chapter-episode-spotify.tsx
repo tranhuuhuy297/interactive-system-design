@@ -1,7 +1,8 @@
 import {
+  References,
   ArchitectureDiagram, Callout, CompareTable, EpisodePlayer, EstimationTable, H2, InterviewQuestion, KeyTakeaways,
 } from '../components/ui'
-import type { ArchEdge, ArchNode } from '../components/ui'
+import type { ArchEdge, ArchNode, Reference } from '../components/ui'
 import { EpisodeSpotifyInstantStartDemo } from './demos/episode-spotify-instant-start-demo'
 import { SPOTIFY_STAGES } from './demos/episode-spotify-stages'
 
@@ -21,6 +22,17 @@ const PLAY_EDGES: ArchEdge[] = [
   { from: 'app', to: 'cdn' }, { from: 'cdn', to: 'store' },
 ]
 
+// Primary public sources behind the “In the real world” notes.
+const REFS: Reference[] = [
+  { title: "Spotify Removes Peer-To-Peer Technology From Its Desktop Client", source: "TechCrunch", year: 2014, url: "https://techcrunch.com/2014/04/17/spotify-removes-peer-to-peer-technology-from-its-desktop-client/", kind: "blog", note: "secondary source" },
+  { title: "Spotify Announces Google Cloud Platform Partnership", source: "TechCrunch", year: 2016, url: "https://techcrunch.com/2016/02/23/spotify-announces-google-cloud-platform-partnership/", kind: "blog", note: "secondary source" },
+  { title: "Spotify’s Event Delivery – The Road to the Cloud (Part I)", source: "Spotify Engineering", year: 2016, url: "https://engineering.atspotify.com/2016/02/spotifys-event-delivery-the-road-to-the-cloud-part-i", kind: "blog" },
+  { title: "Spotify’s Event Delivery – The Road to the Cloud (Part II)", source: "Spotify Engineering", year: 2016, url: "https://engineering.atspotify.com/2016/03/spotifys-event-delivery-the-road-to-the-cloud-part-ii", kind: "blog", note: "Kafka → Cloud Pub/Sub" },
+  { title: "Scaling Agile @ Spotify with Tribes, Squads, Chapters & Guilds", source: "H. Kniberg & A. Ivarsson", year: 2012, url: "https://blog.crisp.se/wp-content/uploads/2012/11/SpotifyScaling.pdf", kind: "paper" },
+  { title: "Spotify users have spent over 2.3 billion hours streaming Discover Weekly playlists since 2015", source: "Spotify Newsroom", year: 2020, url: "https://newsroom.spotify.com/2020-07-09/spotify-users-have-spent-over-2-3-billion-hours-streaming-discover-weekly-playlists-since-2015/", kind: "blog" },
+  { title: "What the Heck Is Backstage Anyway?", source: "Spotify Engineering", year: 2020, url: "https://engineering.atspotify.com/2020/03/what-the-heck-is-backstage-anyway/", kind: "blog" },
+]
+
 export default function SpotifyEpisode() {
   return (
     <>
@@ -34,6 +46,7 @@ export default function SpotifyEpisode() {
         Step through the stages and, before each click, name the next bottleneck. Notice how often the answer is
         “do it on the client” or “reuse a system you already built”.
       </Callout>
+      <p className="muted"><em>This episode is an independent reconstruction from public sources. It is not affiliated with or endorsed by Spotify; all trademarks belong to their owners.</em></p>
 
       <H2 id="the-build">The build, stage by stage</H2>
       <EpisodePlayer stages={SPOTIFY_STAGES} height={400} />
@@ -131,6 +144,9 @@ export default function SpotifyEpisode() {
           <p>The “what is a stream” rule is versioned in one place, and the raw events are retained so any report can be recomputed and audited. Anomaly detection flags bot-like listening before payouts. When numbers are disputed, we can replay the exact events and rule version behind them.</p>
         </>}
       />
+
+      <H2 id="references">Sources</H2>
+      <References items={REFS} />
 
       <KeyTakeaways items={[
         'Instant play comes from removing round trips on the client: warm connections, cached keys, prefetch.',

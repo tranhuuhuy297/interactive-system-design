@@ -1,0 +1,23 @@
+@layer components {
+  .aipar { display: grid; grid-template-columns: minmax(0, 0.9fr) minmax(0, 1.2fr); gap: var(--space-6); }
+  .aipar__out { display: grid; gap: var(--space-3); align-content: start; }
+  .aipar__stats { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: var(--space-2); }
+  .aipar__stats > div { display: flex; flex-direction: column; gap: 2px; padding: var(--space-2) var(--space-3); border: 1px solid var(--border); border-radius: var(--radius-md); background: var(--surface); }
+  .aipar__stats span { font-size: 10.5px; text-transform: uppercase; letter-spacing: 0.05em; color: var(--text-subtle); font-weight: 600; }
+  .aipar__stats strong { font-family: var(--font-mono); font-size: var(--text-sm); color: var(--text); font-weight: 600; }
+  .aipar__nodes { display: grid; gap: var(--space-2); }
+  .aipar__node { padding: var(--space-2) var(--space-3); border: 1px solid var(--border); border-radius: var(--radius-md); background: var(--surface); animation: fade-up var(--dur-base) var(--ease-out); }
+  .aipar__node > span { display: block; font-size: var(--text-xs); color: var(--text-subtle); margin-bottom: 6px; }
+  .aipar__gpus { display: grid; grid-template-columns: repeat(8, 1fr); gap: 6px; }
+  .aipar__gpu { position: relative; height: 44px; border: 1px solid var(--border); border-radius: var(--radius-sm); background: var(--surface-2); overflow: hidden; }
+  .aipar__gpu.is-used { border-color: var(--border-strong); background: var(--bg-elevated); }
+  .aipar__gpu i { position: absolute; left: 0; right: 0; bottom: 0; background: var(--accent); transition: height var(--dur-slow) var(--ease-out); }
+  .aipar__legend { margin: 0; font-size: var(--text-xs); color: var(--text-subtle); display: flex; align-items: center; gap: 6px; }
+  .aipar__legend i { display: inline-block; width: 10px; height: 10px; border-radius: 2px; background: var(--accent); }
+  .aipar__warn { margin: 0; padding-left: var(--space-4); display: grid; gap: 4px; font-size: var(--text-xs); color: var(--text-muted); }
+  .aipar__warn li::marker { color: var(--warning); }
+  @media (max-width: 760px) {
+    .aipar { grid-template-columns: 1fr; }
+    .aipar__stats { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+  }
+}

@@ -1,7 +1,8 @@
 import {
+  References,
   ArchitectureDiagram, Callout, CompareTable, EpisodePlayer, EstimationTable, H2, InterviewQuestion, KeyTakeaways,
 } from '../components/ui'
-import type { ArchEdge, ArchNode } from '../components/ui'
+import type { ArchEdge, ArchNode, Reference } from '../components/ui'
 import { EpisodeUberDispatchDemo } from './demos/episode-uber-dispatch-demo'
 import { UBER_STAGES } from './demos/episode-uber-stages'
 
@@ -24,6 +25,16 @@ const MATCH_EDGES: ArchEdge[] = [
   { from: 'driver', to: 'gw' },
 ]
 
+// Primary public sources behind the “In the real world” notes.
+const REFS: Reference[] = [
+  { title: "H3: Uber’s Hexagonal Hierarchical Spatial Index", source: "Uber Engineering", year: 2018, url: "https://www.uber.com/us/en/blog/h3/", kind: "blog" },
+  { title: "H3 (open-source library)", source: "Uber on GitHub", url: "https://github.com/uber/h3", kind: "docs" },
+  { title: "Designing Schemaless, Uber Engineering’s Scalable Datastore Using MySQL", source: "Uber Engineering", year: 2016, url: "https://www.uber.com/us/en/blog/schemaless-part-one-mysql-datastore/", kind: "blog" },
+  { title: "The Architecture of Schemaless, Uber Engineering’s Trip Datastore Using MySQL", source: "Uber Engineering", year: 2016, url: "https://www.uber.com/us/en/blog/schemaless-part-two-architecture/", kind: "blog" },
+  { title: "H3 documentation", source: "h3geo.org", url: "https://h3geo.org/", kind: "docs" },
+  { title: "Disaster recovery for multi-region Kafka at Uber", source: "Uber Engineering", url: "https://www.uber.com/us/en/blog/kafka/", kind: "blog", note: "“one of the largest Kafka deployments”" },
+]
+
 export default function UberEpisode() {
   return (
     <>
@@ -37,6 +48,7 @@ export default function UberEpisode() {
         At every stage, ask: <em>what is the hot path, and what state must never be lost?</em> In ride-hailing those
         are two very different things. Locations are disposable; trips are sacred.
       </Callout>
+      <p className="muted"><em>This episode is an independent reconstruction from public sources. It is not affiliated with or endorsed by Uber; all trademarks belong to their owners.</em></p>
 
       <H2 id="the-build">The build, stage by stage</H2>
       <EpisodePlayer stages={UBER_STAGES} height={420} />
@@ -121,6 +133,9 @@ export default function UberEpisode() {
         </>}
         followUps={['What if the trip store is unavailable when a driver accepts?', 'How do you design offer timeouts to balance wait time and driver fairness?']}
       />
+
+      <H2 id="references">Sources</H2>
+      <References items={REFS} />
 
       <KeyTakeaways items={[
         'Split disposable, high-rate location data from durable, low-rate trip data. They need opposite designs.',

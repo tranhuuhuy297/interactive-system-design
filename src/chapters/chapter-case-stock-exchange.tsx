@@ -1,8 +1,8 @@
 import {
   ApiSpec, ArchitectureDiagram, Callout, CodeBlock, CompareTable, EstimationTable, H2, InterviewQuestion,
-  KeyTakeaways, Requirements,
+  KeyTakeaways, Requirements, References,
 } from '../components/ui'
-import type { ArchEdge, ArchNode } from '../components/ui'
+import type { ArchEdge, ArchNode, Reference } from '../components/ui'
 import { ExchangeOrderBookDemo } from './demos/exchange-order-book-demo'
 import { ExchangeSequencerReplayDemo } from './demos/exchange-sequencer-replay-demo'
 
@@ -30,6 +30,14 @@ const EDGES: ArchEdge[] = [
   { from: 'broker', to: 'gw' }, { from: 'gw', to: 'risk' }, { from: 'risk', to: 'seq' }, { from: 'seq', to: 'engine' },
   { from: 'seq', to: 'log' }, { from: 'log', to: 'standby', async: true }, { from: 'engine', to: 'md' },
   { from: 'engine', to: 'rep', async: true },
+]
+
+const REFS: Reference[] = [
+  { title: 'The LMAX Architecture', source: 'M. Fowler', year: 2011, url: 'https://martinfowler.com/articles/lmax.html', kind: 'blog', note: 'single-threaded engine, event sourcing, replay' },
+  { title: 'LMAX Disruptor', source: 'LMAX Exchange', url: 'https://lmax-exchange.github.io/disruptor/', kind: 'docs', note: 'pre-allocated ring buffers between stages' },
+  { title: 'FIX Protocol standards', source: 'FIX Trading Community', url: 'https://www.fixtrading.org/standards/', kind: 'docs', note: 'NewOrderSingle, ExecutionReport messages' },
+  { title: 'Nasdaq TotalView-ITCH 5.0 specification', source: 'Nasdaq', url: 'https://www.nasdaqtrader.com/content/technicalsupport/specifications/dataproducts/NQTVITCHspecification.pdf', kind: 'docs', note: 'sequenced binary market data' },
+  { title: 'System Design Interview – An Insider’s Guide, Volume 2', source: 'Alex Xu & Sahn Lam', year: 2022, kind: 'book', note: 'stock exchange prompt' },
 ]
 
 export default function StockExchangeChapter() {
@@ -195,6 +203,9 @@ type SequencedEvent = {
         </>}
         followUps={['How do you avoid split-brain between primary and standby?', 'What does the broker see during failover?']}
       />
+
+      <H2 id="references">References &amp; further reading</H2>
+      <References items={REFS} />
 
       <KeyTakeaways items={[
         'An exchange is a deterministic state machine: sequencer → journal → single-threaded engine.',

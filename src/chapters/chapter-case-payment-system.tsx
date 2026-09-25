@@ -1,10 +1,21 @@
 import {
   ApiSpec, ArchitectureDiagram, Callout, CodeBlock, CompareTable, EstimationTable, H2, InterviewQuestion,
-  KeyTakeaways, Requirements,
+  KeyTakeaways, References, Requirements,
 } from '../components/ui'
-import type { ArchEdge, ArchNode } from '../components/ui'
+import type { ArchEdge, ArchNode, Reference } from '../components/ui'
 import { PayIdempotencyDemo } from './demos/pay-idempotency-demo'
 import { PayLedgerDemo } from './demos/pay-ledger-demo'
+
+const REFS: Reference[] = [
+  { title: 'Designing robust and predictable APIs with idempotency', source: 'Brandur Leach, Stripe', year: 2017, url: 'https://stripe.com/blog/idempotency', kind: 'blog' },
+  { title: 'Idempotent requests', source: 'Stripe API reference', url: 'https://docs.stripe.com/api/idempotent_requests', kind: 'docs' },
+  { title: 'Receive Stripe events in your webhook endpoint', source: 'Stripe documentation', url: 'https://docs.stripe.com/webhooks', kind: 'docs', note: 'signature verification, duplicate and out-of-order events' },
+  { title: 'Avoiding Double Payments in a Distributed Payments System', source: 'Jon Chew & Ninad Khisti, Airbnb Engineering', year: 2019, url: 'https://medium.com/airbnb-engineering/avoiding-double-payments-in-a-distributed-payments-system-2981f6b070bb', kind: 'blog' },
+  { title: 'Ledger: Stripe’s system for tracking and validating money movement', source: 'Ilya Ganelin, Stripe', year: 2024, url: 'https://stripe.dev/blog/ledger-stripe-system-for-tracking-and-validating-money-movement', kind: 'blog', note: 'double-entry ledger and reconciliation' },
+  { title: 'Accounting for Developers, Part I: The Fundamentals', source: 'Lucas Rocha, Modern Treasury', year: 2022, url: 'https://www.moderntreasury.com/journal/accounting-for-developers-part-i', kind: 'blog', note: 'double-entry basics' },
+  { title: 'PCI Security Standards document library (PCI DSS)', source: 'PCI Security Standards Council', url: 'https://www.pcisecuritystandards.org/document_library/', kind: 'docs' },
+  { title: 'System Design Interview – An Insider’s Guide, Vol. 2 (ch. “Payment System”)', source: 'Alex Xu & Sahn Lam', year: 2022, kind: 'book', note: 'recommended further reading on the same prompt' },
+]
 
 const NODES: ArchNode[] = [
   { id: 'client', label: 'Checkout', sub: 'web / app', kind: 'client', x: 10, y: 30 },
@@ -190,6 +201,9 @@ const transitions: Record<Status, Status[]> = {
           <p>Nightly reconciliation between payments and ledger is the backstop for bugs. At our volume the ledger could live in the same database and write in the same transaction, which is simpler. I'd make that call explicitly.</p>
         </>}
       />
+
+      <H2 id="references">References &amp; further reading</H2>
+      <References items={REFS} />
 
       <KeyTakeaways items={[
         'Throughput is easy here. Correctness under partial failure is the whole interview.',

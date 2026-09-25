@@ -1,8 +1,22 @@
 import {
-  ApiSpec, Callout, CodeBlock, CompareTable, FlowDiagram, H2, InterviewQuestion, KeyTakeaways, Tabs,
+  ApiSpec, Callout, CodeBlock, CompareTable, FlowDiagram, H2, InterviewQuestion, KeyTakeaways, References, Tabs,
 } from '../components/ui'
+import type { Reference } from '../components/ui'
 import { NetworkHandshakeTimeline } from './demos/network-handshake-timeline'
 import { NetworkRealtimeTransportSimulator } from './demos/network-realtime-transport-simulator'
+
+const REFS: Reference[] = [
+  { title: "RFC 9110: HTTP Semantics", source: "IETF", year: 2022, url: "https://www.rfc-editor.org/rfc/rfc9110", kind: "rfc" },
+  { title: "RFC 9113: HTTP/2", source: "IETF", year: 2022, url: "https://www.rfc-editor.org/rfc/rfc9113", kind: "rfc" },
+  { title: "RFC 9114: HTTP/3", source: "IETF", year: 2022, url: "https://www.rfc-editor.org/rfc/rfc9114", kind: "rfc" },
+  { title: "RFC 9000: QUIC", source: "IETF", year: 2021, url: "https://www.rfc-editor.org/rfc/rfc9000", kind: "rfc" },
+  { title: "RFC 8446: TLS 1.3", source: "IETF", year: 2018, url: "https://www.rfc-editor.org/rfc/rfc8446", kind: "rfc" },
+  { title: "RFC 6455: The WebSocket Protocol", source: "IETF", year: 2011, url: "https://www.rfc-editor.org/rfc/rfc6455", kind: "rfc" },
+  { title: "Server-sent events (HTML Living Standard)", source: "WHATWG", url: "https://html.spec.whatwg.org/multipage/server-sent-events.html", kind: "docs" },
+  { title: "Introduction to gRPC", source: "gRPC Authors", url: "https://grpc.io/docs/what-is-grpc/introduction/", kind: "docs" },
+  { title: "Learn GraphQL", source: "GraphQL Foundation", url: "https://graphql.org/learn/", kind: "docs" },
+  { title: "The Idempotency-Key HTTP Header Field (Internet-Draft)", source: "IETF HTTPAPI WG", url: "https://datatracker.ietf.org/doc/draft-ietf-httpapi-idempotency-key-header/", kind: "rfc" },
+]
 
 export default function NetworkingApisProtocolsChapter() {
   return (
@@ -133,6 +147,9 @@ curl -X POST https://api.example.com/v1/payments \\
         </>}
         followUps={['How do you evolve a protobuf schema without breaking clients?']}
       />
+
+      <H2 id="references">References &amp; further reading</H2>
+      <References items={REFS} />
 
       <KeyTakeaways items={[
         'A cold HTTPS request pays DNS, transport, and TLS round trips first. Reuse connections everywhere.',

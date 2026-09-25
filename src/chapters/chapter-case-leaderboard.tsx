@@ -1,8 +1,8 @@
 import {
   ApiSpec, ArchitectureDiagram, Callout, CodeBlock, CompareTable, EstimationTable, H2, InterviewQuestion,
-  KeyTakeaways, Requirements,
+  KeyTakeaways, Requirements, References,
 } from '../components/ui'
-import type { ArchEdge, ArchNode } from '../components/ui'
+import type { ArchEdge, ArchNode, Reference } from '../components/ui'
 import { LboardShardingDemo } from './demos/lboard-sharding-demo'
 import { LboardSortedSetDemo } from './demos/lboard-sorted-set-demo'
 
@@ -26,6 +26,15 @@ const EDGES: ArchEdge[] = [
   { from: 'client', to: 'game' }, { from: 'client', to: 'lb' }, { from: 'lb', to: 'svc' },
   { from: 'game', to: 'q', async: true, label: 'match result' }, { from: 'q', to: 'svc', async: true },
   { from: 'svc', to: 'redis' }, { from: 'q', to: 'db', async: true }, { from: 'svc', to: 'profile' },
+]
+
+const REFS: Reference[] = [
+  { title: 'Redis sorted sets', source: 'Redis documentation', url: 'https://redis.io/docs/latest/develop/data-types/sorted-sets/', kind: 'docs', note: 'ZADD/ZRANGE semantics, ties ordered by member' },
+  { title: 'ZADD command (score precision)', source: 'Redis documentation', url: 'https://redis.io/docs/latest/commands/zadd/', kind: 'docs', note: 'scores are doubles; integers exact up to 2^53' },
+  { title: 'ZREVRANK command', source: 'Redis documentation', url: 'https://redis.io/docs/latest/commands/zrevrank/', kind: 'docs', note: 'O(log N) rank lookup' },
+  { title: 'Skip lists: a probabilistic alternative to balanced trees', source: 'W. Pugh, Communications of the ACM', year: 1990, url: 'https://doi.org/10.1145/78973.78977', kind: 'paper', note: 'the structure behind sorted sets' },
+  { title: 'src/t_zset.c (skiplist with span counts)', source: 'Redis source code', url: 'https://github.com/redis/redis/blob/unstable/src/t_zset.c', kind: 'docs', note: 'how rank is computed in O(log N)' },
+  { title: 'System Design Interview – An Insider’s Guide, Volume 2', source: 'Alex Xu & Sahn Lam', year: 2022, kind: 'book', note: 'the leaderboard prompt as commonly posed in interviews' },
 ]
 
 export default function LeaderboardChapter() {
@@ -142,6 +151,9 @@ EXPIREAT lb:2026-09 <end of Oct>          # old boards age out`} />
           <p>So: an exact top-K set fed by the event stream, plus a score histogram (fixed buckets, updated incrementally) to answer “top 4%” in O(buckets). That cuts cost by orders of magnitude and keeps the UX. If product insists on exact ranks, range-shard by score with a routing table and accept the migrations.</p>
         </>}
       />
+
+      <H2 id="references">References &amp; further reading</H2>
+      <References items={REFS} />
 
       <KeyTakeaways items={[
         'Sorted sets give O(log N) updates, ranks and ranges, which is exactly what leaderboards need.',

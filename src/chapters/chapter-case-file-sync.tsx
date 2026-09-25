@@ -1,10 +1,21 @@
 import {
   ApiSpec, ArchitectureDiagram, Callout, CodeBlock, CompareTable, EstimationTable, H2, InterviewQuestion,
-  KeyTakeaways, Requirements,
+  KeyTakeaways, References, Requirements,
 } from '../components/ui'
-import type { ArchEdge, ArchNode } from '../components/ui'
+import type { ArchEdge, ArchNode, Reference } from '../components/ui'
 import { FilesyncChunkingDemo } from './demos/filesync-chunking-demo'
 import { FilesyncConflictDemo } from './demos/filesync-conflict-demo'
+
+const REFS: Reference[] = [
+  { title: 'A Low-bandwidth Network File System', source: 'A. Muthitacharoen, B. Chen, D. Mazières (SOSP)', year: 2001, url: 'https://pdos.csail.mit.edu/papers/lbfs:sosp01/lbfs.pdf', kind: 'paper', note: 'content-defined chunking with Rabin fingerprints' },
+  { title: 'FastCDC: a Fast and Efficient Content-Defined Chunking Approach for Data Deduplication', source: 'W. Xia et al. (USENIX ATC)', year: 2016, url: 'https://www.usenix.org/conference/atc16/technical-sessions/presentation/xia', kind: 'paper' },
+  { title: 'The rsync algorithm (technical report)', source: 'A. Tridgell & P. Mackerras', year: 1996, url: 'https://rsync.samba.org/tech_report/', kind: 'paper', note: 'rolling-checksum delta transfer' },
+  { title: 'Streaming File Synchronization', source: 'Nipunn Koorapati, Dropbox Tech', year: 2014, url: 'https://dropbox.tech/infrastructure/streaming-file-synchronization', kind: 'blog', note: 'files split into 4 MB blocks' },
+  { title: 'Rewriting the heart of our sync engine', source: 'Dropbox Tech', year: 2020, url: 'https://dropbox.tech/infrastructure/rewriting-the-heart-of-our-sync-engine', kind: 'blog', note: 'client correctness and testing' },
+  { title: 'Inside the Magic Pocket', source: 'Dropbox Tech', year: 2016, url: 'https://dropbox.tech/infrastructure/inside-the-magic-pocket', kind: 'blog', note: 'block storage at exabyte scale with erasure coding' },
+  { title: 'Side Channels in Cloud Services: Deduplication in Cloud Storage', source: 'D. Harnik, B. Pinkas, A. Shulman-Peleg (IEEE Security & Privacy)', year: 2010, url: 'https://doi.org/10.1109/MSP.2010.187', kind: 'paper', note: 'cross-user dedup leaks information' },
+  { title: 'System Design Interview – An Insider’s Guide, Vol. 1 (ch. “Design Google Drive”)', source: 'Alex Xu', year: 2020, kind: 'book', note: 'recommended further reading on the same prompt' },
+]
 
 const NODES: ArchNode[] = [
   { id: 'a', label: 'Device A', sub: 'sync client', kind: 'client', x: 10, y: 30,
@@ -166,6 +177,9 @@ type Block       = { sha256: string; size: number; refCount: number; tier: 'hot'
           <p>Long-poll servers hold millions of mostly idle connections, so they need to be memory-lean and horizontally partitioned by namespace. On reconnect, clients jitter their retries to avoid a thundering herd after a deploy.</p>
         </>}
       />
+
+      <H2 id="references">References &amp; further reading</H2>
+      <References items={REFS} />
 
       <KeyTakeaways items={[
         'Separate the byte path (block service, object storage) from the truth path (metadata DB, journal).',

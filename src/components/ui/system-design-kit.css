@@ -106,3 +106,16 @@
   .arch__edge.is-new { color: var(--accent); }
   @keyframes arch-pop { from { opacity: 0; scale: 0.85; } to { opacity: 1; scale: 1; } }
 }
+
+@layer components {
+  /* References list */
+  .refs { list-style: none; padding: 0 !important; display: grid; gap: 1px; border: 1px solid var(--border); border-radius: var(--radius-lg); overflow: hidden; background: var(--border); }
+  .refs__item { display: flex; gap: var(--space-3); align-items: baseline; padding: var(--space-3) var(--space-4); margin: 0 !important; background: var(--surface); }
+  .refs__icon { flex-shrink: 0; color: var(--text-subtle); translate: 0 2px; }
+  .refs__title { font-size: var(--text-sm); font-weight: 550; color: var(--text); }
+  .refs__title a { color: var(--text) !important; text-decoration: none !important; display: inline-flex; align-items: baseline; gap: 4px; }
+  .refs__title a:hover { color: var(--accent) !important; text-decoration: underline !important; }
+  .refs__title svg { color: var(--text-subtle); flex-shrink: 0; }
+  .refs__meta { font-size: var(--text-xs); color: var(--text-subtle); margin-top: 2px; }
+  .refs__meta em { font-style: normal; color: var(--text-muted); }
+}

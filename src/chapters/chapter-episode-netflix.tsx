@@ -1,7 +1,8 @@
 import {
+  References,
   ArchitectureDiagram, Callout, CompareTable, EpisodePlayer, EstimationTable, H2, InterviewQuestion, KeyTakeaways,
 } from '../components/ui'
-import type { ArchEdge, ArchNode } from '../components/ui'
+import type { ArchEdge, ArchNode, Reference } from '../components/ui'
 import { EpisodeNetflixPerTitleDemo } from './demos/episode-netflix-per-title-demo'
 import { NETFLIX_STAGES } from './demos/episode-netflix-stages'
 
@@ -20,6 +21,20 @@ const PLAY_EDGES: ArchEdge[] = [
   { from: 'tv', to: 'oca' }, { from: 'play', to: 'hist', async: true },
 ]
 
+// Primary public sources behind the “In the real world” notes.
+const REFS: Reference[] = [
+  { title: "Completing the Netflix Cloud Migration", source: "Netflix", year: 2016, url: "https://about.netflix.com/en/news/completing-the-netflix-cloud-migration", kind: "blog", note: "AWS move: Aug 2008 → Jan 2016" },
+  { title: "Per-Title Encode Optimization", source: "Netflix Technology Blog", year: 2015, url: "https://netflixtechblog.com/per-title-encode-optimization-7e99442b62a2", kind: "blog" },
+  { title: "Dynamic optimizer — a perceptual video encoding optimization framework", source: "Netflix Technology Blog", url: "https://netflixtechblog.com/dynamic-optimizer-a-perceptual-video-encoding-optimization-framework-e19f1e3a277f", kind: "blog", note: "shot-based encoding" },
+  { title: "Open Connect Overview (PDF)", source: "Netflix", url: "https://openconnect.netflix.com/Open-Connect-Overview.pdf", kind: "docs", note: "initiative began in 2011" },
+  { title: "Open Connect Appliances", source: "Netflix", url: "https://openconnect.netflix.com/en/appliances/", kind: "docs" },
+  { title: "The Netflix Simian Army", source: "Netflix Technology Blog", year: 2011, url: "https://netflixtechblog.com/the-netflix-simian-army-16e57fbab116", kind: "blog", note: "Chaos Monkey" },
+  { title: "Project Nimble: Region Evacuation Reimagined", source: "Netflix Technology Blog", year: 2018, url: "https://netflixtechblog.com/project-nimble-region-evacuation-reimagined-d0d0568254d4", kind: "blog" },
+  { title: "Zuul (edge gateway)", source: "Netflix OSS on GitHub", url: "https://github.com/Netflix/zuul", kind: "docs" },
+  { title: "Eureka (service discovery)", source: "Netflix OSS on GitHub", url: "https://github.com/Netflix/eureka", kind: "docs" },
+  { title: "Hystrix (now in maintenance mode) and EVCache", source: "Netflix OSS on GitHub", url: "https://github.com/Netflix/Hystrix", kind: "docs" },
+]
+
 export default function NetflixEpisode() {
   return (
     <>
@@ -33,6 +48,7 @@ export default function NetflixEpisode() {
         Step through the stages below. At each stage, predict what breaks next <em>before</em> clicking. That habit
         is exactly what a system design interviewer is testing.
       </Callout>
+      <p className="muted"><em>This episode is an independent reconstruction from public sources. It is not affiliated with or endorsed by Netflix; all trademarks belong to their owners.</em></p>
 
       <H2 id="the-build">The build, stage by stage</H2>
       <EpisodePlayer stages={NETFLIX_STAGES} height={400} />
@@ -109,6 +125,9 @@ export default function NetflixEpisode() {
           <p>Crucially, playback, search, and “continue watching” must not depend on it at all. I’d audit the dependency graph so every non-critical call has a fallback, and verify it with fault injection rather than trusting the design doc.</p>
         </>}
       />
+
+      <H2 id="references">Sources</H2>
+      <References items={REFS} />
 
       <KeyTakeaways items={[
         'Split the control plane (small, smart, cloud) from the data plane (huge, dumb, close to users).',

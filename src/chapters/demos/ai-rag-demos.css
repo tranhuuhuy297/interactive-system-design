@@ -1,0 +1,53 @@
+@layer components {
+  /* Retrieval playground */
+  .airag { display: grid; gap: var(--space-4); }
+  .airag__queries { display: flex; flex-wrap: wrap; gap: var(--space-2); }
+  .airag__chip { padding: 5px 10px; border-radius: var(--radius-md); border: 1px solid var(--border-strong); font-size: var(--text-sm); color: var(--text-muted); }
+  .airag__chip:hover { color: var(--text); }
+  .airag__chip.is-active { border-color: var(--accent); color: var(--text); background: var(--accent-soft); }
+  .airag__input { flex: 1 1 200px; height: 32px; padding: 0 var(--space-3); border-radius: var(--radius-md); border: 1px solid var(--border-strong); background: var(--surface-2); font-size: var(--text-sm); outline: none; }
+  .airag__input:focus-visible { border-color: var(--accent); }
+  .airag__why { font-size: var(--text-sm); color: var(--text-muted); line-height: 1.55; }
+  .airag__why em { color: var(--text-subtle); font-style: normal; font-size: var(--text-xs); }
+  .airag__controls { display: grid; grid-template-columns: 1fr 1fr auto; gap: var(--space-5); align-items: end; }
+  .airag__count { display: flex; flex-direction: column; font-size: var(--text-xs); color: var(--text-subtle); }
+  .airag__count strong { font-size: var(--text-lg); color: var(--text); }
+
+  .airag__cols { display: grid; grid-template-columns: repeat(3, 1fr); gap: var(--space-3); }
+  .airag__col { border: 1px solid var(--border); border-radius: var(--radius-lg); background: var(--surface); padding: var(--space-3); min-width: 0; }
+  .airag__col header { display: flex; justify-content: space-between; align-items: baseline; gap: var(--space-2); margin-bottom: var(--space-2); font-size: var(--text-sm); color: var(--text); }
+  .airag__hit { font-size: 11px; font-weight: 600; white-space: nowrap; }
+  .airag__hit.is-good { color: var(--success); }
+  .airag__hit.is-ok { color: var(--warning); }
+  .airag__hit.is-bad { color: var(--danger); }
+  .airag__none { font-size: var(--text-xs); color: var(--text-subtle); }
+  .airag__col ol { list-style: none; padding: 0; margin: 0; display: grid; gap: 6px; }
+  .airag__col li { padding: 6px 8px; border-radius: var(--radius-md); border: 1px solid var(--border); background: var(--bg-elevated); }
+  .airag__col li.is-relevant { border-color: var(--success); }
+  .airag__row { display: flex; gap: 6px; align-items: baseline; font-size: 12px; color: var(--text-muted); }
+  .airag__row code { font-family: var(--font-mono); color: var(--text); }
+  .airag__row span { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  .airag__row b { font-weight: 500; color: var(--text-subtle); font-size: 11px; }
+  .airag__col li p { margin: 3px 0 0; font-size: 11.5px; line-height: 1.45; color: var(--text-subtle); }
+
+  @media (max-width: 860px) {
+    .airag__cols { grid-template-columns: 1fr; }
+    .airag__controls { grid-template-columns: 1fr; }
+  }
+
+  /* ANN trade-off */
+  .aiann { display: grid; gap: var(--space-4); }
+  .aiann__controls { display: grid; grid-template-columns: auto 1fr; gap: var(--space-5); align-items: end; }
+  .aiann__stats { display: grid; grid-template-columns: repeat(4, 1fr); gap: var(--space-2); }
+  .aiann__stat { padding: var(--space-3); border: 1px solid var(--border); border-radius: var(--radius-md); background: var(--surface); display: flex; flex-direction: column; gap: 2px; }
+  .aiann__stat span { font-size: 10.5px; text-transform: uppercase; letter-spacing: 0.06em; color: var(--text-subtle); font-weight: 600; }
+  .aiann__stat strong { font-size: var(--text-lg); font-weight: 600; letter-spacing: -0.02em; color: var(--text); }
+  .aiann__stat small { font-size: var(--text-xs); color: var(--text-subtle); }
+  .aiann__meter { height: 6px; border-radius: 3px; background: var(--surface-3); overflow: hidden; margin-top: 4px; }
+  .aiann__meter i { display: block; height: 100%; background: var(--accent); transition: width var(--dur-base) var(--ease-out); }
+  .aiann__note { font-size: var(--text-xs); color: var(--text-subtle); line-height: 1.6; }
+  @media (max-width: 720px) {
+    .aiann__controls { grid-template-columns: 1fr; }
+    .aiann__stats { grid-template-columns: 1fr 1fr; }
+  }
+}

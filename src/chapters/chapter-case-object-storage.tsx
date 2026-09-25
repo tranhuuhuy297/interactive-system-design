@@ -1,8 +1,8 @@
 import {
   ApiSpec, ArchitectureDiagram, Callout, CodeBlock, CompareTable, EstimationTable, H2, InterviewQuestion,
-  KeyTakeaways, Requirements,
+  KeyTakeaways, Requirements, References,
 } from '../components/ui'
-import type { ArchEdge, ArchNode } from '../components/ui'
+import type { ArchEdge, ArchNode, Reference } from '../components/ui'
 import { ObjstoreErasureCodingDemo } from './demos/objstore-erasure-coding-demo'
 import { ObjstoreMultipartUploadDemo } from './demos/objstore-multipart-upload-demo'
 
@@ -28,6 +28,17 @@ const EDGES: ArchEdge[] = [
   { from: 'client', to: 'api' }, { from: 'api', to: 'iam' }, { from: 'api', to: 'meta' }, { from: 'meta', to: 'mdb' },
   { from: 'api', to: 'placement' }, { from: 'api', to: 'data' }, { from: 'data', to: 'placement', async: true, label: 'heartbeats' },
   { from: 'gc', to: 'data', async: true },
+]
+
+const REFS: Reference[] = [
+  { title: 'Polynomial Codes Over Certain Finite Fields', source: 'I. S. Reed & G. Solomon, J. SIAM', year: 1960, url: 'https://doi.org/10.1137/0108018', kind: 'paper', note: 'Reed–Solomon codes' },
+  { title: 'Erasure Coding in Windows Azure Storage', source: 'C. Huang et al., USENIX ATC', year: 2012, url: 'https://www.usenix.org/conference/atc12/technical-sessions/presentation/huang', kind: 'paper', note: 'locally repairable codes' },
+  { title: 'Finding a Needle in Haystack: Facebook’s Photo Storage', source: 'D. Beaver et al., OSDI', year: 2010, url: 'https://www.usenix.org/conference/osdi10/finding-needle-haystack-facebooks-photo-storage', kind: 'paper', note: 'packing small objects into large files' },
+  { title: 'Amazon S3 update: strong read-after-write consistency', source: 'AWS News Blog', year: 2020, url: 'https://aws.amazon.com/blogs/aws/amazon-s3-update-strong-read-after-write-consistency/', kind: 'blog' },
+  { title: 'Uploading and copying objects using multipart upload', source: 'Amazon S3 User Guide', url: 'https://docs.aws.amazon.com/AmazonS3/latest/userguide/mpuoverview.html', kind: 'docs' },
+  { title: 'Data protection in Amazon S3 (durability)', source: 'Amazon S3 User Guide', url: 'https://docs.aws.amazon.com/AmazonS3/latest/userguide/DataDurability.html', kind: 'docs', note: '11 nines design target' },
+  { title: 'Cloud storage durability', source: 'Backblaze blog', url: 'https://www.backblaze.com/blog/cloud-storage-durability/', kind: 'blog', note: 'how durability nines are modelled' },
+  { title: 'System Design Interview – An Insider’s Guide, Volume 2', source: 'Alex Xu & Sahn Lam', year: 2022, kind: 'book', note: 'S3-like object storage prompt' },
 ]
 
 export default function ObjectStorageChapter() {
@@ -209,6 +220,9 @@ type ObjectVersion = {
         </>}
         followUps={['How would you size repair bandwidth?', 'What are locally repairable codes and when do they help?']}
       />
+
+      <H2 id="references">References &amp; further reading</H2>
+      <References items={REFS} />
 
       <KeyTakeaways items={[
         'Split the system into a metadata plane (what exists, where) and a data plane (bytes on disks); they scale and fail independently.',

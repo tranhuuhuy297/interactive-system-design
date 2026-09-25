@@ -34,7 +34,7 @@ export const SPOTIFY_STAGES: EpisodeStage[] = [
     problem: <p>Prove that streaming can feel as fast as playing a local MP3. Labels only license music to a product that works, and users only stay if play is instant.</p>,
     decision: <p>A small catalog database, audio files in storage, and one backend that authorizes and streams. The client is a native app, not a web page, so it can cache aggressively.</p>,
     tradeoff: <p>Every byte flows through the backend. Latency depends on how far you are from one data center.</p>,
-    realWorld: <p>Spotify has written that its early desktop client combined its own servers with a <strong>peer-to-peer</strong> network between clients to cut bandwidth. It phased P2P out around 2014 once server-side delivery became cheaper and mobile dominated.</p>,
+    realWorld: <p>Spotify has written that its early desktop client combined its own servers with a <strong>peer-to-peer</strong> network between clients to cut bandwidth. In 2014 Spotify said it was phasing P2P out because its growing server fleet could now deliver music on its own. The mobile and web players never used P2P.</p>,
   },
   {
     title: 'v1 · Instant play',

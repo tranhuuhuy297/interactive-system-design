@@ -1,7 +1,8 @@
 import {
+  References,
   ArchitectureDiagram, Callout, CompareTable, EpisodePlayer, EstimationTable, H2, InterviewQuestion, KeyTakeaways,
 } from '../components/ui'
-import type { ArchEdge, ArchNode } from '../components/ui'
+import type { ArchEdge, ArchNode, Reference } from '../components/ui'
 import { EpisodeChatgptContextBudgetDemo } from './demos/episode-chatgpt-context-budget-demo'
 import { CHATGPT_STAGES } from './demos/episode-chatgpt-stages'
 
@@ -22,6 +23,18 @@ const MSG_EDGES: ArchEdge[] = [
   { from: 'orch', to: 'fleet' }, { from: 'orch', to: 'store', async: true },
 ]
 
+// Primary public sources behind the “In the real world” notes.
+const REFS: Reference[] = [
+  { title: "Introducing ChatGPT", source: "OpenAI", year: 2022, url: "https://openai.com/index/chatgpt/", kind: "blog", note: "launched 30 Nov 2022; trained on Azure" },
+  { title: "Streaming API responses", source: "OpenAI API docs", url: "https://developers.openai.com/api/docs/guides/streaming-responses", kind: "docs", note: "stream=true over SSE" },
+  { title: "Rate limits", source: "OpenAI API docs", url: "https://platform.openai.com/docs/guides/rate-limits", kind: "docs", note: "RPM/TPM and usage tiers" },
+  { title: "Memory and new controls for ChatGPT", source: "OpenAI", year: 2024, url: "https://openai.com/index/memory-and-new-controls-for-chatgpt/", kind: "blog" },
+  { title: "Function calling and other API updates", source: "OpenAI", year: 2023, url: "https://openai.com/index/function-calling-and-other-api-updates/", kind: "blog" },
+  { title: "ChatGPT plugins", source: "OpenAI", year: 2023, url: "https://openai.com/index/chatgpt-plugins/", kind: "blog", note: "Code Interpreter announcement" },
+  { title: "Moderation", source: "OpenAI API docs", url: "https://platform.openai.com/docs/guides/moderation", kind: "docs" },
+  { title: "Microsoft and OpenAI extend partnership", source: "Official Microsoft Blog", year: 2023, url: "https://blogs.microsoft.com/blog/2023/01/23/microsoftandopenaiextendpartnership/", kind: "blog" },
+]
+
 export default function ChatgptEpisode() {
   return (
     <>
@@ -36,6 +49,7 @@ export default function ChatgptEpisode() {
         OpenAI publishes little about its internal architecture. The stages below describe <strong>common industry
         practice</strong> for LLM products. “In the real world” notes stick to publicly documented features.
       </Callout>
+      <p className="muted"><em>This episode is an independent reconstruction from public sources. It is not affiliated with or endorsed by OpenAI; all trademarks belong to their owners.</em></p>
 
       <H2 id="the-build">The build, stage by stage</H2>
       <EpisodePlayer stages={CHATGPT_STAGES} height={400} />
@@ -127,6 +141,9 @@ export default function ChatgptEpisode() {
           <p>Reads load the path from root to the current leaf, which bounds work per request. It also lets context building and caching key on stable message ids, and keeps a complete record for abuse investigations and deletion requests.</p>
         </>}
       />
+
+      <H2 id="references">Sources</H2>
+      <References items={REFS} />
 
       <KeyTakeaways items={[
         'GPU time is the scarce resource: meter, limit, and schedule in tokens, not requests.',

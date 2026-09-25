@@ -35,9 +35,9 @@ export function HomePage({ onOpenSearch }: { onOpenSearch: () => void }) {
             <a className="btn btn--ghost btn--md" href="#/mock"><Target size={15} /> Mock interview</a>
           </div>
           <dl className="hero__stats">
-            <div><dt>Chapters</dt><dd>{CHAPTERS.length}</dd></div>
+            <div><dt>Chapters</dt><dd>{CHAPTERS.filter((c) => c.group !== 'About').length}</dd></div>
             <div><dt>Hours</dt><dd>{(totalMinutes / 60).toFixed(1)}</dd></div>
-            <div><dt>Playgrounds</dt><dd>60+</dd></div>
+            <div><dt>Playgrounds</dt><dd>90+</dd></div>
             <div><dt>Case studies</dt><dd>{CHAPTERS.filter((c) => c.group === 'Case Studies').length}</dd></div>
           </dl>
         </motion.div>
@@ -55,7 +55,7 @@ export function HomePage({ onOpenSearch }: { onOpenSearch: () => void }) {
         <div className="progress-strip__tip"><Crown size={15} /> Every chapter has <b>Staff signal</b> callouts and senior-vs-staff model answers.</div>
       </section>
 
-      {GROUPS.map((g, gi) => (
+      {GROUPS.filter((g) => g.name !== 'About').map((g, gi) => (
         <section key={g.name} className="track" style={{ ['--hue' as string]: g.hue }}>
           <header className="track__head">
             <span className="track__num">0{gi + 1}</span>
@@ -83,6 +83,18 @@ export function HomePage({ onOpenSearch }: { onOpenSearch: () => void }) {
       ))}
 
       <InterviewSprintPlan />
+
+      <footer className="home-foot">
+        <p>
+          Independent educational project. Original writing with cited sources; company names are used only to describe
+          publicly documented engineering and imply no affiliation or endorsement.
+        </p>
+        <nav>
+          <a href="#/about">About, sources &amp; license</a>
+          <a href="https://github.com/tranhuuhuy297/interactive-system-design" target="_blank" rel="noopener noreferrer">GitHub</a>
+          <a href="https://github.com/tranhuuhuy297/interactive-system-design/issues" target="_blank" rel="noopener noreferrer">Report an error</a>
+        </nav>
+      </footer>
     </div>
   )
 }

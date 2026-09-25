@@ -1,9 +1,17 @@
 import {
   ApiSpec, ArchitectureDiagram, Callout, CodeBlock, CompareTable, EstimationTable, FlowDiagram, H2, InterviewQuestion,
-  KeyTakeaways, Requirements,
+  KeyTakeaways, References, Requirements,
 } from '../components/ui'
-import type { ArchEdge, ArchNode } from '../components/ui'
+import type { ArchEdge, ArchNode, Reference } from '../components/ui'
 import { AutocompleteTrieExplorerDemo } from './demos/autocomplete-trie-explorer-demo'
+
+const REFS: Reference[] = [
+  { title: 'Trie Memory', source: 'Edward Fredkin, Communications of the ACM', year: 1960, url: 'https://doi.org/10.1145/367390.367400', kind: 'paper', note: 'the trie data structure' },
+  { title: 'The Life of a Typeahead Query', source: 'Keith Adams, Engineering at Meta', year: 2010, url: 'https://engineering.fb.com/2010/05/17/web/the-life-of-a-typeahead-query/', kind: 'blog', note: 'sub-100 ms typeahead, aggregator + leaves' },
+  { title: 'Completion suggester', source: 'Elasticsearch reference', url: 'https://www.elastic.co/guide/en/elasticsearch/reference/current/search-suggesters.html', kind: 'docs', note: 'prefix suggestions from an in-memory structure' },
+  { title: 'Windows (DataStream API)', source: 'Apache Flink documentation', url: 'https://nightlies.apache.org/flink/flink-docs-stable/docs/dev/datastream/operators/windows/', kind: 'docs', note: 'sliding windows for trending queries' },
+  { title: 'System Design Interview – An Insider’s Guide, Vol. 1 (ch. “Design a Search Autocomplete System”)', source: 'Alex Xu', year: 2020, kind: 'book', note: 'recommended further reading on the same prompt' },
+]
 
 const NODES: ArchNode[] = [
   { id: 'client', label: 'Search box', sub: 'debounce + local cache', kind: 'client', x: 7, y: 30,
@@ -162,6 +170,9 @@ function suggest(root: TrieNode, rawPrefix: string, k = 5): string[] {
           <p>Since the index is immutable per version, I'd deploy each version as a whole: build all shards, verify, then flip a version pointer atomically. Otherwise different shards could serve different versions during rollout.</p>
         </>}
       />
+
+      <H2 id="references">References &amp; further reading</H2>
+      <References items={REFS} />
 
       <KeyTakeaways items={[
         'The serving path is a lookup. Precompute top-k per prefix offline.',

@@ -58,7 +58,7 @@ export const INSTAGRAM_STAGES: EpisodeStage[] = [
     problem: <p>Writes and data size outgrow one primary. Posts need IDs that are unique across many databases and still sort by time without a central ID service.</p>,
     decision: <p>Split data into thousands of <strong>logical shards</strong> (keyed by user), mapped onto a few <strong>physical</strong> servers. Generate IDs <em>inside</em> each shard: time bits, then the shard ID, then a per-shard sequence. Growing means moving whole logical shards, never re-keying rows.</p>,
     tradeoff: <p>Cross-user queries are scatter-gather, and resharding is still operational work. The ID layout caps throughput per shard per millisecond.</p>,
-    realWorld: <p>Instagram’s 2012 “Sharding &amp; IDs” post described exactly this: several thousand logical shards as Postgres schemas on fewer physical hosts, and 64-bit IDs of 41 bits of time, 13 bits of shard ID, and 10 bits of sequence, generated in PL/pgSQL.</p>,
+    realWorld: <p>Instagram’s “Sharding &amp; IDs” post (first published in 2011) described exactly this: several thousand logical shards as Postgres schemas on fewer physical hosts, and 64-bit IDs of 41 bits of time, 13 bits of shard ID, and 10 bits of sequence, generated in PL/pgSQL.</p>,
   },
   {
     title: 'v3 · The feed',
@@ -109,6 +109,6 @@ export const INSTAGRAM_STAGES: EpisodeStage[] = [
     problem: <p>A single region means high latency for most of the world and a single disaster domain.</p>,
     decision: <p>Serve reads from <strong>every region</strong> with local caches and replicas. Route writes to each shard’s primary region, and keep enough capacity to absorb a lost region.</p>,
     tradeoff: <p>Replication lag appears in the product: a like may show up a moment later elsewhere, so read-your-own-writes needs routing tricks.</p>,
-    realWorld: <p>After Facebook acquired Instagram in 2012, Instagram moved from AWS into Facebook’s data centers, and its engineers later wrote about running the service across multiple regions.</p>,
+    realWorld: <p>After Facebook acquired Instagram in 2012, Instagram moved from AWS into Facebook’s data centers (completed around 2014). Its engineers later described expanding to data centers in multiple regions, including Europe (2018).</p>,
   },
 ]

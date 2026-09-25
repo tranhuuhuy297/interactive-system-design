@@ -1,7 +1,7 @@
 import {
-  ArchitectureDiagram, Callout, CodeBlock, CompareTable, H2, InterviewQuestion, KeyTakeaways, Requirements, Tabs,
+  ArchitectureDiagram, Callout, CodeBlock, CompareTable, H2, InterviewQuestion, KeyTakeaways, References, Requirements, Tabs,
 } from '../components/ui'
-import type { ArchEdge, ArchNode } from '../components/ui'
+import type { ArchEdge, ArchNode, Reference } from '../components/ui'
 import { RateLimitRaceDemo } from './demos/ratelimit-race-demo'
 
 const NODES: ArchNode[] = [
@@ -22,6 +22,16 @@ const NODES: ArchNode[] = [
 const EDGES: ArchEdge[] = [
   { from: 'client', to: 'edge' }, { from: 'edge', to: 'gw' }, { from: 'gw', to: 'redis', label: 'INCR / EVALSHA' },
   { from: 'rules', to: 'gw', async: true }, { from: 'gw', to: 'svc' }, { from: 'svc', to: 'db' },
+]
+
+const REFS: Reference[] = [
+  { title: "Scaling your API with rate limiters", source: "Stripe blog", year: 2017, url: "https://stripe.com/blog/rate-limiters", kind: "blog" },
+  { title: "Counting things, a lot of different things…", source: "Cloudflare blog", year: 2017, url: "https://blog.cloudflare.com/counting-things-a-lot-of-different-things/", kind: "blog", note: "Sliding-window counter approximation at scale" },
+  { title: "RateLimit header fields for HTTP (Internet-Draft)", source: "IETF HTTPAPI WG", url: "https://datatracker.ietf.org/doc/draft-ietf-httpapi-ratelimit-headers/", kind: "rfc" },
+  { title: "RFC 6585: Additional HTTP Status Codes (429 Too Many Requests)", source: "IETF", year: 2012, url: "https://www.rfc-editor.org/rfc/rfc6585", kind: "rfc" },
+  { title: "RFC 9110: HTTP Semantics", source: "IETF", year: 2022, url: "https://www.rfc-editor.org/rfc/rfc9110", kind: "rfc", note: "Retry-After" },
+  { title: "Scripting with Lua", source: "Redis documentation", url: "https://redis.io/docs/latest/develop/interact/programmability/eval-intro/", kind: "docs", note: "Atomic check-and-update" },
+  { title: "System Design Interview – An Insider’s Guide (Vol. 1)", source: "Alex Xu", year: 2020, kind: "book", note: "Has a rate-limiter chapter; the simulations and code here are original" },
 ]
 
 export default function RateLimitingChapter() {
@@ -181,6 +191,9 @@ Content-Type: application/problem+json`} /> },
           <p>A fixed window is still fine for coarse daily quotas, where a 2× burst in one second doesn't matter and one INCR per request is attractive. I would pick per limit, not use one algorithm everywhere.</p>
         </>}
       />
+
+      <H2 id="references">References &amp; further reading</H2>
+      <References items={REFS} />
 
       <KeyTakeaways items={[
         'Ask whether the limit protects capacity, enforces a contract, or stops abuse. The answer drives placement and accuracy.',

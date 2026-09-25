@@ -11,7 +11,7 @@ const PHASES: Phase[] = [
     'Name non-functional targets (latency, availability, consistency)', 'State what is out of scope'] },
   { id: 'hld', name: 'High-level design', min: 6, max: 18, def: 12, hue: 'var(--accent-2)', checklist: [
     'Sketch the API (3–5 endpoints)', 'Draw the request path end to end', 'Choose data stores and justify them',
-    'Walk one read and one write through the diagram', 'Get explicit buy-in before going deeper'] },
+    'Walk one read and one write through the diagram', 'Confirm direction with the interviewer before going deeper'] },
   { id: 'deep', name: 'Deep dive', min: 8, max: 25, def: 18, hue: 'var(--accent-3)', checklist: [
     'Pick the 1–2 hardest components (or let the interviewer pick)', 'Quantify the bottleneck with numbers',
     'Offer ≥2 options and compare trade-offs', 'Cover failure modes: node, network, region', 'Revisit consistency and data model choices'] },

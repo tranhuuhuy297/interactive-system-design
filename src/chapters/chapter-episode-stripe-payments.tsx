@@ -1,7 +1,8 @@
 import {
+  References,
   ArchitectureDiagram, Callout, CodeBlock, CompareTable, EpisodePlayer, EstimationTable, H2, InterviewQuestion, KeyTakeaways,
 } from '../components/ui'
-import type { ArchEdge, ArchNode } from '../components/ui'
+import type { ArchEdge, ArchNode, Reference } from '../components/ui'
 import { EpisodeStripeRoutingDemo } from './demos/episode-stripe-routing-demo'
 import { STRIPE_STAGES } from './demos/episode-stripe-stages'
 
@@ -26,6 +27,18 @@ const CHARGE_EDGES: ArchEdge[] = [
   { from: 'api', to: 'events', async: true }, { from: 'events', to: 'hooks' }, { from: 'hooks', to: 'merchant', async: true },
 ]
 
+// Primary public sources behind the “In the real world” notes.
+const REFS: Reference[] = [
+  { title: "Idempotent requests", source: "Stripe API reference", url: "https://docs.stripe.com/api/idempotent_requests", kind: "docs", note: "keys prunable after 24 hours" },
+  { title: "Designing robust and predictable APIs with idempotency", source: "Brandur Leach, Stripe blog", year: 2017, url: "https://stripe.com/blog/idempotency", kind: "blog" },
+  { title: "Receive Stripe events in your webhook endpoint", source: "Stripe docs", url: "https://docs.stripe.com/webhooks", kind: "docs", note: "Stripe-Signature; live retries up to 3 days" },
+  { title: "Ledger: Stripe’s system for tracking and validating money movement", source: "Stripe engineering", year: 2024, url: "https://stripe.dev/blog/ledger-stripe-system-for-tracking-and-validating-money-movement", kind: "blog" },
+  { title: "Stripe Radar", source: "Stripe", url: "https://stripe.com/radar", kind: "docs", note: "AI trained on Stripe network data" },
+  { title: "How Radar works", source: "Stripe docs", url: "https://docs.stripe.com/radar/how-radar-works", kind: "docs" },
+  { title: "Storage of Payment System Data (RBI/2017-18/153)", source: "Reserve Bank of India", year: 2018, url: "https://www.rbi.org.in/Scripts/NotificationUser.aspx?Id=11244", kind: "docs" },
+  { title: "Stripe’s 2023 annual letter", source: "Stripe", year: 2024, url: "https://stripe.com/annual-updates/2023", kind: "blog", note: "$1T total payment volume in 2023" },
+]
+
 export default function StripeEpisode() {
   return (
     <>
@@ -38,6 +51,7 @@ export default function StripeEpisode() {
         Before each stage, predict the failure that forces the next change. For the interview-format version of this
         problem (requirements, estimation, API, ledger demo), see the <a href="#/payments">payment system case study</a>.
       </Callout>
+      <p className="muted"><em>This episode is an independent reconstruction from public sources. It is not affiliated with or endorsed by Stripe; all trademarks belong to their owners.</em></p>
 
       <H2 id="the-build">The build, stage by stage</H2>
       <EpisodePlayer stages={STRIPE_STAGES} height={400} />
@@ -147,6 +161,9 @@ async function createPayment(req: Req): Promise<Res> {
         </>}
         followUps={['How do you avoid overloading the backup processor?', 'What if both processors time out?', 'How do merchants see a pending payment?']}
       />
+
+      <H2 id="references">Sources</H2>
+      <References items={REFS} />
 
       <KeyTakeaways items={[
         'Every external call can end in “unknown”; design pending states, status checks, and reconciliation for it.',

@@ -75,3 +75,11 @@
     .progress-strip__tip { margin-left: 0; }
   }
 }
+
+@layer components {
+  .home-foot { margin-top: var(--space-20); padding-top: var(--space-6); border-top: 1px solid var(--border); display: flex; justify-content: space-between; gap: var(--space-6); flex-wrap: wrap; font-size: var(--text-sm); color: var(--text-subtle); }
+  .home-foot p { max-width: 560px; }
+  .home-foot nav { display: flex; gap: var(--space-5); flex-wrap: wrap; }
+  .home-foot a { color: var(--text-muted); text-decoration: none; }
+  .home-foot a:hover { color: var(--text); text-decoration: underline; }
+}

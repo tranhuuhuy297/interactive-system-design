@@ -1,8 +1,8 @@
 import {
   ApiSpec, ArchitectureDiagram, Callout, CodeBlock, CompareTable, EstimationTable, H2, InterviewQuestion,
-  KeyTakeaways, Requirements,
+  KeyTakeaways, Requirements, References,
 } from '../components/ui'
-import type { ArchEdge, ArchNode } from '../components/ui'
+import type { ArchEdge, ArchNode, Reference } from '../components/ui'
 import { LlmBatchingSimulatorDemo } from './demos/llm-batching-simulator-demo'
 import { LlmGpuMemoryCalculatorDemo } from './demos/llm-gpu-memory-calculator-demo'
 
@@ -31,6 +31,17 @@ const EDGES: ArchEdge[] = [
   { from: 'router', to: 'queue' }, { from: 'router', to: 'prefill' }, { from: 'prefill', to: 'decode', label: 'KV' },
   { from: 'decode', to: 'gw', label: 'tokens' }, { from: 'prefill', to: 'prefix' },
   { from: 'registry', to: 'prefill' }, { from: 'registry', to: 'decode' },
+]
+
+const REFS: Reference[] = [
+  { title: 'Orca: A Distributed Serving System for Transformer-Based Generative Models', source: 'G.-I. Yu et al., OSDI', year: 2022, url: 'https://www.usenix.org/conference/osdi22/presentation/yu', kind: 'paper', note: 'iteration-level (continuous) batching' },
+  { title: 'Efficient Memory Management for Large Language Model Serving with PagedAttention', source: 'W. Kwon et al., SOSP', year: 2023, url: 'https://arxiv.org/abs/2309.06180', kind: 'paper', note: 'vLLM, paged KV cache' },
+  { title: 'SARATHI: Efficient LLM Inference by Piggybacking Decodes with Chunked Prefills', source: 'A. Agrawal et al.', year: 2023, url: 'https://arxiv.org/abs/2308.16369', kind: 'paper', note: 'chunked prefill' },
+  { title: 'DistServe: Disaggregating Prefill and Decoding for Goodput-optimized LLM Serving', source: 'Y. Zhong et al., OSDI', year: 2024, url: 'https://arxiv.org/abs/2401.09670', kind: 'paper' },
+  { title: 'Fast Inference from Transformers via Speculative Decoding', source: 'Y. Leviathan, M. Kalman, Y. Matias, ICML', year: 2023, url: 'https://arxiv.org/abs/2211.17192', kind: 'paper' },
+  { title: 'GQA: Training Generalized Multi-Query Transformer Models from Multi-Head Checkpoints', source: 'J. Ainslie et al., EMNLP', year: 2023, url: 'https://arxiv.org/abs/2305.13245', kind: 'paper', note: 'why modern models store fewer KV heads' },
+  { title: 'The Llama 3 Herd of Models', source: 'Llama Team, Meta', year: 2024, url: 'https://arxiv.org/abs/2407.21783', kind: 'paper', note: 'layer / KV-head / head-dim shapes used in the estimates' },
+  { title: 'S-LoRA: Serving Thousands of Concurrent LoRA Adapters', source: 'Y. Sheng et al., MLSys', year: 2024, url: 'https://arxiv.org/abs/2311.03285', kind: 'paper', note: 'batching mixed adapters' },
 ]
 
 export default function LlmInferencePlatformChapter() {
@@ -198,6 +209,9 @@ type Replica = { id: string; model: string; gpus: number; kvFreeBlocks: number; 
           <p>The system work: an adapter registry with versioning, LRU caching of adapters in HBM and host memory, routing affinity (the same adapter goes to replicas where it is already warm), and per-adapter quotas so one noisy customer can’t evict everyone else’s adapters. Full fine-tunes that change base weights need their own replicas; price them accordingly.</p>
         </>}
       />
+
+      <H2 id="references">References &amp; further reading</H2>
+      <References items={REFS} />
 
       <KeyTakeaways items={[
         'Two metrics: TTFT (queue + prefill) and TPOT (decode). Design and alert on both.',

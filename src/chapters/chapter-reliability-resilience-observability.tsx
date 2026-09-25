@@ -1,9 +1,23 @@
 import {
-  Callout, CodeBlock, CompareTable, FlowDiagram, H2, InterviewQuestion, KeyTakeaways, Tabs,
+  Callout, CodeBlock, CompareTable, FlowDiagram, H2, InterviewQuestion, KeyTakeaways, References, Tabs,
 } from '../components/ui'
+import type { Reference } from '../components/ui'
 import { ReliabilityAvailabilityComposerDemo } from './demos/reliability-availability-composer-demo'
 import { ReliabilityCircuitBreakerDemo } from './demos/reliability-circuit-breaker-demo'
 import { ReliabilityRetryStormDemo } from './demos/reliability-retry-storm-demo'
+
+const REFS: Reference[] = [
+  { title: "Service Level Objectives (Site Reliability Engineering, ch. 4)", source: "Google", year: 2016, url: "https://sre.google/sre-book/service-level-objectives/", kind: "book" },
+  { title: "Alerting on SLOs (The Site Reliability Workbook)", source: "Google", year: 2018, url: "https://sre.google/workbook/alerting-on-slos/", kind: "book", note: "Multi-window burn-rate alerts" },
+  { title: "Addressing Cascading Failures (Site Reliability Engineering, ch. 22)", source: "Google", year: 2016, url: "https://sre.google/sre-book/addressing-cascading-failures/", kind: "book" },
+  { title: "Timeouts, retries, and backoff with jitter", source: "Amazon Builders’ Library", url: "https://aws.amazon.com/builders-library/timeouts-retries-and-backoff-with-jitter/", kind: "blog" },
+  { title: "CircuitBreaker", source: "Martin Fowler", year: 2014, url: "https://martinfowler.com/bliki/CircuitBreaker.html", kind: "blog" },
+  { title: "The USE Method", source: "Brendan Gregg", url: "https://www.brendangregg.com/usemethod.html", kind: "blog" },
+  { title: "The RED Method: How to Instrument Your Services", source: "Grafana Labs (Tom Wilkie)", year: 2018, url: "https://grafana.com/blog/2018/08/02/the-red-method-how-to-instrument-your-services/", kind: "blog" },
+  { title: "Principles of Chaos Engineering", source: "principlesofchaos.org", url: "https://principlesofchaos.org/", kind: "docs" },
+  { title: "Dapper, a Large-Scale Distributed Systems Tracing Infrastructure", source: "Sigelman et al., Google", year: 2010, url: "https://research.google/pubs/dapper-a-large-scale-distributed-systems-tracing-infrastructure/", kind: "paper" },
+  { title: "OpenTelemetry documentation", source: "OpenTelemetry (CNCF)", url: "https://opentelemetry.io/docs/", kind: "docs" },
+]
 
 export default function ReliabilityChapter() {
   return (
@@ -164,6 +178,9 @@ await tracer.startActiveSpan('charge-card', async (span) => {
           <p>I would propose SLOs per user journey (read paths at 99.99%, which is achievable with caching and multi-region reads; writes at 99.9%), an error-budget policy that leadership signs, and a costed roadmap: multi-region cost, the dependency changes, and the on-call load.</p>
         </>}
       />
+
+      <H2 id="references">References &amp; further reading</H2>
+      <References items={REFS} />
 
       <KeyTakeaways items={[
         'Pick SLOs per user journey. Spend the error budget deliberately and alert on burn rate.',

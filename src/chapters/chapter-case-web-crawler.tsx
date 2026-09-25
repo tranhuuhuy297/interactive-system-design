@@ -1,10 +1,21 @@
 import {
   ApiSpec, ArchitectureDiagram, Callout, CodeBlock, CompareTable, EstimationTable, H2, InterviewQuestion,
-  KeyTakeaways, Requirements,
+  KeyTakeaways, References, Requirements,
 } from '../components/ui'
-import type { ArchEdge, ArchNode } from '../components/ui'
+import type { ArchEdge, ArchNode, Reference } from '../components/ui'
 import { CrawlerBloomCalculator } from './demos/crawler-bloom-calculator'
 import { CrawlerFrontierSim } from './demos/crawler-frontier-sim'
+
+const REFS: Reference[] = [
+  { title: 'RFC 9309: Robots Exclusion Protocol', source: 'IETF', year: 2022, url: 'https://www.rfc-editor.org/rfc/rfc9309', kind: 'rfc' },
+  { title: 'Mercator: A scalable, extensible Web crawler', source: 'A. Heydon & M. Najork, World Wide Web journal', year: 1999, url: 'https://doi.org/10.1023/A:1019213109274', kind: 'paper', note: 'crawler architecture, URL-seen test' },
+  { title: 'Introduction to Information Retrieval, §20.2.3 The URL frontier', source: 'C. Manning, P. Raghavan, H. Schütze (Cambridge UP)', year: 2008, url: 'https://nlp.stanford.edu/IR-book/html/htmledition/the-url-frontier-1.html', kind: 'book', note: 'front queues (priority) and back queues (politeness)' },
+  { title: 'Detecting Near-Duplicates for Web Crawling', source: 'G. S. Manku, A. Jain, A. Das Sarma (WWW)', year: 2007, url: 'https://research.google/pubs/detecting-near-duplicates-for-web-crawling/', kind: 'paper', note: '64-bit SimHash, Hamming distance ≤ 3' },
+  { title: 'Space/time trade-offs in hash coding with allowable errors', source: 'Burton H. Bloom, Communications of the ACM', year: 1970, url: 'https://doi.org/10.1145/362686.362692', kind: 'paper', note: 'Bloom filters' },
+  { title: 'On the resemblance and containment of documents', source: 'Andrei Z. Broder (SEQUENCES ’97)', year: 1997, url: 'https://doi.org/10.1109/SEQUEN.1997.666900', kind: 'paper', note: 'shingling / near-duplicate detection' },
+  { title: 'The Anatomy of a Large-Scale Hypertextual Web Search Engine', source: 'S. Brin & L. Page', year: 1998, url: 'http://infolab.stanford.edu/~backrub/google.html', kind: 'paper', note: 'early distributed crawler design' },
+  { title: 'System Design Interview – An Insider’s Guide, Vol. 1 (ch. “Design a Web Crawler”)', source: 'Alex Xu', year: 2020, kind: 'book', note: 'recommended further reading on the same prompt' },
+]
 
 const NODES: ArchNode[] = [
   { id: 'seeds', label: 'Seed URLs', sub: 'curated', kind: 'client', x: 10, y: 18,
@@ -129,7 +140,7 @@ function normalize(raw: string, base: string): string | null {
 
       <H2 id="robustness">7 · Deep dive: politeness, traps, and freshness</H2>
       <ul>
-        <li><strong>robots.txt</strong>: fetch once per host, cache it (for about a day), and obey <code>Disallow</code> and <code>Crawl-delay</code> where given. Identify yourself with a user agent that has a contact URL.</li>
+        <li><strong>robots.txt</strong>: fetch once per host, cache it (RFC 9309 suggests no longer than about a day), and obey <code>Allow</code>/<code>Disallow</code>. <code>Crawl-delay</code> is not part of the standard, but honor it where given. Identify yourself with a user agent that has a contact URL.</li>
         <li><strong>Adaptive delay</strong>: back off when response time or 429/503 rates rise. Treat a slow host as a signal, not an obstacle.</li>
         <li><strong>Spider traps</strong>: infinite calendars, session IDs in paths, faceted search. Defend with URL length and depth caps, per-host page budgets, and pattern detection on repeating path segments.</li>
         <li><strong>Freshness</strong>: schedule recrawls based on how often each page has actually changed. Use conditional GETs (<code>If-Modified-Since</code>, ETag) so unchanged pages cost a 304, not a full download.</li>
@@ -179,6 +190,9 @@ type PageRecord = {
           <p>Fixes: add SimHash near-dup detection, per-host page budgets with trap detection, conditional GETs, and store a new snapshot only when the fingerprint changes. I'd add a dashboard of bytes per unique fingerprint by host, so the top offenders show up immediately.</p>
         </>}
       />
+
+      <H2 id="references">References &amp; further reading</H2>
+      <References items={REFS} />
 
       <KeyTakeaways items={[
         'Two-stage frontier: front queues for priority, back queues (one host each) for politeness.',

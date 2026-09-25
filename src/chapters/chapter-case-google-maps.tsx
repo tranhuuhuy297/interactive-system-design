@@ -1,8 +1,8 @@
 import {
   ApiSpec, ArchitectureDiagram, Callout, CodeBlock, CompareTable, EstimationTable, H2, InterviewQuestion,
-  KeyTakeaways, Requirements,
+  KeyTakeaways, Requirements, References,
 } from '../components/ui'
-import type { ArchEdge, ArchNode } from '../components/ui'
+import type { ArchEdge, ArchNode, Reference } from '../components/ui'
 import { MapsRoutingVisualizerDemo } from './demos/maps-routing-visualizer-demo'
 import { MapsTilePyramidDemo } from './demos/maps-tile-pyramid-demo'
 
@@ -37,6 +37,17 @@ const EDGES: ArchEdge[] = [
   { from: 'routing', to: 'graph' }, { from: 'routing', to: 'speeds' },
   { from: 'gw', to: 'loc' }, { from: 'loc', to: 'kafka', async: true }, { from: 'kafka', to: 'traffic' },
   { from: 'traffic', to: 'speeds' },
+]
+
+const REFS: Reference[] = [
+  { title: 'A note on two problems in connexion with graphs', source: 'E. W. Dijkstra, Numerische Mathematik', year: 1959, url: 'https://doi.org/10.1007/BF01386390', kind: 'paper' },
+  { title: 'A Formal Basis for the Heuristic Determination of Minimum Cost Paths', source: 'P. Hart, N. Nilsson, B. Raphael, IEEE TSSC', year: 1968, url: 'https://ieeexplore.ieee.org/document/4082128', kind: 'paper', note: 'the A* algorithm' },
+  { title: 'Contraction Hierarchies: Faster and Simpler Hierarchical Routing in Road Networks', source: 'R. Geisberger et al., WEA', year: 2008, url: 'https://doi.org/10.1007/978-3-540-68552-4_24', kind: 'paper' },
+  { title: 'Customizable Route Planning', source: 'D. Delling et al., SEA', year: 2011, url: 'https://doi.org/10.1007/978-3-642-20662-7_32', kind: 'paper', note: 'fast re-weighting for live traffic' },
+  { title: 'Hidden Markov Map Matching Through Noise and Sparseness', source: 'P. Newson & J. Krumm, ACM SIGSPATIAL', year: 2009, url: 'https://www.microsoft.com/en-us/research/publication/hidden-markov-map-matching-noise-sparseness/', kind: 'paper' },
+  { title: 'ETA Prediction with Graph Neural Networks in Google Maps', source: 'A. Derrow-Pinion et al., CIKM', year: 2021, url: 'https://arxiv.org/abs/2108.11482', kind: 'paper' },
+  { title: 'Slippy map tilenames (z/x/y scheme)', source: 'OpenStreetMap Wiki', url: 'https://wiki.openstreetmap.org/wiki/Slippy_map_tilenames', kind: 'docs' },
+  { title: 'System Design Interview – An Insider’s Guide, Volume 2', source: 'Alex Xu & Sahn Lam', year: 2022, kind: 'book', note: 'Google Maps prompt' },
 ]
 
 export default function GoogleMapsChapter() {
@@ -219,6 +230,9 @@ type LocationFix = { sessionId: string; ts: number; lat: number; lng: number; sp
         </>}
         followUps={['A stadium empties and 50K phones report 0 km/h on one road. Is that a jam?', 'How fresh must live speeds be to be useful?']}
       />
+
+      <H2 id="references">References &amp; further reading</H2>
+      <References items={REFS} />
 
       <KeyTakeaways items={[
         'Split the problem into three planes: static tiles (CDN), routing compute, and a location → traffic stream.',

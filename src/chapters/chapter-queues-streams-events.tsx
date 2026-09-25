@@ -1,7 +1,7 @@
 import {
-  ArchitectureDiagram, Callout, CodeBlock, CompareTable, FlowDiagram, H2, InterviewQuestion, KeyTakeaways, Tabs,
+  ArchitectureDiagram, Callout, CodeBlock, CompareTable, FlowDiagram, H2, InterviewQuestion, KeyTakeaways, References, Tabs,
 } from '../components/ui'
-import type { ArchEdge, ArchNode } from '../components/ui'
+import type { ArchEdge, ArchNode, Reference } from '../components/ui'
 import { MqDeliverySemanticsDemo } from './demos/mq-delivery-semantics-demo'
 import { MqKafkaConsumerGroupDemo } from './demos/mq-kafka-consumer-group-demo'
 
@@ -18,6 +18,17 @@ const OUTBOX_NODES: ArchNode[] = [
 const OUTBOX_EDGES: ArchEdge[] = [
   { from: 'api', to: 'db', label: 'single txn' }, { from: 'db', to: 'relay', async: true },
   { from: 'relay', to: 'kafka' }, { from: 'kafka', to: 'pay', async: true }, { from: 'kafka', to: 'mail', async: true },
+]
+
+const REFS: Reference[] = [
+  { title: "Apache Kafka documentation", source: "Apache Software Foundation", url: "https://kafka.apache.org/documentation/", kind: "docs" },
+  { title: "The Log: What every software engineer should know about real-time data’s unifying abstraction", source: "Jay Kreps", year: 2013, kind: "blog", note: "Originally published on the LinkedIn Engineering blog" },
+  { title: "KIP-848: The Next Generation of the Consumer Rebalance Protocol", source: "Apache Kafka", url: "https://cwiki.apache.org/confluence/display/KAFKA/KIP-848%3A+The+Next+Generation+of+the+Consumer+Rebalance+Protocol", kind: "docs" },
+  { title: "KIP-932: Queues for Kafka", source: "Apache Kafka", url: "https://cwiki.apache.org/confluence/display/KAFKA/KIP-932%3A+Queues+for+Kafka", kind: "docs" },
+  { title: "Exactly-once Semantics Are Possible: Here’s How Kafka Does It", source: "Confluent blog", year: 2017, url: "https://www.confluent.io/blog/exactly-once-semantics-are-possible-heres-how-apache-kafka-does-it/", kind: "blog" },
+  { title: "Pattern: Transactional outbox", source: "Chris Richardson, microservices.io", url: "https://microservices.io/patterns/data/transactional-outbox.html", kind: "docs" },
+  { title: "Sagas", source: "H. Garcia-Molina & K. Salem, SIGMOD", year: 1987, url: "https://www.cs.cornell.edu/andru/cs711/2002fa/reading/sagas.pdf", kind: "paper" },
+  { title: "Designing Data-Intensive Applications", source: "Martin Kleppmann (O’Reilly)", year: 2017, url: "https://dataintensive.net/", kind: "book" },
 ]
 
 export default function QueuesStreamsChapter() {
@@ -169,6 +180,9 @@ async function placeOrder(o: Order) {
           <p>The subtle case is a timeout where we don't know if the charge happened. The answer is never “retry blindly”. Instead, query the provider by the idempotency key, and run a daily reconciliation job that compares the ledger with the provider's settlement report.</p>
         </>}
       />
+
+      <H2 id="references">References &amp; further reading</H2>
+      <References items={REFS} />
 
       <KeyTakeaways items={[
         'Queues distribute commands. Logs retain facts for many independent consumer groups.',

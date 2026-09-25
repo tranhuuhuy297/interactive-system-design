@@ -1,8 +1,19 @@
 import {
-  Callout, CodeBlock, CompareTable, H2, InterviewQuestion, KeyTakeaways, Requirements,
+  Callout, CodeBlock, CompareTable, H2, InterviewQuestion, KeyTakeaways, References, Requirements,
 } from '../components/ui'
+import type { Reference } from '../components/ui'
 import { UidSnowflakeBuilderDemo } from './demos/uid-snowflake-builder-demo'
 import { UidUuidLocalityDemo } from './demos/uid-uuid-locality-demo'
+
+const REFS: Reference[] = [
+  { title: "RFC 9562: Universally Unique IDentifiers (UUIDs)", source: "IETF", year: 2024, url: "https://www.rfc-editor.org/rfc/rfc9562", kind: "rfc", note: "UUIDv4 and UUIDv7 layouts" },
+  { title: "Snowflake (original source, archived)", source: "Twitter", year: 2010, url: "https://github.com/twitter-archive/snowflake/tree/snowflake-2010", kind: "docs", note: "Timestamp · worker · sequence layout" },
+  { title: "Ticket Servers: Distributed Unique Primary Keys on the Cheap", source: "Flickr engineering blog", year: 2010, url: "https://code.flickr.net/2010/02/08/ticket-servers-distributed-unique-primary-keys-on-the-cheap/", kind: "blog" },
+  { title: "ULID specification", source: "ulid/spec", url: "https://github.com/ulid/spec", kind: "docs" },
+  { title: "UUID Functions (uuidv7)", source: "PostgreSQL documentation", url: "https://www.postgresql.org/docs/current/functions-uuid.html", kind: "docs" },
+  { title: "RFC 5905: Network Time Protocol Version 4", source: "IETF", year: 2010, url: "https://www.rfc-editor.org/rfc/rfc5905", kind: "rfc", note: "Clock synchronization and skew" },
+  { title: "System Design Interview – An Insider’s Guide (Vol. 1)", source: "Alex Xu", year: 2020, kind: "book", note: "Has a unique-ID chapter; the bit builder and analysis here are original" },
+]
 
 export default function UniqueIdGenerationChapter() {
   return (
@@ -129,6 +140,9 @@ export function nextId(workerId: bigint): bigint {
           </ul>
         </>}
       />
+
+      <H2 id="references">References &amp; further reading</H2>
+      <References items={REFS} />
 
       <KeyTakeaways items={[
         'Ask three questions: sortable? 64-bit? guessable? The answers pick the scheme.',

@@ -1,7 +1,8 @@
 import {
+  References,
   ArchitectureDiagram, Callout, CompareTable, EpisodePlayer, EstimationTable, H2, InterviewQuestion, KeyTakeaways,
 } from '../components/ui'
-import type { ArchEdge, ArchNode } from '../components/ui'
+import type { ArchEdge, ArchNode, Reference } from '../components/ui'
 import { EpisodeInstagramIdDemo } from './demos/episode-instagram-id-demo'
 import { INSTAGRAM_STAGES } from './demos/episode-instagram-stages'
 
@@ -22,6 +23,18 @@ const POST_EDGES: ArchEdge[] = [
   { from: 'web', to: 'q', async: true }, { from: 'q', to: 'workers' }, { from: 'workers', to: 'feeds' }, { from: 'workers', to: 'media' },
 ]
 
+// Primary public sources behind the “In the real world” notes.
+const REFS: Reference[] = [
+  { title: "What Powers Instagram: Hundreds of Instances, Dozens of Technologies", source: "Instagram Engineering", year: 2011, url: "https://instagram-engineering.com/what-powers-instagram-hundreds-of-instances-dozens-of-technologies-adf2e22da2ad", kind: "blog" },
+  { title: "Sharding & IDs at Instagram", source: "Instagram Engineering", year: 2011, url: "https://instagram-engineering.com/sharding-ids-at-instagram-1cf5a71e5a5c", kind: "blog" },
+  { title: "See Posts You Care About First in Your Feed", source: "Instagram", year: 2016, url: "https://about.instagram.com/blog/announcements/see-posts-you-care-about-first-in-your-feed", kind: "blog" },
+  { title: "Introducing Instagram Stories", source: "Instagram", year: 2016, url: "https://about.instagram.com/blog/announcements/introducing-instagram-stories", kind: "blog" },
+  { title: "Introducing Instagram Reels", source: "Instagram", year: 2020, url: "https://about.instagram.com/blog/announcements/introducing-instagram-reels-announcement", kind: "blog" },
+  { title: "How Facebook encodes your videos", source: "Engineering at Meta", year: 2021, url: "https://engineering.fb.com/2021/04/05/video-engineering/how-facebook-encodes-your-videos/", kind: "blog" },
+  { title: "Instagram Migrates from Amazon’s Cloud into Facebook Data Centers", source: "Data Center Knowledge", year: 2014, url: "https://www.datacenterknowledge.com/cloud/instagram-migrates-from-amazon-s-cloud-into-facebook-data-centers", kind: "blog", note: "secondary source" },
+  { title: "How Instagram is scaling its infrastructure across the ocean", source: "Opensource.com (Instagram engineer)", year: 2018, url: "https://opensource.com/article/18/10/instagram-scaled-infrastructure", kind: "blog" },
+]
+
 export default function InstagramEpisode() {
   return (
     <>
@@ -35,6 +48,7 @@ export default function InstagramEpisode() {
         Notice how many stages are solved by <em>moving work out of the request</em>: to a CDN, a queue, or a
         precomputed list. Spotting that move is half of most system design interviews.
       </Callout>
+      <p className="muted"><em>This episode is an independent reconstruction from public sources. It is not affiliated with or endorsed by Instagram; all trademarks belong to their owners.</em></p>
 
       <H2 id="the-build">The build, stage by stage</H2>
       <EpisodePlayer stages={INSTAGRAM_STAGES} height={400} />
@@ -119,6 +133,9 @@ export default function InstagramEpisode() {
         </>}
         followUps={['How do you order the tray?', 'What if the cache cluster restarts?', 'How would you support story replies and reactions?']}
       />
+
+      <H2 id="references">Sources</H2>
+      <References items={REFS} />
 
       <KeyTakeaways items={[
         'Move bytes to object storage + CDN and heavy work to async queues early; it keeps the request path small.',

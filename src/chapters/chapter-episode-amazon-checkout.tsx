@@ -1,7 +1,8 @@
 import {
+  References,
   ArchitectureDiagram, Callout, CodeBlock, CompareTable, EpisodePlayer, EstimationTable, H2, InterviewQuestion, KeyTakeaways,
 } from '../components/ui'
-import type { ArchEdge, ArchNode } from '../components/ui'
+import type { ArchEdge, ArchNode, Reference } from '../components/ui'
 import { EpisodeAmazonInventoryDemo } from './demos/episode-amazon-inventory-demo'
 import { AMAZON_STAGES } from './demos/episode-amazon-stages'
 
@@ -24,6 +25,16 @@ const ORDER_EDGES: ArchEdge[] = [
   { from: 'orders', to: 'notify', async: true },
 ]
 
+// Primary public sources behind the “In the real world” notes.
+const REFS: Reference[] = [
+  { title: "Dynamo: Amazon’s Highly Available Key-value Store", source: "DeCandia et al., SOSP", year: 2007, url: "https://www.allthingsdistributed.com/files/amazon-dynamo-sosp2007.pdf", kind: "paper", note: "shopping-cart motivation" },
+  { title: "Caching challenges and strategies", source: "Amazon Builders’ Library", url: "https://aws.amazon.com/builders-library/caching-challenges-and-strategies/", kind: "blog" },
+  { title: "Using load shedding to avoid overload", source: "Amazon Builders’ Library", url: "https://aws.amazon.com/builders-library/using-load-shedding-to-avoid-overload/", kind: "blog" },
+  { title: "Reducing the Scope of Impact with Cell-Based Architecture", source: "AWS Well-Architected whitepaper", url: "https://docs.aws.amazon.com/wellarchitected/latest/reducing-scope-of-impact-with-cell-based-architecture/reducing-scope-of-impact-with-cell-based-architecture.html", kind: "docs" },
+  { title: "Amazon.com Recommendations: Item-to-Item Collaborative Filtering", source: "Linden, Smith & York, IEEE Internet Computing", year: 2003, url: "https://doi.org/10.1109/MIC.2003.1167344", kind: "paper" },
+  { title: "Prime Day 2023 Powered by AWS – All the Numbers", source: "AWS News Blog", year: 2023, url: "https://aws.amazon.com/blogs/aws/prime-day-2023-powered-by-aws-all-the-numbers/", kind: "blog" },
+]
+
 export default function AmazonCheckoutEpisode() {
   return (
     <>
@@ -38,6 +49,7 @@ export default function AmazonCheckoutEpisode() {
         merge-on-read for the cart, strict for inventory, eventual for fulfillment. Picking the right one per part is
         the skill being tested.
       </Callout>
+      <p className="muted"><em>This episode is an independent reconstruction from public sources. It is not affiliated with or endorsed by Amazon; all trademarks belong to their owners.</em></p>
 
       <H2 id="the-build">The build, stage by stage</H2>
       <EpisodePlayer stages={AMAZON_STAGES} height={400} />
@@ -145,6 +157,9 @@ UPDATE inventory SET available = available + 1 WHERE sku = :sku;  -- per expired
         </>}
         followUps={['How would you merge a quantity change against a deletion?', 'Where exactly does the strict check happen?']}
       />
+
+      <H2 id="references">Sources</H2>
+      <References items={REFS} />
 
       <KeyTakeaways items={[
         'Pick a consistency model per domain: cached catalog, mergeable cart, strict inventory, eventual fulfillment.',

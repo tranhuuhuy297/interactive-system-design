@@ -117,6 +117,6 @@ export const AIRBNB_STAGES: EpisodeStage[] = [
     problem: <p>Hundreds of teams ship into one codebase and deploy train. Builds are slow, one bug blocks everyone, and ownership of core flows like booking is blurry.</p>,
     decision: <p>Carve the monolith into <strong>services with clear data ownership</strong> (listings, booking, payments, search) behind a gateway. Migrate incrementally, path by path, with the monolith proxying to new services until it can be retired.</p>,
     tradeoff: <p>Network calls replace function calls, cross-service transactions become sagas, and platform investment (service framework, tracing, schema contracts) is now mandatory.</p>,
-    realWorld: <p>Airbnb has publicly described its multi-year migration from the Rails monolith to a service-oriented architecture, starting around 2018.</p>,
+    realWorld: <p>Airbnb engineers have publicly described the multi-year migration from the Rails monolith to a service-oriented architecture, which began around 2017 and was presented at QCon San Francisco in 2018.</p>,
   },
 ]

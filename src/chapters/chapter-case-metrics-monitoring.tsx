@@ -1,8 +1,8 @@
 import {
   ApiSpec, ArchitectureDiagram, Callout, CodeBlock, CompareTable, EstimationTable, H2, InterviewQuestion,
-  KeyTakeaways, Requirements,
+  KeyTakeaways, Requirements, References,
 } from '../components/ui'
-import type { ArchEdge, ArchNode } from '../components/ui'
+import type { ArchEdge, ArchNode, Reference } from '../components/ui'
 import { MetricsAlertEvaluatorDemo } from './demos/metrics-alert-evaluator-demo'
 import { MetricsDownsamplingDemo } from './demos/metrics-downsampling-demo'
 
@@ -33,6 +33,16 @@ const EDGES: ArchEdge[] = [
   { from: 'kafka', to: 'tsdb', async: true }, { from: 'tsdb', to: 'cold', async: true, label: 'compact' },
   { from: 'query', to: 'tsdb' }, { from: 'query', to: 'cold' }, { from: 'rules', to: 'query' }, { from: 'rules', to: 'am' },
   { from: 'dash', to: 'query' },
+]
+
+const REFS: Reference[] = [
+  { title: 'Gorilla: A Fast, Scalable, In-Memory Time Series Database', source: 'T. Pelkonen et al., VLDB', year: 2015, url: 'https://www.vldb.org/pvldb/vol8/p1816-teller.pdf', kind: 'paper', note: 'delta-of-delta + XOR, ~1.37 bytes/sample' },
+  { title: 'Storage (head block, WAL, 2-hour blocks)', source: 'Prometheus documentation', url: 'https://prometheus.io/docs/prometheus/latest/storage/', kind: 'docs' },
+  { title: 'Data model (metric names and labels)', source: 'Prometheus documentation', url: 'https://prometheus.io/docs/concepts/data_model/', kind: 'docs', note: 'series = name + label set' },
+  { title: 'Alertmanager', source: 'Prometheus documentation', url: 'https://prometheus.io/docs/alerting/latest/alertmanager/', kind: 'docs', note: 'grouping, inhibition, routing' },
+  { title: 'Alerting on SLOs', source: 'Google, The Site Reliability Workbook', year: 2018, url: 'https://sre.google/workbook/alerting-on-slos/', kind: 'book', note: 'multi-window burn-rate alerts' },
+  { title: 'Monitoring Distributed Systems', source: 'Google, Site Reliability Engineering', year: 2016, url: 'https://sre.google/sre-book/monitoring-distributed-systems/', kind: 'book', note: 'symptoms vs causes' },
+  { title: 'System Design Interview – An Insider’s Guide, Volume 2', source: 'Alex Xu & Sahn Lam', year: 2022, kind: 'book', note: 'metrics monitoring and alerting prompt' },
 ]
 
 export default function MetricsMonitoringChapter() {
@@ -152,6 +162,9 @@ http_requests_total{service="checkout", method="POST", status="500", region="eu-
           <p>Organisationally, every paging rule needs an owner and a runbook link, and a periodic review deletes rules that never led to action.</p>
         </>}
       />
+
+      <H2 id="references">References &amp; further reading</H2>
+      <References items={REFS} />
 
       <KeyTakeaways items={[
         'The hard problems are cardinality, retention cost and alert quality, not raw QPS.',

@@ -1,9 +1,17 @@
 import {
   ApiSpec, ArchitectureDiagram, Callout, CodeBlock, CompareTable, EstimationTable, H2, InterviewQuestion,
-  KeyTakeaways, Requirements,
+  KeyTakeaways, References, Requirements,
 } from '../components/ui'
-import type { ArchEdge, ArchNode } from '../components/ui'
+import type { ArchEdge, ArchNode, Reference } from '../components/ui'
 import { UrlBase62EncoderDemo } from './demos/url-base62-encoder-demo'
+
+const REFS: Reference[] = [
+  { title: 'RFC 9110: HTTP Semantics (§15.4 Redirection 3xx, §15.4.2 301, §15.4.3 302)', source: 'IETF', year: 2022, url: 'https://www.rfc-editor.org/rfc/rfc9110', kind: 'rfc', note: '301/302/307 semantics and default cacheability' },
+  { title: 'Announcing Snowflake', source: 'Ryan King, Twitter Engineering', year: 2010, url: 'https://blog.x.com/engineering/en_us/a/2010/announcing-snowflake', kind: 'blog', note: 'coordination-free 64-bit IDs' },
+  { title: 'Condition expressions (conditional writes)', source: 'Amazon DynamoDB Developer Guide', url: 'https://docs.aws.amazon.com/amazondynamodb/latest/developerguide/Expressions.ConditionExpressions.html', kind: 'docs', note: 'put-if-absent for custom aliases' },
+  { title: 'Google Safe Browsing', source: 'Google for Developers', url: 'https://developers.google.com/safe-browsing', kind: 'docs', note: 'checking URLs against malware and phishing lists' },
+  { title: 'System Design Interview – An Insider’s Guide, Vol. 1 (ch. “Design a URL Shortener”)', source: 'Alex Xu', year: 2020, kind: 'book', note: 'recommended further reading on the same prompt' },
+]
 
 const NODES: ArchNode[] = [
   { id: 'client', label: 'Client', sub: 'browser / app', kind: 'client', x: 10, y: 50 },
@@ -118,14 +126,15 @@ class IdRange {
       <CompareTable
         columns={['301 Moved Permanently', '302 Found / 307']}
         rows={[
-          { label: 'Browser caching', cells: ['Cached. Repeat clicks never reach you', 'Not cached by default'] },
+          { label: 'Browser caching', cells: ['Cacheable by default, so repeat clicks may never reach you', 'Cached only if you send explicit freshness headers'] },
           { label: 'Server load', cells: ['Lower', 'Higher'] },
           { label: 'Analytics', cells: ['Lose repeat clicks', 'Every click observed'] },
           { label: 'Changing target', cells: ['Hard, stale in browsers', 'Easy'] },
         ]}
       />
       <p>
-        Most commercial shorteners pick <strong>302</strong> because clicks are the product. Keep the redirect path
+        If clicks are the product, every click must reach you: use <strong>302/307</strong>, or a 301 with a short
+        <code>Cache-Control: max-age</code> so browsers only cache it briefly. Keep the redirect path
         lean: cache → DB fallback → respond, with the click event emitted <em>asynchronously</em> to a stream. Add a
         <strong> negative cache</strong> for unknown codes so scanners can't hammer the DB.
       </p>
@@ -175,6 +184,9 @@ type UrlRecord = {
           <p>I'd also make sure the click stream can buffer the spike without applying backpressure to redirects.</p>
         </>}
       />
+
+      <H2 id="references">References &amp; further reading</H2>
+      <References items={REFS} />
 
       <KeyTakeaways items={[
         'Pin down the read:write ratio and analytics needs first. They decide the cache and edge strategy and 301 vs 302.',

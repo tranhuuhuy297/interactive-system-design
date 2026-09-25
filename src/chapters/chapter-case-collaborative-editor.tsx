@@ -1,8 +1,8 @@
 import {
   ApiSpec, ArchitectureDiagram, Callout, CodeBlock, CompareTable, EstimationTable, H2, InterviewQuestion,
-  KeyTakeaways, Requirements,
+  KeyTakeaways, Requirements, References,
 } from '../components/ui'
-import type { ArchEdge, ArchNode } from '../components/ui'
+import type { ArchEdge, ArchNode, Reference } from '../components/ui'
 import { CollabCrdtTombstoneDemo } from './demos/collab-crdt-tombstone-demo'
 import { CollabOtSyncDemo } from './demos/collab-ot-sync-demo'
 
@@ -31,6 +31,17 @@ const EDGES: ArchEdge[] = [
   { from: 'client', to: 'lb' }, { from: 'lb', to: 'dir' }, { from: 'lb', to: 'collab' },
   { from: 'collab', to: 'presence' }, { from: 'collab', to: 'acl' }, { from: 'collab', to: 'oplog' },
   { from: 'oplog', to: 'worker', async: true }, { from: 'worker', to: 'snap' }, { from: 'collab', to: 'snap' },
+]
+
+const REFS: Reference[] = [
+  { title: 'Concurrency control in groupware systems', source: 'C. Ellis & S. Gibbs, ACM SIGMOD', year: 1989, url: 'https://dl.acm.org/doi/10.1145/66926.66963', kind: 'paper', note: 'origin of operational transformation' },
+  { title: 'High-latency, low-bandwidth windowing in the Jupiter collaboration system', source: 'D. Nichols et al., ACM UIST', year: 1995, url: 'https://doi.org/10.1145/215585.215706', kind: 'paper', note: 'client–server OT' },
+  { title: 'Google Wave operational transformation whitepaper', source: 'Apache Wave (archived)', url: 'https://svn.apache.org/repos/asf/incubator/wave/whitepapers/operational-transform/operational-transform.html', kind: 'docs', note: 'builds on Jupiter' },
+  { title: 'What’s different about the new Google Docs: Conflict resolution', source: 'Google Drive Blog', year: 2010, url: 'https://drive.googleblog.com/2010/09/whats-different-about-new-google-docs_22.html', kind: 'blog' },
+  { title: 'Conflict-Free Replicated Data Types', source: 'M. Shapiro et al., SSS', year: 2011, url: 'https://doi.org/10.1007/978-3-642-24550-3_29', kind: 'paper' },
+  { title: 'The Art of the Fugue: Minimizing Interleaving in Collaborative Text Editing', source: 'M. Weidner, J. Gentle, M. Kleppmann', year: 2023, url: 'https://arxiv.org/abs/2305.00583', kind: 'paper', note: 'interleaving anomalies in sequence CRDTs' },
+  { title: 'How Figma’s multiplayer technology works', source: 'Figma blog', year: 2019, url: 'https://www.figma.com/blog/how-figmas-multiplayer-technology-works/', kind: 'blog', note: 'server-authoritative, CRDT-inspired' },
+  { title: 'Yjs documentation', source: 'Yjs', url: 'https://docs.yjs.dev/', kind: 'docs' },
 ]
 
 export default function CollaborativeEditorChapter() {
@@ -94,8 +105,9 @@ export default function CollaborativeEditorChapter() {
       <p>
         The simplest correct architecture sends every edit for a document through <strong>one server</strong> that assigns
         a total order: revision 1, 2, 3 and so on. With a central sequencer, OT only needs to handle client-vs-server
-        concurrency, not the much harder peer-to-peer case. This is the client–server model of the Jupiter system from
-        Xerox PARC, which Google Wave and Docs built on, and of the open-source ot.js library.
+        concurrency, not the much harder peer-to-peer case. This is the client–server model introduced by the Jupiter
+        system from Xerox PARC. Google Wave’s published OT design builds on it, Google Docs describes a similar
+        server-ordered approach, and the open-source ot.js library implements it.
       </p>
       <ul>
         <li><strong>Routing:</strong> gateways route by doc id using a directory with leases, or consistent hashing plus a fencing token, so two servers never both believe they own a doc.</li>
@@ -199,6 +211,9 @@ type DocMeta = { docId: string; ownerId: string; title: string; acl: Record<stri
           </ul>
         </>}
       />
+
+      <H2 id="references">References &amp; further reading</H2>
+      <References items={REFS} />
 
       <KeyTakeaways items={[
         'It is a concurrency-control problem: optimistic local apply plus a convergence algorithm.',

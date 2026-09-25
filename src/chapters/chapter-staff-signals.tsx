@@ -1,4 +1,5 @@
-import { Callout, CompareTable, H2, InterviewQuestion, KeyTakeaways } from '../components/ui'
+import { Callout, CompareTable, H2, InterviewQuestion, KeyTakeaways, References } from '../components/ui'
+import { INTERVIEW_FURTHER_READING } from '../data/interview-further-reading'
 import { StaffAnswerUpgrader } from './demos/staff-answer-upgrader'
 
 export default function StaffSignalsChapter() {
@@ -98,6 +99,9 @@ export default function StaffSignalsChapter() {
           <p>If it's a close call, say so and name the condition that would tip it. Being able to change your mind well is a positive signal; digging in or folding immediately are both negative ones.</p>
         </>}
       />
+
+      <H2 id="further-reading">Further reading</H2>
+      <References items={INTERVIEW_FURTHER_READING} />
 
       <KeyTakeaways items={[
         'Staff signal comes from how you reason, not which technologies you name.',

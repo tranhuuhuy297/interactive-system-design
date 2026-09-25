@@ -1,9 +1,22 @@
 import {
-  Callout, CodeBlock, CompareTable, FlowDiagram, H2, InterviewQuestion, KeyTakeaways, Tabs,
+  Callout, CodeBlock, CompareTable, FlowDiagram, H2, InterviewQuestion, KeyTakeaways, References, Tabs,
 } from '../components/ui'
+import type { Reference } from '../components/ui'
 import { DbIsolationAnomaliesDemo } from './demos/db-isolation-anomalies-demo'
 import { DbLsmTreeVisualizerDemo } from './demos/db-lsm-tree-visualizer-demo'
 import { DbShardingSimulatorDemo } from './demos/db-sharding-simulator-demo'
+
+const REFS: Reference[] = [
+  { title: "The Log-Structured Merge-Tree (LSM-Tree)", source: "O’Neil et al., Acta Informatica", year: 1996, url: "https://www.cs.umb.edu/~poneil/lsmtree.pdf", kind: "paper" },
+  { title: "Bigtable: A Distributed Storage System for Structured Data", source: "Chang et al., OSDI", year: 2006, url: "https://static.googleusercontent.com/media/research.google.com/en//archive/bigtable-osdi06.pdf", kind: "paper", note: "Range partitioning and SSTables" },
+  { title: "A Critique of ANSI SQL Isolation Levels", source: "Berenson et al., SIGMOD", year: 1995, url: "https://www.microsoft.com/en-us/research/publication/a-critique-of-ansi-sql-isolation-levels/", kind: "paper" },
+  { title: "Transaction Isolation", source: "PostgreSQL documentation", url: "https://www.postgresql.org/docs/current/transaction-iso.html", kind: "docs" },
+  { title: "Index Types", source: "PostgreSQL documentation", url: "https://www.postgresql.org/docs/current/indexes-types.html", kind: "docs" },
+  { title: "Leveled Compaction", source: "RocksDB wiki", url: "https://github.com/facebook/rocksdb/wiki/Leveled-Compaction", kind: "docs" },
+  { title: "Cassandra: A Decentralized Structured Storage System", source: "A. Lakshman & P. Malik, LADIS", year: 2009, url: "https://www.cs.cornell.edu/projects/ladis2009/papers/lakshman-ladis2009.pdf", kind: "paper" },
+  { title: "Dynamo: Amazon’s Highly Available Key-value Store", source: "DeCandia et al., SOSP", year: 2007, url: "https://www.allthingsdistributed.com/files/amazon-dynamo-sosp2007.pdf", kind: "paper" },
+  { title: "Designing Data-Intensive Applications", source: "Martin Kleppmann (O’Reilly)", year: 2017, url: "https://dataintensive.net/", kind: "book" },
+]
 
 export default function DatabasesChapter() {
   return (
@@ -157,6 +170,9 @@ await shard.tx(async (tx) => {
           <p>I'd also add an invariant check or constraint where the database supports it, and an alert, because this class of bug is invisible in unit tests.</p>
         </>}
       />
+
+      <H2 id="references">References &amp; further reading</H2>
+      <References items={REFS} />
 
       <KeyTakeaways items={[
         'Pick storage from access patterns: queries, rates, consistency, latency.',

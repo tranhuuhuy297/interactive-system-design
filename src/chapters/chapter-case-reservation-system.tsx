@@ -1,8 +1,8 @@
 import {
   ApiSpec, ArchitectureDiagram, Callout, CodeBlock, CompareTable, EstimationTable, H2, InterviewQuestion,
-  KeyTakeaways, Requirements,
+  KeyTakeaways, Requirements, References,
 } from '../components/ui'
-import type { ArchEdge, ArchNode } from '../components/ui'
+import type { ArchEdge, ArchNode, Reference } from '../components/ui'
 import { ReserveRaceDemo } from './demos/reserve-race-demo'
 
 const NODES: ArchNode[] = [
@@ -27,6 +27,16 @@ const EDGES: ArchEdge[] = [
   { from: 'client', to: 'cdn' }, { from: 'client', to: 'gw' }, { from: 'client', to: 'wait' }, { from: 'wait', to: 'gw' },
   { from: 'gw', to: 'search' }, { from: 'gw', to: 'resv' }, { from: 'search', to: 'cache' },
   { from: 'resv', to: 'db' }, { from: 'resv', to: 'pay' }, { from: 'db', to: 'q', async: true }, { from: 'q', to: 'cache', async: true },
+]
+
+const REFS: Reference[] = [
+  { title: 'Transaction isolation (READ COMMITTED update re-check)', source: 'PostgreSQL documentation', url: 'https://www.postgresql.org/docs/current/transaction-iso.html', kind: 'docs', note: 'a blocked UPDATE re-evaluates its WHERE clause' },
+  { title: 'Explicit locking (row-level locks)', source: 'PostgreSQL documentation', url: 'https://www.postgresql.org/docs/current/explicit-locking.html', kind: 'docs', note: 'SELECT … FOR UPDATE, deadlocks' },
+  { title: 'Constraints (CHECK, UNIQUE)', source: 'PostgreSQL documentation', url: 'https://www.postgresql.org/docs/current/ddl-constraints.html', kind: 'docs', note: 'database-enforced backstops' },
+  { title: 'SET command (NX, EX options)', source: 'Redis documentation', url: 'https://redis.io/docs/latest/commands/set/', kind: 'docs', note: 'per-seat holds with a TTL' },
+  { title: 'Cloudflare Waiting Room', source: 'Cloudflare blog', year: 2021, url: 'https://blog.cloudflare.com/cloudflare-waiting-room/', kind: 'blog', note: 'an edge queue in front of on-sales' },
+  { title: 'Designing Data-Intensive Applications', source: 'Martin Kleppmann (O’Reilly)', year: 2017, url: 'https://dataintensive.net/', kind: 'book', note: 'chapter 7: transactions, write skew, locking' },
+  { title: 'System Design Interview – An Insider’s Guide, Volume 2', source: 'Alex Xu & Sahn Lam', year: 2022, kind: 'book', note: 'hotel reservation prompt' },
 ]
 
 export default function ReservationSystemChapter() {
@@ -160,6 +170,9 @@ HELD ──pay ok──▶ CONFIRMED ──cancel──▶ CANCELLED (inventory 
           <p>Then the product decisions: queue vs lottery fairness, per-account limits, bot defence at admission. Also the failure plan: if Redis fails over and loses the last seconds of holds, reconciliation against the order DB must catch any oversell.</p>
         </>}
       />
+
+      <H2 id="references">References &amp; further reading</H2>
+      <References items={REFS} />
 
       <KeyTakeaways items={[
         'Model inventory as counts per (hotel, room type, date), not individual rooms.',

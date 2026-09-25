@@ -1,4 +1,5 @@
-import { Callout, H2, KeyTakeaways } from '../components/ui'
+import { Callout, H2, KeyTakeaways, References } from '../components/ui'
+import { INTERVIEW_FURTHER_READING } from '../data/interview-further-reading'
 import { QUIZ } from '../data/quiz-data'
 import { QuizRunner } from './demos/quiz-runner'
 
@@ -29,6 +30,9 @@ export default function KnowledgeQuizChapter() {
         overlap”, but “so with N=3 I'd use W=2, R=2, and I accept that a two-node outage makes the key unavailable
         for writes.”
       </Callout>
+
+      <H2 id="further-reading">Further reading</H2>
+      <References items={INTERVIEW_FURTHER_READING} />
 
       <KeyTakeaways items={[
         'Know the numbers cold: seconds in a day, the latency ladder, nines of availability, base62 capacity.',

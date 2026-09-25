@@ -1,4 +1,5 @@
-import { Callout, CompareTable, H2, KeyTakeaways } from '../components/ui'
+import { Callout, CompareTable, H2, KeyTakeaways, References } from '../components/ui'
+import { INTERVIEW_FURTHER_READING } from '../data/interview-further-reading'
 import { QUESTION_BANK, Q_CATEGORIES } from '../data/question-bank-data'
 import { QbankExplorer } from './demos/qbank-explorer'
 
@@ -37,6 +38,9 @@ export default function QuestionBankChapter() {
         this scale, but here's how I'd reason about it” counts <strong>in your favor</strong>. Confidently wrong numbers
         or mechanisms are the fastest way to a down-level.
       </Callout>
+
+      <H2 id="further-reading">Further reading</H2>
+      <References items={INTERVIEW_FURTHER_READING} />
 
       <KeyTakeaways items={[
         'Practice out loud; recognizing an answer is not the same as producing it.',

@@ -1,9 +1,19 @@
 import {
   ApiSpec, ArchitectureDiagram, Callout, CodeBlock, CompareTable, EstimationTable, H2, InterviewQuestion,
-  KeyTakeaways, Requirements,
+  KeyTakeaways, References, Requirements,
 } from '../components/ui'
-import type { ArchEdge, ArchNode } from '../components/ui'
+import type { ArchEdge, ArchNode, Reference } from '../components/ui'
 import { NotifPipelineSimulatorDemo } from './demos/notif-pipeline-simulator-demo'
+
+const REFS: Reference[] = [
+  { title: 'Sending notification requests to APNs', source: 'Apple Developer Documentation', url: 'https://developer.apple.com/documentation/usernotifications/sending-notification-requests-to-apns', kind: 'docs', note: 'headers incl. apns-collapse-id' },
+  { title: 'Handling notification responses from APNs', source: 'Apple Developer Documentation', url: 'https://developer.apple.com/documentation/usernotifications/handling-notification-responses-from-apns', kind: 'docs', note: 'error codes such as 410 Unregistered' },
+  { title: 'Firebase Cloud Messaging', source: 'Firebase documentation', url: 'https://firebase.google.com/docs/cloud-messaging', kind: 'docs' },
+  { title: 'Designing robust and predictable APIs with idempotency', source: 'Brandur Leach, Stripe', year: 2017, url: 'https://stripe.com/blog/idempotency', kind: 'blog', note: 'idempotency keys, retries with jitter' },
+  { title: 'Pattern: Transactional outbox', source: 'Chris Richardson, microservices.io', url: 'https://microservices.io/patterns/data/transactional-outbox.html', kind: 'docs' },
+  { title: 'Using dead-letter queues in Amazon SQS', source: 'AWS documentation', url: 'https://docs.aws.amazon.com/AWSSimpleQueueService/latest/SQSDeveloperGuide/sqs-dead-letter-queues.html', kind: 'docs' },
+  { title: 'System Design Interview – An Insider’s Guide, Vol. 1 (ch. “Design a Notification System”)', source: 'Alex Xu', year: 2020, kind: 'book', note: 'recommended further reading on the same prompt' },
+]
 
 const NODES: ArchNode[] = [
   { id: 'svc', label: 'Product services', sub: 'orders, auth, social', kind: 'client', x: 7, y: 30,
@@ -185,6 +195,9 @@ type Preferences = { userId: string; channels: Record<string, boolean>; categori
           <p>Then add an SLO on transactional delivery latency so this is caught by an alert rather than by users.</p>
         </>}
       />
+
+      <H2 id="references">References &amp; further reading</H2>
+      <References items={REFS} />
 
       <KeyTakeaways items={[
         'Producers send intents. The platform owns channels, preferences, templates, and retries.',

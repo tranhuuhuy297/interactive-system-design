@@ -1,10 +1,21 @@
 import {
   ApiSpec, ArchitectureDiagram, Callout, CodeBlock, CompareTable, EstimationTable, H2, InterviewQuestion,
-  KeyTakeaways, Requirements,
+  KeyTakeaways, References, Requirements,
 } from '../components/ui'
-import type { ArchEdge, ArchNode } from '../components/ui'
+import type { ArchEdge, ArchNode, Reference } from '../components/ui'
 import { VideoAbrSim } from './demos/video-abr-sim'
 import { VideoTranscodeDag } from './demos/video-transcode-dag'
+
+const REFS: Reference[] = [
+  { title: 'RFC 8216: HTTP Live Streaming', source: 'IETF (informational)', year: 2017, url: 'https://www.rfc-editor.org/rfc/rfc8216', kind: 'rfc' },
+  { title: 'DASH Industry Forum (MPEG-DASH, ISO/IEC 23009-1)', source: 'DASH-IF', url: 'https://dashif.org/', kind: 'docs' },
+  { title: 'Uploading and copying objects using multipart upload', source: 'Amazon S3 User Guide', url: 'https://docs.aws.amazon.com/AmazonS3/latest/userguide/mpuoverview.html', kind: 'docs', note: 'part sizes, parallel and resumable uploads' },
+  { title: 'Resumable upload protocol', source: 'tus.io', url: 'https://tus.io/protocols/resumable-upload', kind: 'docs' },
+  { title: 'Per-Title Encode Optimization', source: 'Z. Li, M. Manohara, J. De Cock, D. Ronca, Netflix TechBlog', year: 2015, url: 'https://netflixtechblog.com/per-title-encode-optimization-7e99442b62a2', kind: 'blog', note: 'bitrate ladder tuned per title' },
+  { title: 'VMAF: Video Multi-Method Assessment Fusion', source: 'Netflix (open source)', url: 'https://github.com/Netflix/vmaf', kind: 'docs', note: 'perceptual quality metric' },
+  { title: 'Alliance for Open Media (AV1)', source: 'AOMedia', url: 'https://aomedia.org/', kind: 'docs' },
+  { title: 'System Design Interview – An Insider’s Guide, Vol. 1 (ch. “Design YouTube”)', source: 'Alex Xu', year: 2020, kind: 'book', note: 'recommended further reading on the same prompt' },
+]
 
 const NODES: ArchNode[] = [
   { id: 'creator', label: 'Creator app', kind: 'client', x: 10, y: 22 },
@@ -165,6 +176,9 @@ type Video = {
           <p>Levers: cap bitrate for small screens, AV1 for top content, fix cache keys, add a shield tier, and renegotiate or shift traffic across CDNs.</p>
         </>}
       />
+
+      <H2 id="references">References &amp; further reading</H2>
+      <References items={REFS} />
 
       <KeyTakeaways items={[
         'Two systems: a batch upload/transcode pipeline and a CDN-dominated delivery path.',

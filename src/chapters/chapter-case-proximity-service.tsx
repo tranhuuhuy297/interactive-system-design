@@ -1,10 +1,21 @@
 import {
   ApiSpec, ArchitectureDiagram, Callout, CodeBlock, CompareTable, EstimationTable, H2, InterviewQuestion,
-  KeyTakeaways, Requirements,
+  KeyTakeaways, References, Requirements,
 } from '../components/ui'
-import type { ArchEdge, ArchNode } from '../components/ui'
+import type { ArchEdge, ArchNode, Reference } from '../components/ui'
 import { GeoGeohashExplorer } from './demos/geo-geohash-explorer'
 import { GeoQuadtreeDemo } from './demos/geo-quadtree-demo'
+
+const REFS: Reference[] = [
+  { title: 'Geohash', source: 'Wikipedia (algorithm by Gustavo Niemeyer, 2008)', url: 'https://en.wikipedia.org/wiki/Geohash', kind: 'docs', note: 'encoding and cell dimensions per precision' },
+  { title: 'Quad trees: a data structure for retrieval on composite keys', source: 'R. A. Finkel & J. L. Bentley, Acta Informatica', year: 1974, url: 'https://link.springer.com/article/10.1007/BF00288933', kind: 'paper' },
+  { title: 'S2 cell hierarchy', source: 'S2 Geometry documentation', url: 'https://s2geometry.io/devguide/s2cell_hierarchy.html', kind: 'docs' },
+  { title: 'H3: Uber’s Hexagonal Hierarchical Spatial Index', source: 'Isaac Brodsky, Uber Engineering', year: 2018, url: 'https://www.uber.com/us/en/blog/h3/', kind: 'blog' },
+  { title: 'H3 documentation', source: 'h3geo.org', url: 'https://h3geo.org/docs/', kind: 'docs' },
+  { title: 'Redis geospatial indexes', source: 'Redis documentation', url: 'https://redis.io/docs/latest/develop/data-types/geospatial/', kind: 'docs', note: 'GEOADD / GEOSEARCH' },
+  { title: 'PostGIS documentation', source: 'PostGIS', url: 'https://postgis.net/docs/', kind: 'docs', note: 'spatial indexes in a relational database' },
+  { title: 'System Design Interview – An Insider’s Guide, Vol. 2 (ch. “Proximity Service”)', source: 'Alex Xu & Sahn Lam', year: 2022, kind: 'book', note: 'recommended further reading on the same prompt' },
+]
 
 const NODES: ArchNode[] = [
   { id: 'user', label: 'Mobile app', sub: 'lat/lon', kind: 'client', x: 10, y: 45 },
@@ -112,7 +123,7 @@ export default function ProximityServiceChapter() {
           { label: 'Density-aware', cells: ['No (same cell size everywhere)', 'Yes, splits where dense', 'Cover with mixed-level cells'] },
           { label: 'Storage', cells: ['Any DB with a string index, Redis', 'Custom in-process structure', 'Library + 64-bit cell IDs in any KV'] },
           { label: 'Updates', cells: ['Trivial: recompute one string', 'Tree rebuild or locking on writes', 'Trivial: recompute cell ID'] },
-          { label: 'Examples', cells: ['Redis GEO, Elasticsearch geohash grid', 'Classic in-memory spatial index', 'Google Maps (S2), Uber (H3)'] },
+          { label: 'Examples', cells: ['Redis GEO, Elasticsearch geohash grid', 'Classic in-memory spatial index', 'S2 (open-sourced by Google), H3 (Uber)'] },
         ]}
       />
 
@@ -163,6 +174,9 @@ SELECT business_id FROM geo_index
           <p>Technically: stream DB changes with CDC into an incremental index updater. Geohash makes that trivial, since one insert per precision applies to every replica. That gives minutes of latency without coupling the write path to the read-replica fleet. Synchronous fan-out to hundreds of index replicas would make every owner edit fragile.</p>
         </>}
       />
+
+      <H2 id="references">References &amp; further reading</H2>
+      <References items={REFS} />
 
       <KeyTakeaways items={[
         'Proximity search turns 2D closeness into 1D keys: geohash, quadtree, S2, H3.',

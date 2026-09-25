@@ -1,7 +1,7 @@
 import {
-  ArchitectureDiagram, Callout, CodeBlock, CompareTable, FlowDiagram, H2, InterviewQuestion, KeyTakeaways, Tabs,
+  ArchitectureDiagram, Callout, CodeBlock, CompareTable, FlowDiagram, H2, InterviewQuestion, KeyTakeaways, References, Tabs,
 } from '../components/ui'
-import type { ArchEdge, ArchNode } from '../components/ui'
+import type { ArchEdge, ArchNode, Reference } from '../components/ui'
 import { LbAlgorithmRaceDemo } from './demos/lb-algorithm-race-demo'
 import { LbConsistentHashRingDemo } from './demos/lb-consistent-hash-ring-demo'
 
@@ -19,6 +19,18 @@ const GLOBAL_NODES: ArchNode[] = [
 const GLOBAL_EDGES: ArchEdge[] = [
   { from: 'user', to: 'dns' }, { from: 'dns', to: 'l4' }, { from: 'l4', to: 'l7' },
   { from: 'l7', to: 'a', label: '/api' }, { from: 'l7', to: 'b', label: '/media' },
+]
+
+const REFS: Reference[] = [
+  { title: "Consistent Hashing and Random Trees", source: "Karger et al., STOC", year: 1997, url: "https://doi.org/10.1145/258533.258660", kind: "paper", note: "Origin of consistent hashing" },
+  { title: "Dynamo: Amazon’s Highly Available Key-value Store", source: "DeCandia et al., SOSP", year: 2007, url: "https://www.allthingsdistributed.com/files/amazon-dynamo-sosp2007.pdf", kind: "paper", note: "Virtual nodes and ring-based partitioning in practice" },
+  { title: "The Power of Two Choices in Randomized Load Balancing", source: "M. Mitzenmacher, IEEE TPDS", year: 2001, url: "https://www.eecs.harvard.edu/~michaelm/postscripts/tpds2001.pdf", kind: "paper" },
+  { title: "Maglev: A Fast and Reliable Software Network Load Balancer", source: "Eisenbud et al., NSDI", year: 2016, url: "https://research.google/pubs/maglev-a-fast-and-reliable-software-network-load-balancer/", kind: "paper" },
+  { title: "A Fast, Minimal Memory, Consistent Hash Algorithm (jump hash)", source: "J. Lamping & E. Veach", year: 2014, url: "https://arxiv.org/abs/1406.2294", kind: "paper" },
+  { title: "Consistent Hashing with Bounded Loads", source: "Mirrokni, Thorup & Zadimoghaddam", year: 2016, url: "https://arxiv.org/abs/1608.01350", kind: "paper" },
+  { title: "Load Balancing in the Datacenter (Site Reliability Engineering, ch. 20)", source: "Google", year: 2016, url: "https://sre.google/sre-book/load-balancing-datacenter/", kind: "book" },
+  { title: "Two random choices", source: "Marc Brooker", year: 2012, url: "https://brooker.co.za/blog/2012/01/17/two-random.html", kind: "blog" },
+  { title: "How Elastic Load Balancing works", source: "AWS documentation", url: "https://docs.aws.amazon.com/elasticloadbalancing/latest/userguide/how-elastic-load-balancing-works.html", kind: "docs" },
 ]
 
 export default function LoadBalancingChapter() {
@@ -161,6 +173,9 @@ class HashRing {
           <p>Then I'd verify with a per-pod RPS dashboard, not just CPU.</p>
         </>}
       />
+
+      <H2 id="references">References &amp; further reading</H2>
+      <References items={REFS} />
 
       <KeyTakeaways items={[
         'L4 balances connections quickly; L7 balances requests with full context. Most real paths use both.',

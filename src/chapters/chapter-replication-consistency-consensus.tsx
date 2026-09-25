@@ -1,9 +1,23 @@
 import {
-  Callout, CodeBlock, CompareTable, FlowDiagram, H2, InterviewQuestion, KeyTakeaways, Tabs,
+  Callout, CodeBlock, CompareTable, FlowDiagram, H2, InterviewQuestion, KeyTakeaways, References, Tabs,
 } from '../components/ui'
+import type { Reference } from '../components/ui'
 import { ConsensusQuorumPlaygroundDemo } from './demos/consensus-quorum-playground-demo'
 import { ConsensusRaftElectionDemo } from './demos/consensus-raft-election-demo'
 import { ConsensusReplicationLagDemo } from './demos/consensus-replication-lag-demo'
+
+const REFS: Reference[] = [
+  { title: "In Search of an Understandable Consensus Algorithm (Raft)", source: "D. Ongaro & J. Ousterhout, USENIX ATC", year: 2014, url: "https://www.usenix.org/system/files/conference/atc14/atc14-paper-ongaro.pdf", kind: "paper" },
+  { title: "Paxos Made Simple", source: "L. Lamport", year: 2001, url: "https://lamport.azurewebsites.net/pubs/paxos-simple.pdf", kind: "paper" },
+  { title: "Time, Clocks, and the Ordering of Events in a Distributed System", source: "L. Lamport, CACM", year: 1978, url: "https://lamport.azurewebsites.net/pubs/time-clocks.pdf", kind: "paper" },
+  { title: "Brewer’s Conjecture and the Feasibility of Consistent, Available, Partition-Tolerant Web Services", source: "S. Gilbert & N. Lynch, SIGACT News", year: 2002, url: "https://users.ece.cmu.edu/~adrian/731-sp04/readings/GL-cap.pdf", kind: "paper", note: "Formal CAP proof" },
+  { title: "Consistency Tradeoffs in Modern Distributed Database System Design (PACELC)", source: "D. Abadi, IEEE Computer", year: 2012, url: "https://www.cs.umd.edu/~abadi/papers/abadi-pacelc.pdf", kind: "paper" },
+  { title: "Dynamo: Amazon’s Highly Available Key-value Store", source: "DeCandia et al., SOSP", year: 2007, url: "https://www.allthingsdistributed.com/files/amazon-dynamo-sosp2007.pdf", kind: "paper", note: "Quorums, sloppy quorums and version vectors" },
+  { title: "Consistency Models", source: "Jepsen", url: "https://jepsen.io/consistency", kind: "docs" },
+  { title: "How to do distributed locking", source: "Martin Kleppmann", year: 2016, url: "https://martin.kleppmann.com/2016/02/08/how-to-do-distributed-locking.html", kind: "blog", note: "Leases and fencing tokens" },
+  { title: "Sagas", source: "H. Garcia-Molina & K. Salem, SIGMOD", year: 1987, url: "https://www.cs.cornell.edu/andru/cs711/2002fa/reading/sagas.pdf", kind: "paper" },
+  { title: "Designing Data-Intensive Applications", source: "Martin Kleppmann (O’Reilly)", year: 2017, url: "https://dataintensive.net/", kind: "book" },
+]
 
 export default function ConsistencyChapter() {
   return (
@@ -180,6 +194,9 @@ function compare(a: VV, b: VV): 'before' | 'after' | 'equal' | 'concurrent' {
         </>}
         followUps={['What happens if the lock holder crashes mid-job?', 'How does the protected resource check a fencing token?', 'Why is a GC pause dangerous here?']}
       />
+
+      <H2 id="references">References &amp; further reading</H2>
+      <References items={REFS} />
 
       <KeyTakeaways items={[
         'Single-leader is simplest; multi-leader and leaderless buy availability at the cost of conflict resolution.',
