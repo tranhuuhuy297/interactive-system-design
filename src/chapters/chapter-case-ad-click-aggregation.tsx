@@ -1,0 +1,166 @@
+import {
+  ApiSpec, ArchitectureDiagram, Callout, CodeBlock, CompareTable, EstimationTable, FlowDiagram, H2,
+  InterviewQuestion, KeyTakeaways, Requirements, Tabs,
+} from '../components/ui'
+import type { ArchEdge, ArchNode } from '../components/ui'
+import { AdclickWindowingDemo } from './demos/adclick-windowing-demo'
+
+const NODES: ArchNode[] = [
+  { id: 'ads', label: 'Ad servers', sub: 'redirect', kind: 'service', x: 10, y: 45,
+    detail: 'Log each click with a unique click_id, ad_id, event timestamp, user and geo attributes. Log first, then redirect. The log is the product.' },
+  { id: 'raw', label: 'Raw clicks', sub: 'Kafka · ad_id', kind: 'queue', x: 27, y: 45,
+    detail: 'The durable, replayable source of truth. Keep days or weeks of retention so you can reprocess after a bug.' },
+  { id: 'agg', label: 'Aggregator', sub: 'Flink', kind: 'worker', x: 46, y: 22,
+    detail: 'Dedupes by click_id, assigns event-time windows, aggregates per (ad, minute) and top-N. Checkpoints state for exactly-once processing.' },
+  { id: 'aggq', label: 'Aggregates', sub: 'Kafka', kind: 'queue', x: 62, y: 22 },
+  { id: 'olap', label: 'OLAP store', sub: 'ClickHouse / Pinot', kind: 'db', x: 80, y: 22,
+    detail: 'Columnar and fast for group-by and filter queries over time. Writes are idempotent upserts keyed by (ad_id, window_start).' },
+  { id: 'lake', label: 'Data lake', sub: 'object storage', kind: 'storage', x: 46, y: 78,
+    detail: 'Raw clicks archived as Parquet. The input for batch recounts, backfills and ML.' },
+  { id: 'batch', label: 'Batch recount', sub: 'Spark, nightly', kind: 'worker', x: 66, y: 78,
+    detail: 'Recomputes yesterday from raw data with every late event included. Its numbers are what advertisers are billed on.' },
+  { id: 'query', label: 'Query service', kind: 'service', x: 80, y: 55 },
+  { id: 'dash', label: 'Dashboards', kind: 'client', x: 90, y: 85 },
+]
+
+const EDGES: ArchEdge[] = [
+  { from: 'ads', to: 'raw', async: true }, { from: 'raw', to: 'agg', async: true }, { from: 'agg', to: 'aggq', async: true },
+  { from: 'aggq', to: 'olap', async: true }, { from: 'raw', to: 'lake', async: true }, { from: 'lake', to: 'batch' },
+  { from: 'batch', to: 'olap', label: 'overwrite' }, { from: 'olap', to: 'query' }, { from: 'query', to: 'dash' },
+]
+
+export default function AdClickAggregationChapter() {
+  return (
+    <>
+      <p>
+        Counting clicks sounds trivial until the counts become <strong>invoices</strong>. This prompt is a streaming
+        systems interview in disguise: event time vs processing time, late data, exactly-once state, hot keys, and
+        how fast numbers and correct numbers live side by side.
+      </p>
+
+      <H2 id="requirements">1 · Clarify requirements</H2>
+      <Requirements
+        functional={['Click count per ad over the last M minutes', 'Top-N most clicked ads per minute', 'Filter by attributes (country, device)', 'Billing-grade daily totals']}
+        nonFunctional={['Dashboards fresh within ~1 minute', 'Billing numbers correct (dedupe, no loss)', 'Survive processor crashes without double counting', 'Reprocess history after a bug']}
+        outOfScope={['Ad serving and auction', 'Click-fraud ML (hook provided)']}
+      />
+      <Callout kind="tip">
+        Ask whether dashboard numbers and billed numbers must be <strong>identical</strong>. Almost always the answer
+        is “eventually”. That one answer licenses a fast approximate path plus a slow exact path.
+      </Callout>
+
+      <H2 id="estimation">2 · Back-of-the-envelope</H2>
+      <EstimationTable
+        assumptions={['1B clicks/day (illustrative)', 'Peak 5× average', '~100 B per raw click event', '2M active ads']}
+        rows={[
+          { label: 'Average ingest', math: '1B / 86,400 s', result: '≈ 11.6K/s' },
+          { label: 'Peak ingest', math: '11.6K × 5', result: '≈ 58K/s' },
+          { label: 'Raw volume', math: '1B × 100 B', result: '≈ 100 GB/day' },
+          { label: 'Minute aggregates', math: '2M ads × 1,440 min (upper bound)', result: '≤ 2.9B rows/day' },
+        ]}
+      />
+      <p>In practice only a fraction of ads get clicks in any given minute, so real aggregate rows are far fewer. Kafka with a few dozen partitions and a modest Flink cluster covers the ingest rate.</p>
+
+      <H2 id="api">3 · API</H2>
+      <ApiSpec endpoints={[
+        { method: 'GET', path: '/v1/ads/{adId}/clicks', desc: 'Time series of counts.', body: '?from&to&granularity=1m&country=', returns: '[{ windowStart, count }]' },
+        { method: 'GET', path: '/v1/ads/top', desc: 'Most-clicked ads.', body: '?window=1m&limit=100', returns: '[{ adId, count }]' },
+      ]} />
+
+      <H2 id="high-level">4 · High-level design</H2>
+      <ArchitectureDiagram nodes={NODES} edges={EDGES} height={400}
+        caption="A fast streaming path for dashboards and a batch path that produces the billed numbers"
+        flows={[
+          { name: 'Streaming', path: ['ads', 'raw', 'agg', 'aggq', 'olap', 'query', 'dash'], steps: ['Log the click with click_id + event time', 'Kafka keyed by ad_id keeps each ad in one partition', 'Dedupe + event-time window per (ad, minute)', 'Emit when the watermark passes window end', 'Idempotent upsert on (ad_id, window_start)', 'Dashboard reads are fresh within ~1 min'] },
+          { name: 'Batch correction', path: ['raw', 'lake', 'batch', 'olap'], steps: ['Archive raw clicks to Parquet', 'Nightly job recounts including all late clicks', 'Overwrite yesterday’s aggregates: billing uses these'] },
+        ]} />
+
+      <H2 id="windows">5 · Deep dive: event time, windows & watermarks</H2>
+      <p>
+        A click that happened at 10:00:59 but arrived at 10:01:07 belongs to the <strong>10:00 minute</strong>. Windowing
+        by arrival time (processing time) is simpler but produces numbers that change with network weather. A
+        <strong> watermark</strong> is the stream's claim that no more events older than T are expected. Window
+        results are emitted when the watermark passes the window end.
+      </p>
+      <AdclickWindowingDemo />
+      <CompareTable
+        columns={['Tumbling', 'Sliding (hopping)', 'Session']}
+        rows={[
+          { label: 'Shape', cells: ['Fixed, non-overlapping', 'Fixed size, overlapping hops', 'Closes after a gap of inactivity'] },
+          { label: 'Use here', cells: ['Clicks per ad per minute', 'Top-N over the last 5 min, updated every minute', 'User engagement bursts'] },
+          { label: 'State cost', cells: ['1 window per key', 'size/slide windows per event', 'Unbounded until the gap'] },
+        ]}
+      />
+
+      <H2 id="exactly-once">6 · Deep dive: exactly-once counts</H2>
+      <p>Double counting comes from three places. Handle each explicitly:</p>
+      <ul>
+        <li><strong>Duplicate clicks</strong> (client retries, redirect replays): dedupe on <code>click_id</code> in keyed state with a TTL of a few minutes, longer than the watermark lag.</li>
+        <li><strong>Processor crash and replay</strong>: Flink checkpoints store Kafka offsets and window state together. After a restore, both rewind consistently.</li>
+        <li><strong>Sink duplicates</strong>: either use a transactional sink (two-phase commit tied to checkpoints) or, simpler, an <strong>idempotent upsert</strong> keyed by <code>(ad_id, window_start)</code> so re-emitting overwrites instead of adding.</li>
+      </ul>
+      <CodeBlock lang="ts" title="aggregate row (idempotent by construction)" code={`
+// PRIMARY KEY (ad_id, window_start, dims_hash)
+type AdMinute = {
+  adId: string
+  windowStart: number     // epoch minute (event time)
+  dimsHash: string        // country|device combo, or '*' for total
+  clicks: number          // overwritten, never incremented, on re-emit
+  source: 'stream' | 'batch'
+}`} />
+
+      <H2 id="hot-keys">7 · Deep dive: hot ads & the two-path architecture</H2>
+      <p>
+        A Super Bowl ad can take a big share of all clicks, and keying by <code>ad_id</code> pins it to one
+        partition and one task. Fix: <strong>salt the key</strong> (<code>ad_id#0..7</code>), pre-aggregate in parallel,
+        then merge the 8 partial counts in a second, much smaller stage.
+      </p>
+      <Tabs items={[
+        { label: 'Lambda', content: <>
+          <FlowDiagram steps={[{ label: 'Raw log', sub: 'Kafka + lake' }, { label: 'Speed layer', sub: 'stream, approximate' }, { label: 'Batch layer', sub: 'exact recount' }, { label: 'Serving', sub: 'batch overwrites stream' }]} />
+          <p>Two codebases compute “the same” numbers. You get correctness from batch and freshness from streaming, but also logic drift between two implementations.</p>
+        </> },
+        { label: 'Kappa', content: <>
+          <FlowDiagram steps={[{ label: 'Raw log', sub: 'long retention' }, { label: 'One stream job', sub: 'event-time, exactly-once' }, { label: 'Serving', sub: 'idempotent upserts' }, { label: 'Reprocess', sub: 'replay log into v2 job' }]} />
+          <p>One codebase. Corrections come from replaying the log through a new version of the job. That needs long log retention and a stream engine you trust with state.</p>
+        </> },
+      ]} />
+
+      <H2 id="staff">8 · Staff-level extensions</H2>
+      <Callout kind="staff">
+        <ul>
+          <li><strong>Name the contract</strong>: dashboards are “preliminary, ±x%”, invoices come from the closed-day batch. Put it in the API response (<code>source: stream|batch</code>) so no team bills from preliminary numbers.</li>
+          <li><strong>Reconciliation as a metric</strong>: alert when stream and batch totals diverge by more than a threshold. Divergence is an early bug detector for the stream job.</li>
+          <li><strong>Replay is a feature</strong>: size Kafka retention and the lake to support a backfill after the inevitable dedupe bug, and practise it.</li>
+          <li><strong>Privacy</strong>: raw clicks contain user identifiers. Put retention limits and deletion propagation (GDPR) on the lake, not just on the OLAP store.</li>
+        </ul>
+      </Callout>
+
+      <H2 id="interview">Interview drill</H2>
+      <InterviewQuestion
+        q="How do you handle clicks that arrive minutes late?"
+        senior={<p>Use event-time windows with a watermark that allows some lateness. Events later than that are dropped or sent to a side output.</p>}
+        staff={<>
+          <p>Make it a trade-off with a number. The watermark lag is how long every dashboard waits, so I'd pick it from the observed delay distribution (say, covering p99 at ~10 s). Events later than that go to a <strong>side output</strong>, never silently dropped.</p>
+          <p>For billing, the nightly batch recount over the raw log includes everything and overwrites the day. I'd also measure the late-event rate as an SLI, because a spike usually means a broken client SDK or a region outage, not normal jitter.</p>
+        </>}
+        followUps={['What if a client clock is wrong by an hour?', 'How much state does dedup need?', 'How would you backfill after a bug?']}
+      />
+      <InterviewQuestion
+        q="Your stream job crashes and restarts. Why don't counts double?"
+        senior={<p>Flink checkpoints store the Kafka offsets and state together, so after restore it replays from the checkpointed offsets with consistent state.</p>}
+        staff={<>
+          <p>That covers the <em>internal</em> state. The sink is where people get burned: results emitted after the last checkpoint get emitted again on replay. Either use a transactional sink that commits on checkpoint completion (adds latency equal to the checkpoint interval), or make writes <strong>idempotent upserts keyed by window</strong>. I prefer the latter because it's simpler, and it also makes batch overwrites and backfills safe.</p>
+        </>}
+      />
+
+      <KeyTakeaways items={[
+        'Window by event time; watermarks trade freshness for completeness.',
+        'Late events go to a side output, and the batch recount produces billable truth.',
+        'Exactly-once effect = dedupe on click_id + checkpointed state + idempotent sink.',
+        'Salt hot keys and merge partial aggregates in a second stage.',
+        'Lambda vs kappa is about how you correct history. Choose deliberately and label numbers by source.',
+      ]} />
+    </>
+  )
+}

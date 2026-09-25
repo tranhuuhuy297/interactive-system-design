@@ -1,0 +1,127 @@
+import {
+  Callout, CodeBlock, CompareTable, EstimationTable, H2, InterviewQuestion, KeyTakeaways,
+} from '../components/ui'
+import { EstimationCapacityCalculator } from './demos/estimation-capacity-calculator'
+import { EstimationLatencyVisualizer } from './demos/estimation-latency-visualizer'
+import { EstimationNinesCalculator } from './demos/estimation-nines-calculator'
+
+export default function EstimationChapter() {
+  return (
+    <>
+      <p>
+        Estimation is not about getting the exact number. It is about getting the <strong>order of magnitude</strong>{' '}
+        right fast enough to make design decisions: does this fit on one machine? In memory? Does it need sharding?
+        Is bandwidth or storage the real cost? A few rounded numbers said out loud do more for your credibility
+        than any diagram.
+      </p>
+
+      <H2 id="powers-of-two">Powers of two and the units that matter</H2>
+      <CompareTable columns={['Exact', '≈ Decimal', 'Unit']} rows={[
+        { label: '2¹⁰', cells: ['1,024', '1 thousand', 'KB'] },
+        { label: '2²⁰', cells: ['1,048,576', '1 million', 'MB'] },
+        { label: '2³⁰', cells: ['~1.07 billion', '1 billion', 'GB'] },
+        { label: '2⁴⁰', cells: ['~1.1 trillion', '1 trillion', 'TB'] },
+        { label: '2⁵⁰', cells: ['~1.13 quadrillion', '1 quadrillion', 'PB'] },
+      ]} caption="In interviews, round 2¹⁰ to 1,000. The 2–13% error never changes a design decision." />
+      <p>Handy constants to memorize:</p>
+      <ul>
+        <li><strong>Seconds per day ≈ 86,400 ≈ 10⁵.</strong> So 1M requests/day ≈ 12 QPS, and 1B/day ≈ 12K QPS.</li>
+        <li><strong>A char is 1 byte</strong> (ASCII), a UUID 16 bytes binary (36 as text), a timestamp 8 bytes, a typical row with metadata a few hundred bytes.</li>
+        <li><strong>A modern server</strong> has tens to hundreds of GB of RAM, around 10–25 Gbps networking, and NVMe drives with GB/s throughput.</li>
+      </ul>
+
+      <H2 id="latency">Latency numbers every engineer should know</H2>
+      <p>
+        Originally popularized by Jeff Dean and updated by many since, these numbers explain most design choices:
+        why we cache, why we batch, and why we avoid cross-region round trips on the hot path.
+      </p>
+      <EstimationLatencyVisualizer />
+      <Callout kind="tip">
+        Three ratios cover most interview reasoning: <strong>memory is about 1,000× faster than an SSD random read</strong>,
+        an <strong>in-datacenter round trip costs roughly as much as a few SSD reads</strong>, and a <strong>cross-continent
+        round trip is about 100–300× an in-DC one</strong>. That last ratio is why multi-region writes are expensive.
+      </Callout>
+
+      <H2 id="availability">Availability and the nines</H2>
+      <p>
+        Availability targets translate directly into allowed downtime. Remember that a request path with many
+        dependencies is only as available as the <em>product</em> of its parts:
+      </p>
+      <EstimationNinesCalculator />
+      <Callout kind="pitfall">
+        Promising 99.99% on a service with eight 99.9% dependencies in series is mathematically impossible
+        (0.999⁸ ≈ 99.2%). Either add redundancy, make dependencies optional with graceful degradation, or lower the
+        target.
+      </Callout>
+
+      <H2 id="formulas">The core formulas</H2>
+      <CodeBlock lang="text" title="estimation cheat sheet" code={`
+QPS (avg)      = daily requests / 86,400
+Peak QPS       = avg QPS × peak factor (often 2–5×)
+Storage / yr   = writes per day × 365 × bytes per record × replication factor
+Bandwidth      = QPS × payload size          (compute ingress and egress separately)
+Cache size     = hot fraction (e.g. 20%) × daily reads × payload
+Servers        = peak QPS / sustainable QPS per server (+ headroom for N+1 / AZ loss)`} />
+
+      <H2 id="calculator">Try it: the capacity calculator</H2>
+      <EstimationCapacityCalculator />
+
+      <H2 id="worked-example">Worked example: a photo-sharing app</H2>
+      <EstimationTable
+        assumptions={['500M DAU, 10% upload one photo per day', 'Average photo after compression: 2 MB, plus ~3 thumbnails ≈ 0.5 MB total', 'Each user views ~50 photos per day', 'Keep everything for 10 years, 3 replicas (or erasure coding at ~1.5×)']}
+        rows={[
+          { label: 'Uploads / day', math: '500M × 10%', result: '50M' },
+          { label: 'Upload QPS', math: '50M / 86,400', result: '≈ 580/s' },
+          { label: 'View QPS', math: '500M × 50 / 86,400', result: '≈ 290K/s' },
+          { label: 'New storage / day', math: '50M × 2.5 MB', result: '125 TB' },
+          { label: 'Storage / yr (3×)', math: '125 TB × 365 × 3', result: '≈ 137 PB' },
+          { label: 'Egress (avg)', math: '290K/s × ~200 KB (feed-sized image)', result: '≈ 58 GB/s' },
+        ]}
+      />
+      <p>
+        Two conclusions fall out immediately. Views dwarf uploads, so this is a <strong>CDN problem</strong>{' '}
+        first, and the ~58 GB/s of egress must come from the edge. And replicating 137 PB three times is
+        painful, so <strong>erasure coding and cold tiers</strong> for old photos are worth raising.
+      </p>
+
+      <H2 id="staff">Estimation at staff level</H2>
+      <Callout kind="staff">
+        <p>Senior candidates compute numbers. Staff candidates <strong>use</strong> numbers to kill options and to talk about money:</p>
+        <ul>
+          <li>“12K writes/s fits comfortably on one well-tuned Postgres primary, so I won't shard on day one. I'd plan the partition key now so resharding later is mechanical.”</li>
+          <li>“The working set is about 300 GB, which fits in a Redis cluster of a few nodes. Caching is cheap here, so I'd lean on it.”</li>
+          <li>“At 58 GB/s of egress, the CDN bill dominates compute by an order of magnitude. Image format (AVIF/WebP) and resizing matter more than the service language.”</li>
+        </ul>
+        <p>They also sanity-check with a second method, top-down from DAU and bottom-up from per-server capacity, and call out which assumption, if wrong, changes the design.</p>
+      </Callout>
+
+      <H2 id="interview">Interview drill</H2>
+      <InterviewQuestion
+        q="Estimate the storage needed for a Twitter-like service's tweets over 5 years."
+        senior={<p>Say 300M DAU with 2 tweets a day, about 600M tweets/day. At roughly 300 bytes each that is 180 GB/day, about 66 TB/year, about 330 TB over 5 years. With 3× replication, about 1 PB.</p>}
+        staff={<>
+          <p>Same arithmetic, but I'd separate the <strong>text</strong> (~1 PB replicated, small enough for a sharded store) from <strong>media</strong>. If 10% of tweets carry a 1 MB image, that is 60 TB/day, over 300× the text. So media storage and CDN egress are the real cost drivers, not the tweet table.</p>
+          <p>That split changes the design. Tweets go in a partitioned KV or relational store, media goes in object storage with lifecycle tiering, and the question “do we need to shard tweets?” becomes a capacity plan rather than a day-one requirement.</p>
+        </>}
+        followUps={['How does your estimate change if we keep edit history?', 'Which assumption is the most uncertain, and how would you validate it?']}
+      />
+      <InterviewQuestion
+        q="How many servers do we need to serve 1M requests per second?"
+        senior={<p>If each server handles around 10K QPS, we need 100 servers, plus some headroom, say 150.</p>}
+        staff={<>
+          <p>“Per-server QPS” hides the real question: <strong>what does a request cost?</strong> A cached read might be 50K QPS per core-heavy node, while a request fanning out to 5 services might be 500. I'd estimate from the dominant resource (CPU per request, memory for connections, or network bandwidth) and plan for peak, not average.</p>
+          <p>Then I'd add headroom for losing an availability zone: with 3 AZs, each must absorb 50% more load, so provision about 1.5× peak, and keep utilization around 50–60% so latency doesn't spike as queues form near saturation.</p>
+        </>}
+        followUps={['Why does latency degrade sharply near 100% utilization?', 'How would autoscaling change this plan?']}
+      />
+
+      <KeyTakeaways items={[
+        '86,400 s/day ≈ 10⁵: 1M/day ≈ 12 QPS, 1B/day ≈ 12K QPS.',
+        'Memorize latency ratios. RAM ≪ SSD ≪ in-DC RTT ≪ cross-region RTT, each step about 10–1000×.',
+        'Availability multiplies along serial paths. Redundancy and graceful degradation are how you buy nines back.',
+        'Always show the arithmetic, and separate ingress from egress and metadata from media.',
+        'Staff signal: use the numbers to rule options out and to talk about cost.',
+      ]} />
+    </>
+  )
+}

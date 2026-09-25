@@ -1,0 +1,46 @@
+@layer components {
+  /* Capacity calculator */
+  .est-calc { display: grid; grid-template-columns: minmax(220px, 0.85fr) 1.4fr; gap: var(--space-5); margin-top: var(--space-4); }
+  .est-calc__out { width: 100%; border-collapse: collapse; font-size: var(--text-sm); align-self: start; border: 1px solid var(--border); border-radius: var(--radius-md); overflow: hidden; }
+  .est-calc__out th, .est-calc__out td { padding: 8px 10px; border-bottom: 1px solid var(--border); text-align: left; vertical-align: top; }
+  .est-calc__out tr:last-child > * { border-bottom: 0; }
+  .est-calc__out th { color: var(--text); font-weight: 600; white-space: nowrap; }
+  .est-calc__math { color: var(--text-subtle); font-size: 11.5px; }
+  .est-calc__res { color: var(--accent-3); font-weight: 600; text-align: right !important; white-space: nowrap; transition: color var(--dur-base); }
+
+  /* Latency visualizer */
+  .est-lat__top { display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: var(--space-3); }
+  .est-lat__legend { display: flex; gap: var(--space-3); font-size: var(--text-xs); color: var(--text-subtle); }
+  .est-lat__dot { display: inline-flex; align-items: center; gap: 5px; text-transform: capitalize; }
+  .est-lat__dot::before { content: ""; width: 8px; height: 8px; border-radius: 2px; background: var(--c); }
+  .est-lat__dot--cpu, .est-lat__row--cpu { --c: var(--accent); }
+  .est-lat__dot--memory, .est-lat__row--memory { --c: var(--accent-2); }
+  .est-lat__dot--storage, .est-lat__row--storage { --c: var(--accent-3); }
+  .est-lat__dot--network, .est-lat__row--network { --c: var(--warning); }
+  .est-lat { list-style: none; padding: 0; margin: var(--space-4) 0 0; display: grid; gap: 3px; }
+  .est-lat__row { position: relative; display: grid; grid-template-columns: minmax(150px, 1.1fr) 2fr 92px; gap: var(--space-3); align-items: center; padding: 5px 8px; border-radius: 7px; font-size: 12.5px; outline: none; }
+  .est-lat__row:hover, .est-lat__row:focus-visible { background: var(--surface-2); }
+  .est-lat__op { color: var(--text-muted); }
+  .est-lat__track { height: 10px; border-radius: 99px; background: var(--surface-3); overflow: hidden; }
+  .est-lat__bar { display: block; height: 100%; border-radius: inherit; background: var(--c); transition: width var(--dur-slow) var(--ease-out); }
+  .est-lat__val { text-align: right; color: var(--text); font-size: 12px; }
+  .est-lat__ratio { position: absolute; right: 108px; top: -20px; padding: 2px 8px; border-radius: 6px; background: var(--text); color: var(--bg); font-size: 11px; white-space: nowrap; z-index: 2; pointer-events: none; }
+  .est-lat__note { margin: var(--space-3) 0 0; font-size: var(--text-xs); color: var(--text-subtle); }
+
+  /* Nines calculator */
+  .est-nines { display: grid; grid-template-columns: 1fr 1.2fr; gap: var(--space-5); }
+  .est-nines__out { display: grid; gap: var(--space-4); align-content: start; }
+  .est-nines__big { display: grid; gap: 2px; padding: var(--space-4); border-radius: var(--radius-lg); background: var(--surface-2); border: 1px solid var(--border); }
+  .est-nines__big strong { font-size: var(--text-3xl); color: var(--accent-3); line-height: 1.1; }
+  .est-nines__big > span:last-child { font-size: var(--text-sm); color: var(--text-muted); }
+  .est-nines table { width: 100%; border-collapse: collapse; font-size: 12.5px; }
+  .est-nines th { text-align: left; font-size: 10.5px; text-transform: uppercase; letter-spacing: 0.06em; color: var(--text-subtle); padding: 6px 8px; border-bottom: 1px solid var(--border); }
+  .est-nines td { padding: 6px 8px; color: var(--text-muted); border-bottom: 1px solid var(--border); }
+  .est-nines tr.is-met td { color: var(--success); }
+
+  @media (max-width: 760px) {
+    .est-calc, .est-nines { grid-template-columns: 1fr; }
+    .est-lat__row { grid-template-columns: 1fr 80px; }
+    .est-lat__track { grid-column: 1 / -1; grid-row: 2; }
+  }
+}

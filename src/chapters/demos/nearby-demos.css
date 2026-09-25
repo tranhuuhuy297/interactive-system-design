@@ -1,0 +1,27 @@
+@layer components {
+  .nb { display: grid; grid-template-columns: 1.4fr 1fr; gap: var(--space-5); align-items: start; }
+  .nb__map { width: 100%; height: auto; border: 1px solid var(--border); border-radius: var(--radius-md); background: var(--surface-2); }
+  .nb__radius { fill: color-mix(in oklch, var(--accent) 8%, transparent); stroke: var(--accent); stroke-width: 0.25; stroke-dasharray: 1 1; transition: r var(--dur-base) var(--ease-out); }
+  .nb__link { stroke: var(--border-strong); stroke-width: 0.2; }
+  .nb__link.is-near { stroke: var(--accent); stroke-width: 0.35; }
+  .nb__user { fill: var(--text-subtle); opacity: 0.55; transition: cx 0.45s linear, cy 0.45s linear; }
+  .nb__user.is-friend { fill: var(--text-muted); opacity: 1; }
+  .nb__user.is-near { fill: var(--accent); opacity: 1; }
+  .nb__user.is-me { fill: var(--text); opacity: 1; }
+
+  .nb__counters { display: grid; grid-template-columns: 1fr 1fr; border: 1px solid var(--border); border-radius: var(--radius-md); overflow: hidden; }
+  .nb__counters > div { display: grid; gap: 2px; padding: var(--space-2) var(--space-3); border-bottom: 1px solid var(--border); }
+  .nb__counters > div:nth-child(odd) { border-right: 1px solid var(--border); }
+  .nb__counters > div:nth-last-child(-n + 2) { border-bottom: 0; }
+  .nb__counters span { font-size: var(--text-xs); color: var(--text-subtle); }
+  .nb__counters b { font-size: var(--text-md); font-weight: 600; color: var(--text); }
+  .nb__counters small { font-size: var(--text-xs); color: var(--text-subtle); font-weight: 400; }
+  .nb__ok { color: var(--accent) !important; }
+
+  .nb__list { list-style: none; margin: 0; padding: 0; display: grid; gap: 2px; }
+  .nb__list li { display: flex; justify-content: space-between; padding: 4px var(--space-2); border-radius: var(--radius-sm); font-size: var(--text-xs); color: var(--text-subtle); }
+  .nb__list li.is-near { color: var(--text); background: var(--surface-2); }
+  .nb__note { margin: var(--space-4) 0 0; font-size: var(--text-xs); color: var(--text-subtle); line-height: 1.5; }
+
+  @media (max-width: 720px) { .nb { grid-template-columns: 1fr; } }
+}

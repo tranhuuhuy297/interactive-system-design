@@ -1,0 +1,20 @@
+@layer components {
+  .b62 { display: grid; grid-template-columns: 1fr 1.1fr; gap: var(--space-5); }
+  .b62__field { display: grid; gap: var(--space-2); }
+  .b62__field input { height: 38px; padding: 0 var(--space-3); border-radius: var(--radius-md); border: 1px solid var(--border-strong); background: var(--surface-2); font-family: var(--font-mono); font-size: 12.5px; outline: none; }
+  .b62__field input:focus-visible { border-color: var(--accent); }
+  .b62__cap { display: flex; align-items: baseline; gap: 6px; font-size: var(--text-sm); color: var(--text-muted); flex-wrap: wrap; }
+  .b62__cap strong { color: var(--accent-3); }
+  .b62__stage { display: grid; gap: var(--space-3); align-content: start; }
+  .b62__code { font-size: var(--text-2xl); color: var(--text-muted); word-break: break-all; }
+  .b62__code b { color: var(--accent); }
+  .b62__warn { font-size: var(--text-xs); color: var(--warning); }
+  .b62__log { list-style: none; padding: 0; margin: 0; display: grid; gap: 4px; }
+  .b62__log li { display: grid; grid-template-columns: auto 1fr auto; gap: var(--space-3); align-items: center; padding: 6px 10px; border-radius: 8px; background: var(--bg-elevated); font-size: 12px; animation: fade-up var(--dur-base) var(--ease-out); }
+  .b62__log code { color: var(--accent); font-family: var(--font-mono); }
+  .b62__log span { color: var(--text-subtle); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  .b62__log em { font-style: normal; color: var(--danger); font-weight: 700; }
+  .b62__log li.is-clash { outline: 1px solid var(--danger); }
+  .b62__empty { color: var(--text-subtle); background: none !important; }
+  @media (max-width: 720px) { .b62 { grid-template-columns: 1fr; } }
+}

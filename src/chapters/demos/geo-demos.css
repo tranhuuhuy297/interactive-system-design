@@ -1,0 +1,35 @@
+@layer components {
+  .geo__controls { display: grid; gap: var(--space-4); margin-bottom: var(--space-5); grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); align-items: end; }
+  .geo__controls .segmented { grid-column: 1 / -1; }
+  .geo__layout { display: grid; grid-template-columns: minmax(0, 1.2fr) minmax(0, 1fr); gap: var(--space-5); align-items: start; }
+
+  .geo__grid { position: relative; display: grid; gap: 2px; padding: 2px; border-radius: var(--radius-md); overflow: hidden; background: var(--surface-2); border: 1px solid var(--border); }
+  .geo__row { display: grid; grid-template-columns: repeat(5, 1fr); gap: 2px; }
+  .geo__cell { aspect-ratio: 1.25; display: grid; place-items: center; border-radius: 4px; background: color-mix(in oklch, var(--bg-elevated) 80%, transparent); border: 1px solid var(--border); font-size: 10.5px; color: var(--text-subtle); transition: background var(--dur-base), border-color var(--dur-base); overflow: hidden; }
+  .geo__cell:hover { border-color: var(--accent); }
+  .geo__cell b { color: var(--text); font-weight: 700; }
+  .geo__cell.is-neighbor { border-color: color-mix(in oklch, var(--accent-2) 55%, transparent); }
+  .geo__cell.is-center { border: 2px solid var(--accent); background: var(--accent-soft); }
+  .geo__cell.is-hit { background: color-mix(in oklch, var(--accent-3) 22%, var(--bg-elevated)); }
+  .geo__circle { position: absolute; translate: -50% -50%; border-radius: 50%; border: 2px dashed var(--accent-3); background: color-mix(in oklch, var(--accent-3) 8%, transparent); pointer-events: none; transition: all var(--dur-base) var(--ease-out); }
+  .geo__pin { position: absolute; width: 12px; height: 12px; translate: -50% -50%; border-radius: 50%; background: var(--danger); box-shadow: 0 0 0 2px var(--bg-elevated); pointer-events: none; transition: all var(--dur-base) var(--ease-out); }
+
+  .geo__facts { display: grid; gap: 8px; margin: 0; }
+  .geo__facts div { display: flex; justify-content: space-between; gap: var(--space-3); padding-bottom: 5px; border-bottom: 1px dashed var(--border); font-size: var(--text-sm); }
+  .geo__facts dt { color: var(--text-muted); }
+  .geo__facts dd { margin: 0; font-family: var(--font-mono); font-size: 12.5px; color: var(--text); text-align: right; }
+  .geo__facts--tight div { font-size: 12.5px; }
+  .geo__code { color: var(--accent) !important; font-size: var(--text-md) !important; letter-spacing: 0.06em; }
+  .geo__tip { margin: var(--space-2) 0 0; font-size: 12.5px; color: var(--text-subtle); line-height: 1.5; }
+  .geo__tip.is-warn { color: var(--warning); }
+
+  .geo__qt { width: 100%; height: auto; aspect-ratio: 1; border-radius: var(--radius-md); background: var(--surface-2); border: 1px solid var(--border); cursor: crosshair; }
+  .geo__qnode { fill: none; stroke: var(--border-strong); stroke-width: 0.25; }
+  .geo__qnode.d3, .geo__qnode.d4, .geo__qnode.d5 { stroke: color-mix(in oklch, var(--accent) 55%, transparent); }
+  .geo__qrect { fill: color-mix(in oklch, var(--accent-3) 14%, transparent); stroke: var(--accent-3); stroke-width: 0.5; stroke-dasharray: 1.5 1; }
+  .geo__pt { fill: var(--text-muted); }
+  .geo__pt.is-found { fill: var(--accent-3); }
+  .geo__btns { display: flex; flex-wrap: wrap; gap: var(--space-2); }
+
+  @media (max-width: 760px) { .geo__layout { grid-template-columns: 1fr; } }
+}

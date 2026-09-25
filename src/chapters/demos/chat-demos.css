@@ -1,0 +1,47 @@
+@layer components {
+  /* ── Connection routing ── */
+  .chatr__controls, .chats__controls { display: flex; flex-wrap: wrap; align-items: center; gap: var(--space-3); margin-bottom: var(--space-4); }
+  .chatr__arrow { color: var(--text-subtle); }
+  .chatr__grid { display: grid; grid-template-columns: repeat(3, 1fr); gap: var(--space-4); }
+  .chatr__col { display: grid; gap: var(--space-2); align-content: start; }
+  .chatr__box {
+    display: flex; flex-direction: column; gap: 2px; padding: 8px 12px; border-radius: var(--radius-md);
+    background: var(--surface-2); border: 1px solid var(--border); font-size: var(--text-sm);
+    transition: border-color var(--dur-base), background var(--dur-base), opacity var(--dur-base);
+  }
+  .chatr__col:first-child .chatr__box { flex-direction: row; align-items: center; justify-content: space-between; }
+  .chatr__box small { font-size: 11px; color: var(--text-subtle); }
+  .chatr__box.is-active { border-color: var(--accent); background: var(--accent-soft); }
+  .chatr__box.is-offline { opacity: 0.55; }
+  .chatr__name { font-weight: 600; color: var(--text); text-transform: capitalize; }
+  .chatr__toggle { font-size: 11px; font-weight: 600; padding: 2px 8px; border-radius: var(--radius-full); background: color-mix(in oklch, var(--success) 16%, transparent); color: var(--success); }
+  .chatr__toggle[aria-pressed="false"] { background: var(--surface-3); color: var(--text-subtle); }
+  .chatr__log, .chats__log { list-style: none; margin: var(--space-4) 0 0; padding: 0; display: grid; gap: 4px; }
+  .chatr__log li { display: flex; gap: var(--space-3); align-items: baseline; padding: 6px 10px; border-radius: var(--radius-md); font-size: var(--text-sm); color: var(--text-subtle); transition: background var(--dur-base), color var(--dur-base); }
+  .chatr__log li span { flex-shrink: 0; display: grid; place-items: center; width: 20px; height: 20px; border-radius: 50%; background: var(--surface-3); font: 700 11px var(--font-mono); }
+  .chatr__log li.is-done { color: var(--text-muted); }
+  .chatr__log li.is-active { background: var(--accent-soft); color: var(--text); }
+  .chatr__log li.is-active span { background: var(--accent); color: var(--accent-contrast); }
+  .chatr__empty { color: var(--text-subtle); }
+
+  /* ── Ordering & sync ── */
+  .chats__grid { display: grid; grid-template-columns: repeat(3, 1fr); gap: var(--space-3); }
+  .chats__panel { padding: var(--space-3); border-radius: var(--radius-lg); background: var(--surface-2); border: 1px solid var(--border); transition: opacity var(--dur-base); min-width: 0; }
+  .chats__panel.is-offline { opacity: 0.55; }
+  .chats__head { display: flex; justify-content: space-between; align-items: center; }
+  .chats__cursor { font-size: 11px; color: var(--accent-2); margin: 4px 0 var(--space-2); }
+  .chats__cursor em { color: var(--warning); font-style: normal; }
+  .chats__msgs { list-style: none; margin: var(--space-2) 0 0; padding: 0; display: grid; gap: 4px; }
+  .chats__msgs li { display: flex; gap: 8px; align-items: center; padding: 5px 8px; border-radius: var(--radius-md); background: var(--bg-elevated); font-size: 12.5px; color: var(--text); animation: fade-up var(--dur-base) var(--ease-out); }
+  .chats__msgs li span { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  .chats__msgs code { font-family: var(--font-mono); font-size: 11px; color: var(--text-subtle); }
+  .chats__tick { font-size: 11px; font-weight: 700; }
+  .chats__tick--sent { color: var(--text-subtle); }
+  .chats__tick--delivered { color: var(--text-muted); }
+  .chats__tick--read { color: var(--accent-2); }
+  .chats__gap { background: color-mix(in oklch, var(--warning) 12%, transparent) !important; color: var(--warning) !important; font-style: italic; }
+  .chats__log li { font-size: 12.5px; color: var(--text-subtle); padding: 3px 0; border-bottom: 1px dashed var(--border); }
+  .chats__log li:first-child { color: var(--text); }
+
+  @media (max-width: 720px) { .chatr__grid, .chats__grid { grid-template-columns: 1fr; } }
+}

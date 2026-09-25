@@ -1,0 +1,24 @@
+@layer components {
+  .notif { display: grid; grid-template-columns: 1fr 1.25fr; gap: var(--space-5); }
+  .notif__prefs { display: flex; gap: var(--space-2); margin-top: var(--space-2); }
+  .notif__pref { padding: 5px 12px; border-radius: var(--radius-full); font-size: var(--text-sm); font-weight: 600; background: var(--surface-3); color: var(--text-subtle); border: 1px solid var(--border); text-decoration: line-through; transition: all var(--dur-fast); }
+  .notif__pref[aria-pressed="true"] { background: var(--accent-soft); color: var(--accent); border-color: color-mix(in oklch, var(--accent) 40%, transparent); text-decoration: none; }
+  .notif__stage { display: grid; gap: var(--space-3); align-content: start; min-width: 0; }
+  .notif__actions { display: flex; flex-wrap: wrap; gap: var(--space-2); }
+  .notif__stages { display: grid; grid-template-columns: repeat(auto-fill, minmax(96px, 1fr)); gap: var(--space-2); }
+  .notif__count { --t: var(--text-muted); display: grid; gap: 2px; padding: var(--space-2) var(--space-3); border-radius: var(--radius-md); background: var(--surface-2); border: 1px solid color-mix(in oklch, var(--t) 30%, var(--border)); }
+  .notif__count span { font-size: 10.5px; text-transform: uppercase; letter-spacing: 0.06em; color: var(--text-subtle); font-weight: 600; }
+  .notif__count strong { font-size: var(--text-xl); color: var(--t); animation: notif-bump 0.35s var(--ease-spring); }
+  .notif__count--warn { --t: var(--warning); }
+  .notif__count--info { --t: var(--accent-2); }
+  .notif__count--ok { --t: var(--success); }
+  .notif__count--bad { --t: var(--danger); }
+  @keyframes notif-bump { from { transform: scale(1.35); } to { transform: none; } }
+  .notif__log { list-style: none; margin: 0; padding: var(--space-3); display: grid; gap: 3px; max-height: 260px; overflow-y: auto; border-radius: var(--radius-md); background: var(--code-bg); border: 1px solid var(--border); font-family: var(--font-mono); font-size: 11.5px; }
+  .notif__log li { animation: fade-up var(--dur-base) var(--ease-out); }
+  .notif__line--ok { color: var(--success); }
+  .notif__line--warn { color: var(--warning); }
+  .notif__line--bad { color: var(--danger); }
+  .notif__line--info { color: var(--text-subtle); }
+  @media (max-width: 760px) { .notif { grid-template-columns: 1fr; } }
+}

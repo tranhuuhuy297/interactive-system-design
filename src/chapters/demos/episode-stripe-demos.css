@@ -1,0 +1,27 @@
+@layer components {
+  .str-rt__controls { display: flex; flex-wrap: wrap; align-items: flex-end; gap: var(--space-4); }
+  .str-rt__controls > div { display: grid; gap: var(--space-2); }
+
+  .str-rt__stats { display: grid; grid-template-columns: repeat(6, 1fr); gap: var(--space-2); margin-top: var(--space-5); }
+  .str-rt__stats > div { display: flex; flex-direction: column; gap: 2px; padding: var(--space-3); border: 1px solid var(--border); border-radius: var(--radius-md); background: var(--surface); min-width: 0; }
+  .str-rt__stats span { font-size: 10.5px; text-transform: uppercase; letter-spacing: 0.06em; color: var(--text-subtle); font-weight: 600; }
+  .str-rt__stats strong { font-size: var(--text-lg); font-weight: 600; letter-spacing: -0.02em; color: var(--text); font-variant-numeric: tabular-nums; }
+  .str-rt__bad { color: var(--danger) !important; }
+  .str-rt__warn { color: var(--warning) !important; }
+
+  .str-rt__chart { display: flex; align-items: flex-end; gap: 2px; height: 120px; margin-top: var(--space-4); padding: var(--space-2); border: 1px solid var(--border); border-radius: var(--radius-md); background: var(--surface-2); }
+  .str-rt__col { flex: 1; display: flex; flex-direction: column-reverse; height: 100%; min-width: 3px; }
+  .str-rt__seg { display: block; width: 100%; }
+  .str-rt__seg--ok { background: var(--success); }
+  .str-rt__seg--declined { background: var(--surface-3); }
+  .str-rt__seg--pending { background: var(--warning); }
+  .str-rt__seg--failed { background: var(--danger); opacity: 0.55; }
+  .str-rt__seg--doubled { background: var(--danger); }
+
+  .str-rt__legend { display: flex; flex-wrap: wrap; gap: var(--space-2) var(--space-4); margin-top: var(--space-3); font-size: var(--text-xs); color: var(--text-subtle); }
+  .str-rt__legend span { display: inline-flex; align-items: center; gap: 6px; }
+  .str-rt__legend i { display: inline-block; width: 10px; height: 10px; border-radius: 2px; }
+
+  @media (max-width: 720px) { .str-rt__stats { grid-template-columns: repeat(3, 1fr); } }
+  @media (max-width: 420px) { .str-rt__stats { grid-template-columns: repeat(2, 1fr); } }
+}

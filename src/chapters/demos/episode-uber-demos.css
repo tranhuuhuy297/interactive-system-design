@@ -1,0 +1,24 @@
+@layer components {
+  .uber-dp { display: grid; grid-template-columns: minmax(220px, 1fr) 1.6fr; gap: var(--space-5); align-items: start; }
+  .uber-dp .btn { justify-self: start; }
+  .uber-dp__stats { display: grid; grid-template-columns: 1fr 1fr; gap: var(--space-2); }
+  .uber-dp__stat { display: flex; flex-direction: column; gap: 2px; padding: var(--space-3); border: 1px solid var(--border); border-radius: var(--radius-md); background: var(--surface); transition: border-color var(--dur-base); }
+  .uber-dp__stat.is-on { border-color: var(--text-muted); }
+  .uber-dp__stat span { font-size: 10.5px; text-transform: uppercase; letter-spacing: 0.06em; font-weight: 600; color: var(--text-subtle); }
+  .uber-dp__stat strong { font-size: var(--text-lg); font-weight: 600; letter-spacing: -0.02em; color: var(--text); }
+  .uber-dp__stat small { font-size: var(--text-xs); color: var(--text-subtle); }
+  .uber-dp__verdict { margin: 0; font-size: var(--text-sm); color: var(--text-muted); line-height: 1.5; }
+  .uber-dp__verdict strong { color: var(--success); font-weight: 600; }
+
+  .uber-dp__map { border: 1px solid var(--border); border-radius: var(--radius-lg); background: var(--surface); padding: var(--space-2); }
+  .uber-dp__map svg { width: 100%; height: auto; display: block; }
+  .uber-dp__street { stroke: var(--border); stroke-width: 1; }
+  .uber-dp__route polyline { fill: none; stroke: var(--accent); stroke-width: 2.5; stroke-linejoin: round; stroke-dasharray: 5 4; animation: uber-dp-dash 1s linear infinite; }
+  .uber-dp__route text { font-size: 10px; font-family: var(--font-mono); fill: var(--text-muted); paint-order: stroke; stroke: var(--surface); stroke-width: 3px; }
+  .uber-dp__driver { fill: var(--bg-elevated); stroke: var(--text); stroke-width: 2; }
+  .uber-dp__rider rect { fill: var(--text); }
+  .uber-dp__rider text { font-size: 11px; font-weight: 700; fill: var(--bg); }
+  @keyframes uber-dp-dash { to { stroke-dashoffset: -18; } }
+  @media (prefers-reduced-motion: reduce) { .uber-dp__route polyline { animation: none; } }
+  @media (max-width: 720px) { .uber-dp { grid-template-columns: 1fr; } }
+}

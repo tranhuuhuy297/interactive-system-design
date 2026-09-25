@@ -1,0 +1,37 @@
+@layer components {
+  /* Hash ring */
+  .lbr { display: grid; grid-template-columns: minmax(240px, 1fr) 1.1fr; gap: var(--space-6); align-items: start; }
+  .lbr__svg { width: 100%; max-width: 340px; margin: 0 auto; }
+  .lbr__track { fill: none; stroke: var(--border-strong); stroke-width: 1; }
+  .lbr__center { fill: var(--text); font-size: 15px; font-weight: 600; }
+  .lbr__center--sub { fill: var(--text-subtle); font-size: 11px; font-weight: 400; font-family: var(--font-mono); }
+  .lbr__btns { display: flex; gap: var(--space-2); flex-wrap: wrap; }
+  .lbr__moved { display: grid; grid-template-columns: 1fr 1fr; gap: var(--space-3); }
+  .lbr__moved > div { padding: var(--space-3); border-radius: var(--radius-md); background: var(--surface-2); border: 1px solid var(--border); display: grid; gap: 2px; }
+  .lbr__moved strong { font-size: var(--text-2xl); }
+  .lbr__moved .is-good { color: var(--success); }
+  .lbr__moved .is-bad { color: var(--danger); }
+  .lbr__note { font-size: var(--text-xs); color: var(--text-subtle); margin: 0; }
+  .lbr__bars { display: grid; gap: 4px; margin-top: var(--space-2); }
+  .lbr__bar { display: grid; grid-template-columns: 26px 1fr 34px; align-items: center; gap: var(--space-2); font-size: var(--text-xs); color: var(--text-muted); }
+  .lbr__bar i { display: block; height: 10px; border-radius: 99px; transition: width var(--dur-slow) var(--ease-out); }
+  .lbr__bar b { text-align: right; color: var(--text); font-weight: 500; }
+
+  /* Algorithm race */
+  .lba__controls { display: flex; flex-wrap: wrap; align-items: center; gap: var(--space-4); margin-bottom: var(--space-5); }
+  .lba__slider { flex: 1; min-width: 180px; }
+  .lba__grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(170px, 1fr)); gap: var(--space-3); }
+  .lba__lane { padding: var(--space-3); border-radius: var(--radius-lg); border: 1px solid var(--border); background: var(--surface); transition: border-color var(--dur-base); }
+  .lba__lane.is-best { border-color: color-mix(in oklch, var(--success) 60%, transparent); }
+  .lba__head { display: flex; justify-content: space-between; align-items: center; gap: var(--space-2); font-size: var(--text-sm); color: var(--text); min-height: 22px; }
+  .lba__queues { display: flex; gap: 5px; height: 110px; align-items: flex-end; margin: var(--space-3) 0 var(--space-2); }
+  .lba__q { flex: 1; height: 100%; display: flex; flex-direction: column; justify-content: flex-end; align-items: center; gap: 3px; }
+  .lba__q i { width: 100%; min-height: 2px; border-radius: 3px 3px 1px 1px; background: var(--text-muted); transition: height 90ms linear; }
+  .lba__q i.is-hot { background: var(--danger); }
+  .lba__q span { font-size: 10px; color: var(--text-subtle); font-family: var(--font-mono); }
+  .lba__stats { display: flex; justify-content: space-between; font-size: 11px; color: var(--text-subtle); }
+  .lba__stats b { color: var(--text); font-weight: 600; }
+  .lba__foot { margin: var(--space-4) 0 0; font-size: var(--text-xs); color: var(--text-subtle); }
+
+  @media (max-width: 720px) { .lbr { grid-template-columns: 1fr; } }
+}

@@ -1,0 +1,203 @@
+import {
+  ApiSpec, ArchitectureDiagram, Callout, CodeBlock, CompareTable, EstimationTable, H2, InterviewQuestion,
+  KeyTakeaways, Requirements,
+} from '../components/ui'
+import type { ArchEdge, ArchNode } from '../components/ui'
+import { PayIdempotencyDemo } from './demos/pay-idempotency-demo'
+import { PayLedgerDemo } from './demos/pay-ledger-demo'
+
+const NODES: ArchNode[] = [
+  { id: 'client', label: 'Checkout', sub: 'web / app', kind: 'client', x: 10, y: 30 },
+  { id: 'api', label: 'Payment service', sub: 'orchestrator', kind: 'service', x: 29, y: 30,
+    detail: 'Owns the payment state machine. Validates the order, records the payment row and idempotency key in one transaction, and hands off execution. It never stores raw card numbers.' },
+  { id: 'pdb', label: 'Payments DB', sub: 'idempotency keys', kind: 'db', x: 29, y: 78,
+    detail: 'A relational store with strong consistency and ACID transactions. The payment row, its state transitions and the outbox record are committed atomically.' },
+  { id: 'exec', label: 'Payment executor', sub: 'workers', kind: 'worker', x: 50, y: 30,
+    detail: 'Calls the PSP with the idempotency key forwarded. If the outcome is unknown (timeout), it queries the PSP for status instead of blindly retrying the charge.' },
+  { id: 'psp', label: 'PSP', sub: 'Stripe / Adyen', kind: 'external', x: 73, y: 30,
+    detail: 'Handles card networks, 3-D Secure and tokenization. The hosted payment fields keep card data out of your servers, which shrinks PCI DSS scope.' },
+  { id: 'hook', label: 'Webhook handler', kind: 'service', x: 73, y: 72,
+    detail: 'Receives asynchronous PSP events (succeeded, failed, disputed). It verifies signatures, dedupes by event ID and updates the state machine.' },
+  { id: 'outbox', label: 'Outbox → Kafka', kind: 'queue', x: 50, y: 78,
+    detail: 'The transactional outbox guarantees that a committed state change is eventually published exactly as committed. Consumers must be idempotent.' },
+  { id: 'ledger', label: 'Ledger', sub: 'double-entry', kind: 'db', x: 50, y: 55,
+    detail: 'Immutable journal of balanced debit/credit entries. Balances are derived. Corrections are new reversing entries, never UPDATEs.' },
+  { id: 'recon', label: 'Reconciliation', sub: 'nightly batch', kind: 'worker', x: 90, y: 55,
+    detail: 'Compares the ledger with the PSP settlement files and bank statements. Mismatches go to a finance queue, and some are auto-fixable.' },
+  { id: 'files', label: 'PSP files', sub: 'settlement', kind: 'storage', x: 89, y: 88 },
+]
+
+const EDGES: ArchEdge[] = [
+  { from: 'client', to: 'api' }, { from: 'api', to: 'pdb' }, { from: 'api', to: 'exec' }, { from: 'exec', to: 'psp' },
+  { from: 'psp', to: 'hook', async: true, label: 'webhook' }, { from: 'hook', to: 'pdb' },
+  { from: 'pdb', to: 'outbox', async: true }, { from: 'outbox', to: 'ledger', async: true },
+  { from: 'files', to: 'recon' }, { from: 'recon', to: 'ledger' },
+]
+
+export default function PaymentSystemChapter() {
+  return (
+    <>
+      <p>
+        Payments look like a small CRUD problem: the traffic is modest and the objects are simple. What makes the
+        problem hard is that <strong>every bug is somebody's money</strong>. The interview is about correctness under
+        failure: timeouts that hide whether a charge happened, retries that duplicate it, webhooks that arrive twice
+        or out of order, and a ledger that must balance to the cent years later.
+      </p>
+
+      <H2 id="requirements">1 · Clarify requirements</H2>
+      <Requirements
+        functional={['Pay-in: charge a customer for an order via a PSP', 'Pay-out: settle funds to sellers', 'Refunds and partial refunds', 'Payment status query + webhooks to the order service']}
+        nonFunctional={['No double charges, no lost payments (correctness over availability)', 'Full audit trail, retained for years', 'p99 checkout call < 2 s excluding the PSP', 'PCI DSS scope kept minimal']}
+        outOfScope={['Building our own card-network integration', 'Fraud ML models (assume a risk service exists)', 'Multi-currency FX treasury']}
+      />
+      <Callout kind="tip">
+        Ask early: <strong>are we a marketplace</strong> (money flows buyer → platform → seller) <strong>or a
+        merchant</strong>? A marketplace needs pay-outs, seller balances and a real ledger. A single merchant can
+        lean on the PSP's dashboard for much of that.
+      </Callout>
+
+      <H2 id="estimation">2 · Back-of-the-envelope</H2>
+      <EstimationTable
+        assumptions={['10M payments/day (illustrative, large marketplace)', 'Peak = 10× average (sales events)', '~3 ledger entries per payment, ~200 B each']}
+        rows={[
+          { label: 'Average TPS', math: '10M / 86,400 s', result: '≈ 116/s' },
+          { label: 'Peak TPS', math: '116 × 10', result: '≈ 1.2K/s' },
+          { label: 'Ledger rows/day', math: '10M × 3', result: '30M' },
+          { label: 'Ledger growth', math: '30M × 200 B × 365', result: '≈ 2.2 TB/yr' },
+        ]}
+      />
+      <p>One well-tuned relational primary handles this write rate. <strong>Throughput is not the problem</strong>. Say so explicitly and spend your time on the failure modes.</p>
+
+      <H2 id="api">3 · API</H2>
+      <ApiSpec endpoints={[
+        { method: 'POST', path: '/v1/payments', desc: <>Create and execute a payment. Requires an <code>Idempotency-Key</code> header.</>, body: '{ orderId, amount: 5000, currency: "USD", paymentMethodToken }', returns: '201 { paymentId, status }' },
+        { method: 'GET', path: '/v1/payments/{id}', desc: 'Current state, used by clients after an ambiguous timeout.', returns: '{ status: pending | succeeded | failed | refunded }' },
+        { method: 'POST', path: '/v1/payments/{id}/refunds', desc: 'Full or partial refund. Also idempotent.', body: '{ amount }' },
+        { method: 'POST', path: '/webhooks/psp', desc: 'Signed PSP events. Dedupe by event ID and tolerate out-of-order delivery.' },
+      ]} />
+      <Callout kind="pitfall">
+        Floats for money. Store <strong>integer minor units</strong> (cents) plus an ISO-4217 currency code, and
+        define rounding rules for fees and splits explicitly.
+      </Callout>
+
+      <H2 id="high-level">4 · High-level design</H2>
+      <ArchitectureDiagram nodes={NODES} edges={EDGES} height={420}
+        caption="The synchronous path stops at the PSP. Everything after is event-driven and idempotent."
+        flows={[
+          { name: 'Pay-in', path: ['client', 'api', 'pdb', 'api', 'exec', 'psp'], steps: ['Checkout sends the tokenized card and an Idempotency-Key', 'Insert the payment (PENDING) and the key row in one transaction', 'Commit, then dispatch to the executor', 'Executor forwards the key', 'PSP authorizes and captures'] },
+          { name: 'Confirmation', path: ['psp', 'hook', 'pdb', 'outbox', 'ledger'], steps: ['PSP sends a signed webhook', 'Handler dedupes the event ID and moves the state to SUCCEEDED', 'The same transaction writes an outbox row', 'Relay publishes, and the ledger posts balanced entries'] },
+          { name: 'Reconciliation', path: ['files', 'recon', 'ledger'], steps: ['Download the PSP settlement file daily', 'Match by PSP reference and amount; mismatches go to the finance queue'] },
+        ]} />
+
+      <H2 id="idempotency">5 · Deep dive: idempotency, exactly-once effect</H2>
+      <p>
+        Exactly-once <em>delivery</em> is impossible over an unreliable network. What you build instead is
+        <strong> at-least-once delivery + idempotent processing = exactly-once effect</strong>. The client generates a
+        key per logical payment attempt, and the server stores the key with the request fingerprint and the final
+        response.
+      </p>
+      <PayIdempotencyDemo />
+      <CodeBlock lang="ts" title="idempotency middleware (sketch)" code={`
+async function withIdempotency(key: string, fingerprint: string, run: () => Promise<Resp>) {
+  // Unique PK on key: concurrent duplicates lose the race here.
+  const row = await db.insertOrGet('idempotency_keys', { key, fingerprint, status: 'processing' })
+  if (row.inserted) {
+    const resp = await run()                       // PSP call also receives \`key\`
+    await db.update('idempotency_keys', key, { status: 'done', response: resp })
+    return resp
+  }
+  if (row.fingerprint !== fingerprint) throw new Http422('Key reused with different body')
+  if (row.status === 'processing') throw new Http409('Request in progress, retry later')
+  return row.response                              // replay, no side effects
+}`} />
+      <Callout kind="warn">
+        The dangerous state is <strong>“PSP called, outcome unknown”</strong> (timeout, crash). Never resolve it by
+        charging again. Resolve it by <strong>querying the PSP with the same key</strong>, and let a sweeper job do
+        that for payments stuck in PENDING.
+      </Callout>
+
+      <H2 id="state-machine">6 · Deep dive: the payment state machine</H2>
+      <CodeBlock lang="ts" title="legal transitions only" code={`
+const transitions: Record<Status, Status[]> = {
+  CREATED:    ['PENDING'],
+  PENDING:    ['SUCCEEDED', 'FAILED', 'UNKNOWN'],   // UNKNOWN = timeout, reconcile via status query
+  UNKNOWN:    ['SUCCEEDED', 'FAILED'],
+  SUCCEEDED:  ['REFUNDED', 'PARTIALLY_REFUNDED', 'DISPUTED'],
+  PARTIALLY_REFUNDED: ['REFUNDED', 'DISPUTED'],
+  FAILED: [], REFUNDED: [], DISPUTED: ['SUCCEEDED', 'REFUNDED'],
+}
+// UPDATE payments SET status = $next, version = version + 1
+//  WHERE id = $id AND status = $expected AND version = $v   -- optimistic guard`} />
+      <p>
+        The conditional <code>UPDATE … WHERE status = $expected</code> makes out-of-order webhooks harmless. A late
+        <code> payment.failed</code> after <code>SUCCEEDED</code> simply matches zero rows and gets logged for review.
+      </p>
+
+      <H2 id="ledger">7 · Deep dive: the double-entry ledger & reconciliation</H2>
+      <p>
+        Each business event produces entries whose debits equal their credits. Nothing is ever updated or deleted.
+        Mistakes are fixed with reversing entries, and the audit trail comes for free.
+      </p>
+      <PayLedgerDemo />
+      <CompareTable
+        columns={['Mutable balance column', 'Double-entry journal']}
+        rows={[
+          { label: 'Audit', cells: ['Lost history; needs a separate log', 'The journal is the history'] },
+          { label: 'Invariant', cells: ['None enforced', 'Σ debits = Σ credits per transaction'] },
+          { label: 'Concurrency', cells: ['Hot row contention on popular accounts', 'Appends; balances cached or derived'] },
+          { label: 'Correction', cells: ['Overwrite (dangerous)', 'Reversing entry (traceable)'] },
+        ]}
+      />
+      <p>
+        Reconciliation is the safety net for every bug you didn't anticipate. Compare the internal ledger with the
+        PSP settlement file and the bank statement, and route every mismatch to a queue with an owner.
+      </p>
+
+      <H2 id="data-model">8 · Data model</H2>
+      <CodeBlock lang="ts" title="core tables (SQL)" code={`
+// payments(id PK, order_id, amount_minor BIGINT, currency CHAR(3),
+//          status, psp_ref UNIQUE, version INT, created_at, updated_at)
+// idempotency_keys(key PK, fingerprint, status, response JSONB, created_at)  -- TTL ~24h+
+// ledger_entries(id PK, txn_id, account_id, debit_minor, credit_minor, created_at)
+//          CHECK (debit_minor = 0 OR credit_minor = 0)
+// outbox(id PK, aggregate_id, event_type, payload, published_at NULL)`} />
+
+      <H2 id="staff">9 · Staff-level extensions</H2>
+      <Callout kind="staff">
+        <ul>
+          <li><strong>PCI scope as architecture</strong>: tokenize at the edge with PSP-hosted fields so no service you run ever sees a PAN. That decision removes most of your compliance cost.</li>
+          <li><strong>Multi-PSP routing</strong>: add a second PSP for failover and cost, keyed by the same idempotency key per attempt. Watch out for a double capture across providers.</li>
+          <li><strong>Consistency boundaries</strong>: payments + ledger + outbox in one database beats a distributed saga. Split only when team or scale forces it, and then use sagas with compensations such as refunds.</li>
+          <li><strong>Operational truth</strong>: dashboards for payments stuck in UNKNOWN/PENDING, reconciliation break counts and dispute rate. Name owners for each queue.</li>
+        </ul>
+      </Callout>
+
+      <H2 id="interview">Interview drill</H2>
+      <InterviewQuestion
+        q="The PSP call times out. Did the customer get charged? What does your system do?"
+        senior={<p>We don't know, so we mark the payment as pending and retry with the same idempotency key, so the PSP won't double charge.</p>}
+        staff={<>
+          <p>Move the payment to <strong>UNKNOWN</strong>, not FAILED, and tell the client “processing” rather than an error, so they don't click pay again with a new key. Resolution is a <strong>status query</strong> to the PSP keyed by our idempotency key or reference, from a sweeper with backoff, plus the webhook that usually arrives first.</p>
+          <p>A retry with the same key is only safe if the PSP guarantees key-scoped dedup over the retry window. I'd verify their retention period. Anything still unresolved after N hours goes to reconciliation and a human queue. The product decision is whether to ship the order while UNKNOWN (usually no for digital goods, maybe for low-value physical goods).</p>
+        </>}
+        followUps={['What if the webhook says succeeded but your DB write fails?', 'How long do you keep idempotency keys?', 'How would you add a second PSP?']}
+      />
+      <InterviewQuestion
+        q="How do you guarantee the ledger is updated exactly once per successful payment?"
+        senior={<p>Publish an event to Kafka when the payment succeeds, and have the ledger consume it with an idempotent consumer.</p>}
+        staff={<>
+          <p>Use a <strong>transactional outbox</strong>: the state change to SUCCEEDED and the outbox row commit atomically, which removes the dual-write problem. A relay publishes at-least-once. The ledger enforces a <strong>unique constraint on (payment_id, entry_type)</strong>, so a redelivered event is a no-op.</p>
+          <p>Nightly reconciliation between payments and ledger is the backstop for bugs. At our volume the ledger could live in the same database and write in the same transaction, which is simpler. I'd make that call explicitly.</p>
+        </>}
+      />
+
+      <KeyTakeaways items={[
+        'Throughput is easy here. Correctness under partial failure is the whole interview.',
+        'Idempotency key + at-least-once = exactly-once effect. Forward the key to the PSP.',
+        'Timeouts produce UNKNOWN, resolved by a status query, never by blind re-charging.',
+        'The append-only double-entry ledger plus reconciliation is the audit and the safety net.',
+        'Integer minor units, a state machine with guarded transitions, and an outbox for events.',
+      ]} />
+    </>
+  )
+}

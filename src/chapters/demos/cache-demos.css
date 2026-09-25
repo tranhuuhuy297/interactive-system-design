@@ -1,0 +1,44 @@
+@layer components {
+  /* Eviction simulator */
+  .cev__top { display: grid; gap: var(--space-3); }
+  .cev__input { height: 36px; padding: 0 var(--space-3); border-radius: var(--radius-md); border: 1px solid var(--border-strong); background: var(--surface-2); font-size: 13px; outline: none; }
+  .cev__input:focus-visible { border-color: var(--accent); }
+  .cev__row { display: flex; align-items: flex-end; gap: var(--space-3); flex-wrap: wrap; }
+  .cev__slider { flex: 1; min-width: 160px; }
+  .cev__seq { display: flex; flex-wrap: wrap; gap: 4px; margin: var(--space-4) 0; }
+  .cev__tok { width: 28px; height: 28px; border-radius: 7px; font-family: var(--font-mono); font-size: 12px; font-weight: 600; background: var(--surface-2); color: var(--text-subtle); border: 1px solid var(--border); transition: all var(--dur-fast); }
+  .cev__tok.is-done { color: var(--text); background: var(--surface-3); }
+  .cev__tok.is-now { background: var(--accent); color: var(--accent-contrast); border-color: var(--accent); }
+  .cev__grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(170px, 1fr)); gap: var(--space-3); }
+  .cev__col { padding: var(--space-3); border-radius: var(--radius-lg); background: var(--surface); border: 1px solid var(--border); display: grid; gap: var(--space-2); }
+  .cev__head { display: flex; justify-content: space-between; align-items: baseline; color: var(--text); }
+  .cev__head span { font-size: var(--text-sm); color: var(--accent-3); }
+  .cev__slots { display: grid; gap: 4px; }
+  .cev__slot { display: flex; justify-content: space-between; align-items: center; height: 34px; padding: 0 var(--space-3); border-radius: 8px; background: var(--bg-elevated); border: 1px solid var(--border); color: var(--text); transition: background var(--dur-base), border-color var(--dur-base); }
+  .cev__slot small { color: var(--text-subtle); font-size: 11px; }
+  .cev__slot.is-empty { justify-content: center; color: var(--text-subtle); border-style: dashed; }
+  .cev__slot.is-hit { border-color: var(--success); background: color-mix(in oklch, var(--success) 12%, var(--bg-elevated)); }
+  .cev__slot.is-miss { border-color: var(--warning); background: color-mix(in oklch, var(--warning) 12%, var(--bg-elevated)); }
+  .cev__status { font-size: var(--text-xs); font-family: var(--font-mono); color: var(--text-subtle); min-height: 18px; }
+  .cev__status .is-hit { color: var(--success); }
+  .cev__status .is-miss { color: var(--warning); }
+  .cev__strip { display: flex; gap: 2px; flex-wrap: wrap; min-height: 8px; }
+  .cev__strip i { width: 8px; height: 8px; border-radius: 2px; }
+  .cev__strip i.is-hit { background: var(--success); }
+  .cev__strip i.is-miss { background: color-mix(in oklch, var(--warning) 60%, transparent); }
+
+  /* Stampede simulator */
+  .cst__controls { display: grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); gap: var(--space-4); margin-bottom: var(--space-5); }
+  .cst__charts { display: grid; gap: var(--space-3); }
+  .cst__run { padding: var(--space-3) var(--space-4); border-radius: var(--radius-lg); background: var(--surface); border: 1px solid var(--border); }
+  .cst__run.is-over { border-color: color-mix(in oklch, var(--danger) 55%, transparent); }
+  .cst__head { display: flex; flex-wrap: wrap; align-items: center; gap: var(--space-3); color: var(--text); font-size: var(--text-sm); }
+  .cst__head .mono { flex: 1; font-size: 11.5px; color: var(--text-subtle); }
+  .cst__svg { width: 100%; height: 90px; margin-top: var(--space-2); display: block; }
+  .cst__bar { fill: var(--text-muted); }
+  .cst__run.is-over .cst__bar { fill: var(--danger); }
+  .cst__wait { fill: var(--warning); opacity: 0.8; }
+  .cst__cap { stroke: var(--text-muted); stroke-dasharray: 6 5; stroke-width: 1.2; vector-effect: non-scaling-stroke; }
+  .cst__note { margin: var(--space-1) 0 0; font-size: var(--text-xs); color: var(--text-muted); }
+  .cst__foot { margin: var(--space-4) 0 0; font-size: var(--text-xs); color: var(--text-subtle); }
+}

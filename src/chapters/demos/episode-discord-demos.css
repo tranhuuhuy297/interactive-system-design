@@ -1,0 +1,20 @@
+@layer components {
+  .dsc-co { display: grid; grid-template-columns: 1fr 1.3fr; gap: var(--space-6); }
+  .dsc-co .demo-label { margin-bottom: var(--space-2); }
+  .dsc-co__out { display: grid; gap: var(--space-3); align-content: start; min-width: 0; }
+  .dsc-co__stats { display: grid; grid-template-columns: repeat(3, 1fr); gap: var(--space-2); }
+  .dsc-co__stats > div { display: flex; flex-direction: column; gap: 2px; padding: var(--space-3); border: 1px solid var(--border); border-radius: var(--radius-md); background: var(--surface); min-width: 0; }
+  .dsc-co__stats span { font-size: 10.5px; text-transform: uppercase; letter-spacing: 0.06em; color: var(--text-subtle); font-weight: 600; }
+  .dsc-co__stats strong { font-size: var(--text-lg); font-weight: 600; letter-spacing: -0.02em; color: var(--text); }
+  .dsc-co__stats small { font-size: var(--text-xs); color: var(--text-subtle); }
+  .dsc-co__chart { width: 100%; height: 150px; border: 1px solid var(--border); border-radius: var(--radius-md); background: var(--surface); }
+  .dsc-co__lane { fill: transparent; }
+  .dsc-co__lane--alt { fill: var(--surface-2); }
+  .dsc-co__q { fill: var(--accent); opacity: 0.55; }
+  .dsc-co__axis { display: flex; justify-content: space-between; font-size: var(--text-xs); color: var(--text-subtle); font-family: var(--font-mono); }
+  .dsc-co__note { font-size: var(--text-sm); color: var(--text-muted); line-height: 1.55; }
+  @media (max-width: 720px) {
+    .dsc-co { grid-template-columns: 1fr; }
+    .dsc-co__stats { grid-template-columns: 1fr 1fr; }
+  }
+}
