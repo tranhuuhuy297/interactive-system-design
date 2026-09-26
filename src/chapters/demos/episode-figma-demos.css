@@ -1,0 +1,27 @@
+@layer components {
+  .fg-mp__controls { display: grid; gap: var(--space-3); }
+  .fg-mp__sliders { display: grid; grid-template-columns: 1fr 1fr; gap: var(--space-4); }
+  .fg-mp__buttons { display: flex; align-items: center; gap: var(--space-2); flex-wrap: wrap; }
+  .fg-mp__t { margin-left: auto; font-size: var(--text-xs); color: var(--text-muted); }
+  .fg-mp__grid { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: var(--space-3); margin-top: var(--space-4); }
+  .fg-mp__view { display: grid; gap: var(--space-2); padding: var(--space-3); border: 1px solid var(--border); border-radius: var(--radius-lg); background: var(--surface); min-width: 0; }
+  .fg-mp__view:nth-child(2) { border-color: var(--border-strong); background: var(--surface-2); }
+  .fg-mp__title { font-size: var(--text-xs); font-weight: 700; text-transform: uppercase; letter-spacing: 0.06em; color: var(--text-subtle); }
+  .fg-mp__canvas { position: relative; height: 56px; border-radius: var(--radius-md); border: 1px dashed var(--border-strong); background: var(--bg-elevated); overflow: hidden; }
+  .fg-mp__shape { position: absolute; top: 12px; padding: 6px 10px; border-radius: 6px; font-size: 11px; font-weight: 600; color: var(--bg); white-space: nowrap; transition: left var(--dur-slow) var(--ease-out), background var(--dur-base); }
+  .fg-mp__props { margin: 0; display: grid; gap: 2px; }
+  .fg-mp__props > div { display: flex; justify-content: space-between; gap: var(--space-2); padding: 3px 6px; border-radius: 6px; font-size: var(--text-xs); }
+  .fg-mp__props > div.is-pending { background: color-mix(in oklch, var(--warning) 12%, transparent); }
+  .fg-mp__props dt { color: var(--text-subtle); }
+  .fg-mp__props dd { margin: 0; color: var(--text); text-align: right; }
+  .fg-mp__props small { color: var(--warning); }
+  .fg-mp__status { display: flex; flex-wrap: wrap; gap: var(--space-2); margin-top: var(--space-4); }
+  .fg-mp__badge { padding: 4px 10px; border-radius: var(--radius-full); border: 1px solid var(--border-strong); font-size: var(--text-xs); font-weight: 600; color: var(--text-muted); }
+  .fg-mp__badge.is-ok { border-color: var(--success); color: var(--success); }
+  .fg-mp__badge.is-bad { border-color: var(--danger); color: var(--danger); }
+  .fg-mp__log { list-style: none; margin: var(--space-3) 0 0; padding: 0; display: grid; gap: 2px; font-family: var(--font-mono); font-size: 11.5px; color: var(--text-muted); min-height: 40px; }
+  @media (max-width: 720px) {
+    .fg-mp__grid { grid-template-columns: 1fr; }
+    .fg-mp__sliders { grid-template-columns: 1fr; }
+  }
+}

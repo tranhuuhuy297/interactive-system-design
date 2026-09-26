@@ -9,7 +9,7 @@ import { NearbyFriendsSimulationDemo } from './demos/nearby-friends-simulation-d
 const NODES: ArchNode[] = [
   { id: 'client', label: 'Mobile app', sub: 'opted in', kind: 'client', x: 7, y: 50,
     detail: 'Sends its location every ~30 s while the feature is active and keeps one WebSocket open to receive friends’ updates.' },
-  { id: 'lb', label: 'Load balancer', sub: 'L4, long-lived', kind: 'lb', x: 26, y: 50,
+  { id: 'lb', label: 'Load balancer', sub: 'L4, long-lived', kind: 'lb', x: 29, y: 50,
     detail: 'Spreads WebSocket connections by least-connections. Connections are long-lived, so deploys must drain servers gracefully instead of cutting millions of sockets at once.' },
   { id: 'ws', label: 'WebSocket servers', sub: 'stateful', kind: 'service', x: 48, y: 30,
     detail: 'Each connection handler subscribes to every friend’s channel. On a friend update it computes distance and forwards only if within radius. The filtering lives here.' },

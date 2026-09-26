@@ -10,9 +10,9 @@ import { CollabOtSyncDemo } from './demos/collab-ot-sync-demo'
 const NODES: ArchNode[] = [
   { id: 'client', label: 'Editors', sub: 'browser / app', kind: 'client', x: 8, y: 50,
     detail: 'Each client applies its own edits immediately for zero-latency typing, keeps unacknowledged ops in a pending queue, and rebases incoming ops against them.' },
-  { id: 'lb', label: 'WS gateway', sub: 'route by doc id', kind: 'lb', x: 26, y: 50,
+  { id: 'lb', label: 'WS gateway', sub: 'route by doc id', kind: 'lb', x: 29, y: 50,
     detail: 'Terminates WebSockets and forwards every connection for document D to the one session server that currently owns D.' },
-  { id: 'dir', label: 'Doc directory', sub: 'owner leases', kind: 'cache', x: 26, y: 86,
+  { id: 'dir', label: 'Doc directory', sub: 'owner leases', kind: 'cache', x: 29, y: 86,
     detail: 'A strongly consistent map doc id → owning session server, with a lease (etcd/ZooKeeper, or consistent hashing plus fencing). If the owner dies, the lease expires and another server takes over.' },
   { id: 'collab', label: 'Session server', sub: 'doc authority', kind: 'service', x: 48, y: 50,
     detail: 'Holds the live document in memory, assigns each incoming op a revision number, transforms it (OT) or merges it (CRDT), persists it, then broadcasts it. One writer per document keeps ordering simple.' },

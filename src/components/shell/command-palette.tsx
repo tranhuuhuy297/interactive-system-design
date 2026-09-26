@@ -1,13 +1,19 @@
 import { useEffect, useMemo, useRef, useState } from 'react'
 import { AnimatePresence, motion } from 'motion/react'
-import { CornerDownLeft, Home, Moon, RotateCcw, Search } from 'lucide-react'
+import { BookA, CornerDownLeft, Home, Moon, RotateCcw, Search } from 'lucide-react'
 import type { LucideIcon } from 'lucide-react'
 import { CHAPTERS } from '../../data/chapters-registry'
+import { requestGlossaryFocus } from '../../chapters/demos/gloss-focus'
+import type { GlossaryEntry } from '../../data/glossary-data'
 import { navigate } from '../../lib/use-hash-route'
+
+type RankTerms = (query: string, limit?: number) => GlossaryEntry[]
 
 interface Item {
   id: string
   label: string
+  /** Muted text after the label, e.g. a glossary definition preview. */
+  detail?: string
   hint: string
   icon: LucideIcon
   haystack: string
@@ -30,6 +36,14 @@ function PaletteDialog({ onClose, onToggleTheme, onResetProgress }: Omit<Command
   const [query, setQuery] = useState('')
   const [active, setActive] = useState(0)
   const listRef = useRef<HTMLUListElement>(null)
+  const [rankTerms, setRankTerms] = useState<RankTerms | null>(null)
+
+  // Glossary index loads on first open so the ~330-term dataset stays out of the initial bundle.
+  useEffect(() => {
+    let alive = true
+    import('../../chapters/demos/gloss-helpers').then((m) => { if (alive) setRankTerms(() => m.rankTermMatches) })
+    return () => { alive = false }
+  }, [])
 
   // Return focus to whatever opened the palette.
   useEffect(() => {
@@ -50,8 +64,17 @@ function PaletteDialog({ onClose, onToggleTheme, onResetProgress }: Omit<Command
 
   const results = useMemo(() => {
     const words = query.toLowerCase().split(/\s+/).filter(Boolean)
-    return words.length ? items.filter((it) => words.every((w) => it.haystack.includes(w))) : items
-  }, [items, query])
+    if (!words.length) return items
+    const hits = items.filter((it) => words.every((w) => it.haystack.includes(w)))
+    const terms: Item[] = (rankTerms?.(query, 6) ?? []).map((e) => ({
+      id: `g-${e.term}`, label: e.term, hint: 'Glossary', icon: BookA, haystack: '',
+      detail: e.def.length > 72 ? `${e.def.slice(0, 70).trimEnd()}…` : e.def,
+      run: () => requestGlossaryFocus(e.term),
+    }))
+    // Chapters first, then glossary terms, then actions.
+    const isAction = (it: Item) => it.hint === 'Action'
+    return [...hits.filter((it) => !isAction(it)), ...terms, ...hits.filter(isAction)]
+  }, [items, query, rankTerms])
 
   const moveTo = (i: number) => {
     setActive(i)
@@ -78,8 +101,8 @@ function PaletteDialog({ onClose, onToggleTheme, onResetProgress }: Omit<Command
         <div className="palette__search">
           <Search size={18} aria-hidden />
           <input autoFocus value={query} onChange={(e) => { setQuery(e.target.value); setActive(0) }}
-            placeholder="Search chapters, concepts, actions…" role="combobox" aria-expanded="true" aria-label="Search"
-            aria-controls="palette-list" aria-activedescendant={results[active] ? `pal-${results[active].id}` : undefined} />
+            placeholder="Search chapters, glossary terms, actions…" role="combobox" aria-expanded="true" aria-label="Search"
+            aria-controls="palette-list" aria-activedescendant={results[active] ? `pal-${results[active].id.replace(/[^\w-]/g, '_')}` : undefined} />
           <kbd>esc</kbd>
         </div>
         <ul className="palette__list" id="palette-list" role="listbox" ref={listRef}>
@@ -87,11 +110,11 @@ function PaletteDialog({ onClose, onToggleTheme, onResetProgress }: Omit<Command
           {results.map((it, i) => {
             const Icon = it.icon
             return (
-              <li key={it.id} id={`pal-${it.id}`} data-idx={i} role="option" aria-selected={i === active}
+              <li key={it.id} id={`pal-${it.id.replace(/[^\w-]/g, '_')}`} data-idx={i} role="option" aria-selected={i === active}
                 className={`palette__item ${i === active ? 'is-active' : ''}`}
                 onMouseMove={() => { if (i !== active) setActive(i) }} onClick={() => choose(it)}>
                 <Icon size={16} className="palette__icon" aria-hidden />
-                <span className="palette__label">{it.label}</span>
+                <span className="palette__label">{it.label}{it.detail && <span className="muted"> — {it.detail}</span>}</span>
                 <span className="palette__hint">{it.hint}</span>
                 {i === active && <CornerDownLeft size={14} className="palette__enter" aria-hidden />}
               </li>

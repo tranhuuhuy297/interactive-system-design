@@ -11,13 +11,16 @@ sources in a References section.
   queues & streams, rate limiting, unique IDs, reliability & observability
 - **Case studies**: URL shortener, news feed, chat, notifications, autocomplete, web crawler, video platform,
   file sync, proximity, distributed KV store, payments, leaderboard, ad-click aggregation, reservations, metrics,
-  Google Maps, nearby friends, object storage, stock exchange, collaborative editor, LLM inference platform
+  Google Maps, nearby friends, object storage, stock exchange, collaborative editor, LLM inference platform,
+  email service, distributed message queue, digital wallet, job scheduler, search engine
 - **Episodes**: story-driven "how to build X" from v0 to planet scale, with a stage-by-stage episode player —
-  Netflix, Stripe payments, Uber, Discord, Instagram, Amazon checkout, Spotify, Airbnb, ChatGPT
+  Netflix, Stripe payments, Uber, Discord, Instagram, Amazon checkout, Spotify, Airbnb, ChatGPT, WhatsApp, Figma, YouTube
 - **AI Systems**: LLM inference (prefill/decode, KV cache, batching, speculative decoding, parallelism, serving
   stacks), LLM engineering (prompting & structured output, RAG, fine-tuning decisions, evals), AI engineering
   (agents & tools, production LLM apps, safety & security), plus case studies: enterprise RAG assistant,
   AI coding assistant, LLM gateway
+- **Practice**: Design Studio (drag-and-drop whiteboard with automated review of bottlenecks and single points
+  of failure), Daily Review (spaced repetition over flashcards, mental models, and glossary), and a searchable Glossary
 - **Interview**: staff-level signals, mock interview simulator, question bank (flashcards), scored quiz
 
 ## Run

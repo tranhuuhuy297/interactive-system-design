@@ -1,6 +1,7 @@
 import type { ComponentType } from 'react'
 import type { LucideIcon } from 'lucide-react'
 import {
+  BookA, CalendarCheck, CalendarClock, DraftingCompass, Inbox, Mail, MessageCircle, MonitorPlay, PenTool, PiggyBank, ScanSearch,
   LayoutGrid, Code, Cpu, FileSearch, FlaskConical, Library, MemoryStick, MessageSquareCode, Router, ShieldAlert, SlidersHorizontal, Workflow,
   Info, Camera, Car, Clapperboard, Gamepad2, House, Music, ShoppingCart, Sparkles, Wallet,
   Activity, Archive, BarChart3, Bot, BedDouble, Bell, Binary, Boxes, Brain, Calculator, Compass, CreditCard, Database,
@@ -8,7 +9,7 @@ import {
   MousePointerClick, Network, Newspaper, PenLine, PlayCircle, Rocket, Search, Shield, Spline, Target, Timer, TrendingUp, Trophy, Users, Zap,
 } from 'lucide-react'
 
-export type ChapterGroup = 'Foundations' | 'Building Blocks' | 'Case Studies' | 'Episodes' | 'AI Systems' | 'Interview' | 'About'
+export type ChapterGroup = 'Foundations' | 'Building Blocks' | 'Case Studies' | 'Episodes' | 'AI Systems' | 'Practice' | 'Interview' | 'About'
 
 export interface Chapter {
   id: string
@@ -28,6 +29,7 @@ export const GROUPS: { name: ChapterGroup; hue: string; tagline: string }[] = [
   { name: 'Case Studies', hue: 'var(--accent-3)', tagline: 'Classic prompts, end-to-end, staff depth' },
   { name: 'Episodes', hue: 'var(--danger)', tagline: 'How real products get built, from v0 to planet scale' },
   { name: 'AI Systems', hue: 'var(--success)', tagline: 'LLM inference, LLM engineering, and AI product systems' },
+  { name: 'Practice', hue: 'var(--accent)', tagline: 'Build designs, review on a schedule, look anything up' },
   { name: 'Interview', hue: 'var(--warning)', tagline: 'Rehearse like it is the real loop' },
   { name: 'About', hue: 'var(--text-subtle)', tagline: 'Sources, disclaimer, and license' },
 ]
@@ -170,6 +172,26 @@ export const CHAPTERS: Chapter[] = [
     blurb: 'GPU scheduling, continuous batching, KV cache, streaming tokens, cost per token.',
     keywords: ['llm', 'inference', 'gpu', 'batching', 'kv cache', 'streaming', 'ai', 'model serving'],
     load: () => import('../chapters/chapter-case-llm-inference-platform') },
+  { id: 'email-service', title: 'Design a Distributed Email Service', group: 'Case Studies', minutes: 22, icon: Mail,
+    blurb: 'SMTP ingest, mailbox storage, search, spam filtering, and deliverability at scale.',
+    keywords: ['email', 'smtp', 'imap', 'mailbox', 'spam', 'search', 'deliverability', 'gmail'],
+    load: () => import('../chapters/chapter-case-email-service') },
+  { id: 'message-queue', title: 'Design a Distributed Message Queue', group: 'Case Studies', minutes: 24, icon: Inbox,
+    blurb: 'Partitioned append-only logs, replication with ISR, consumer groups, and retention.',
+    keywords: ['message queue', 'kafka', 'log', 'partition', 'replication', 'isr', 'consumer group', 'retention'],
+    load: () => import('../chapters/chapter-case-distributed-message-queue') },
+  { id: 'digital-wallet', title: 'Design a Digital Wallet', group: 'Case Studies', minutes: 22, icon: PiggyBank,
+    blurb: 'Balance transfers at high TPS: event sourcing, ledgers, and exactly-once money moves.',
+    keywords: ['digital wallet', 'balance', 'transfer', 'ledger', 'event sourcing', 'tps', 'reconciliation'],
+    load: () => import('../chapters/chapter-case-digital-wallet') },
+  { id: 'job-scheduler', title: 'Design a Distributed Job Scheduler', group: 'Case Studies', minutes: 20, icon: CalendarClock,
+    blurb: 'Cron at scale: time partitioning, leases, retries, idempotent execution, and fairness.',
+    keywords: ['job scheduler', 'cron', 'distributed scheduler', 'leases', 'retries', 'idempotency', 'workflow'],
+    load: () => import('../chapters/chapter-case-job-scheduler') },
+  { id: 'search-engine', title: 'Design a Search Engine', group: 'Case Studies', minutes: 24, icon: ScanSearch,
+    blurb: 'Inverted indexes, sharding by document, ranking, freshness, and query serving.',
+    keywords: ['search engine', 'inverted index', 'ranking', 'bm25', 'sharding', 'query', 'elasticsearch'],
+    load: () => import('../chapters/chapter-case-search-engine') },
 
   // ── Episodes
   { id: 'ep-netflix', title: 'How to Build Netflix', group: 'Episodes', minutes: 28, icon: Clapperboard,
@@ -208,6 +230,18 @@ export const CHAPTERS: Chapter[] = [
     blurb: 'From one GPU and a prompt to streaming chat, memory, tools, safety, and global capacity.',
     keywords: ['chatgpt', 'llm', 'chat', 'app', 'streaming', 'conversation', 'memory', 'rag', 'tools', 'safety'],
     load: () => import('../chapters/chapter-episode-chatgpt') },
+  { id: 'ep-whatsapp', title: 'How to Build WhatsApp', group: 'Episodes', minutes: 24, icon: MessageCircle,
+    blurb: 'Billions of messages with a tiny team: Erlang, FreeBSD, and end-to-end encryption.',
+    keywords: ['whatsapp', 'erlang', 'freebsd', 'messaging', 'end to end encryption', 'signal protocol'],
+    load: () => import('../chapters/chapter-episode-whatsapp') },
+  { id: 'ep-figma', title: 'How to Build Figma', group: 'Episodes', minutes: 22, icon: PenTool,
+    blurb: 'Multiplayer design in the browser: WebAssembly, a custom sync server, and Postgres at scale.',
+    keywords: ['figma', 'multiplayer', 'webassembly', 'crdt', 'postgres', 'sharding', 'realtime'],
+    load: () => import('../chapters/chapter-episode-figma') },
+  { id: 'ep-youtube', title: 'How to Build YouTube', group: 'Episodes', minutes: 24, icon: MonitorPlay,
+    blurb: 'From a MySQL box to Vitess, custom transcoding chips, and serving video to billions.',
+    keywords: ['youtube', 'video', 'vitess', 'mysql', 'transcoding', 'cdn', 'recommendations'],
+    load: () => import('../chapters/chapter-episode-youtube') },
 
   // ── AI Systems
   { id: 'ai-inference', title: 'LLM Inference Fundamentals', group: 'AI Systems', minutes: 20, icon: Cpu,
@@ -270,6 +304,20 @@ export const CHAPTERS: Chapter[] = [
     blurb: 'One API over many models: routing, quotas, caching, failover, and cost attribution.',
     keywords: ['llm gateway', 'routing', 'quotas', 'failover', 'cost attribution', 'multi provider'],
     load: () => import('../chapters/chapter-ai-case-llm-gateway') },
+
+  // ── Practice
+  { id: 'studio', title: 'Design Studio', group: 'Practice', minutes: 30, icon: DraftingCompass,
+    blurb: 'Drag components onto a canvas, wire them up, and get instant feedback on bottlenecks and single points of failure.',
+    keywords: ['design studio', 'whiteboard', 'practice', 'canvas', 'architecture', 'builder', 'feedback'],
+    load: () => import('../chapters/chapter-design-studio') },
+  { id: 'review', title: 'Daily Review', group: 'Practice', minutes: 10, icon: CalendarCheck,
+    blurb: 'Spaced repetition over flashcards, mental models, and glossary terms. A few minutes a day, scheduled for memory.',
+    keywords: ['spaced repetition', 'review', 'flashcards', 'memory', 'leitner', 'daily'],
+    load: () => import('../chapters/chapter-daily-review') },
+  { id: 'glossary', title: 'Glossary', group: 'Practice', minutes: 10, icon: BookA,
+    blurb: 'Every term defined across the handbook, searchable, with links back to where it is explained.',
+    keywords: ['glossary', 'terms', 'definitions', 'dictionary', 'jargon'],
+    load: () => import('../chapters/chapter-glossary') },
 
   // ── Interview
   { id: 'cheat-sheet', title: 'Cheat Sheet: Every Mental Model', group: 'Interview', minutes: 15, icon: LayoutGrid,

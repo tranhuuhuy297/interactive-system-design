@@ -9,7 +9,7 @@ import { ExchangeSequencerReplayDemo } from './demos/exchange-sequencer-replay-d
 
 const NODES: ArchNode[] = [
   { id: 'broker', label: 'Brokers', sub: 'FIX / binary', kind: 'client', x: 8, y: 50 },
-  { id: 'gw', label: 'Gateway', sub: 'session, throttle', kind: 'lb', x: 25, y: 50,
+  { id: 'gw', label: 'Gateway', sub: 'session, throttle', kind: 'lb', x: 28, y: 50,
     detail: 'Handles broker sessions, message validation and per-client rate limits. Stateless apart from session sequence numbers, and co-located with brokers in the same data center.' },
   { id: 'risk', label: 'Risk checks', sub: 'pre-trade', kind: 'service', x: 44, y: 18,
     detail: 'Price bands, fat-finger limits, credit and position limits. Must finish in microseconds, so state is held in memory and updated from the engine output stream.' },

@@ -1,6 +1,9 @@
 import { Check, Home } from 'lucide-react'
 import { CHAPTERS, GROUPS, chapterIndex } from '../../data/chapters-registry'
 import { useProgress } from '../../lib/use-progress'
+import { useNow } from '../../lib/use-now'
+import { useSpacedRepetition } from '../../lib/use-spaced-repetition'
+import '../home/daily-review-home-card.css'
 
 interface SidebarProps {
   route: string
@@ -13,6 +16,9 @@ interface SidebarProps {
 export function SidebarNavigation({ route, open, hidden = false, onNavigate }: SidebarProps) {
   const { isDone, done } = useProgress()
   const pct = Math.round((done.length / CHAPTERS.length) * 100)
+  const { state: srs } = useSpacedRepetition()
+  const now = useNow(60_000)
+  const reviewsDue = Object.values(srs.cards).filter((c) => c.due <= now).length
 
   return (
     <aside className={`sidebar ${open ? 'is-open' : ''}`} inert={hidden} aria-label="Handbook navigation">
@@ -36,7 +42,9 @@ export function SidebarNavigation({ route, open, hidden = false, onNavigate }: S
                   aria-current={route === c.id ? 'page' : undefined}>
                   <Icon size={15} className="nav__icon" />
                   <span className="nav__title">{c.title}</span>
-                  {isDone(c.id)
+                  {c.id === 'review' && reviewsDue > 0
+                    ? <span className="srs-nav-badge" aria-label={`${reviewsDue} reviews due`}>{reviewsDue > 99 ? '99+' : reviewsDue}</span>
+                    : isDone(c.id)
                     ? <Check size={14} className="nav__done" aria-label="completed" />
                     : <span className="nav__num">{String(chapterIndex(c.id) + 1).padStart(2, '0')}</span>}
                 </a>

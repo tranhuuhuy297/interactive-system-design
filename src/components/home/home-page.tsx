@@ -3,6 +3,7 @@ import { ArrowRight, Clapperboard, Clock, Command, Crown, Sparkles, Target } fro
 import { CHAPTERS, GROUPS } from '../../data/chapters-registry'
 import { useProgress } from '../../lib/use-progress'
 import { HeroTrafficSimulator } from './hero-traffic-simulator'
+import { DailyReviewHomeCard } from './daily-review-home-card'
 import { InterviewSprintPlan } from './interview-sprint-plan'
 import './home-page.css'
 
@@ -54,6 +55,7 @@ export function HomePage({ onOpenSearch }: { onOpenSearch: () => void }) {
         </div>
         <div className="progress-strip__tip"><Crown size={15} /> Every chapter has <b>Staff signal</b> callouts and senior-vs-staff model answers.</div>
       </section>
+      <DailyReviewHomeCard />
 
       {GROUPS.filter((g) => g.name !== 'About').map((g, gi) => (
         <section key={g.name} className="track" style={{ ['--hue' as string]: g.hue }}>

@@ -1,0 +1,23 @@
+@layer components {
+  .wlt__bar { display: flex; flex-wrap: wrap; gap: var(--space-3); align-items: center; justify-content: space-between; }
+  .wlt__actions { display: flex; flex-wrap: wrap; gap: var(--space-2); }
+  .wlt__note { margin: var(--space-3) 0; padding: 8px 12px; border-radius: var(--radius-md); background: var(--surface-2); border: 1px solid var(--border); font-size: var(--text-sm); color: var(--text); }
+  .wlt__grid { display: grid; grid-template-columns: 1.1fr 1.3fr 0.9fr; gap: var(--space-4); }
+  .wlt__grid .demo-label { margin-bottom: var(--space-2); }
+  .wlt__list { list-style: none; margin: 0; padding: 0; display: grid; gap: 4px; max-height: 260px; overflow-y: auto; }
+  .wlt__row { display: grid; grid-template-columns: auto 1fr auto; gap: var(--space-2); align-items: baseline; padding: 6px 8px; border-radius: var(--radius-md); background: var(--surface); border: 1px solid var(--border); font-size: 12px; color: var(--text); animation: fade-up var(--dur-base) var(--ease-out); }
+  .wlt__row em { font-style: normal; font-size: 11px; color: var(--text-subtle); }
+  .wlt__row--accepted em { color: var(--success); }
+  .wlt__row--rejected em, .wlt__row--rejected span:nth-child(2) { color: var(--warning); }
+  .wlt__row--duplicate-ignored { opacity: 0.7; }
+  .wlt__row--duplicate-ignored em { color: var(--accent); }
+  .wlt__row.has-snap { border-bottom: 2px solid var(--accent); }
+  .wlt__empty { font-size: var(--text-sm); color: var(--text-subtle); }
+  .wlt__small { margin: var(--space-2) 0 0; font-size: var(--text-xs); color: var(--text-subtle); }
+  .wlt__balances { display: grid; gap: 4px; transition: opacity var(--dur-base); }
+  .wlt__balances > div { display: flex; justify-content: space-between; padding: 6px 10px; border-radius: var(--radius-md); border: 1px solid var(--border); background: var(--surface); font-size: var(--text-sm); color: var(--text-muted); }
+  .wlt__balances strong { color: var(--text); }
+  .wlt__balances.is-lost { opacity: 0.45; }
+  .wlt__checks { display: flex; flex-wrap: wrap; gap: 6px; margin-top: var(--space-3); }
+  @media (max-width: 820px) { .wlt__grid { grid-template-columns: 1fr; } }
+}
